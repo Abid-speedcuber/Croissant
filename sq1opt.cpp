@@ -8,6 +8,9 @@
 #include <iostream>
 #include <cstring>
 #include <ctime>
+#include <vector>
+#include <sstream>
+#include <algorithm>
 
 #define NUMHALVES 13
 #define NUMLAYERS 158
@@ -48,118 +51,7 @@ const char* errors[]={
 	"Position can't be solved with these constraints",//19
 };
 
-const int KARNOTATION_LEN = 109;
-const std::string KARNOTATION[KARNOTATION_LEN][2]={
-	{"U", "3,0"},
-	{"U'", "9,0"},
-	{"U2", "6,0"},
-	{"D", "0,3"},
-	{"D'", "0,9"},
-	{"D2", "0,6"},
-	{"u", "2,&"},
-	{"u'", "^,1"},
-	{"d", "&,2"},
-	{"d'", "1,^"},
-	{"E", "3,9"},
-	{"E'", "9,3"},
-	{"e", "3,3"},
-	{"e'", "9,9"},
-	{"F", "4,1"},
-	{"F'", "8,&"},
-	{"f", "1,4"},
-	{"f'", "&,8"},
-	{"M", "1,1"},
-	{"M'", "&,&"},
-	{"m", "2,2"},
-	{"m'", "^,^"},
-	{"u2", "5,&"},
-	{"u2'", "7,1"},
-	{"d2", "&,5"},
-	{"d2'", "1,7"},
-	{"T", "2,8"},
-	{"T'", "^,4"},
-	{"t", "4,^"},
-	{"t'", "8,2"},
-	{"W ", "3,0/9,0/"},
-	{"W' ", "9,0/3,0/"},
-	{"B ", "0,3/0,9/"},
-	{"B' ", "0,9/0,3/"},
-	{"w ", "2,&/^,1/"},
-	{"w' ", "^,1/2,&/"},
-	{"b ", "&,2/1,^/"},
-	{"b' ", "1,^/&,2/"},
-	{"E\\ ", "3,0/0,9/"},
-	{"E\\' ", "9,0/0,3/"},
-	{"e\\ ", "3,0/0,3/"},
-	{"e\\' ", "9,0/0,9/"},
-	{"F2 ", "4,1/8,&/"},
-	{"F2' ", "8,&/4,1/"},
-	{"f2 ", "1,4/&,8/"},
-	{"f2' ", "&,8/1,4/"},
-	{"U3 ", "3,0/9,0/3,0/"},
-	{"U3' ", "9,0/3,0/9,0/"},
-	{"D3 ", "0,3/0,9/0,3/"},
-	{"D3' ", "0,9/0,3/0,9/"},
-	{"u3 ", "2,&/^,1/2,&/"},
-	{"u3' ", "^,1/2,&/^,1/"},
-	{"u4 ", "2,&/^,1/2,&/^,1/"},
-	{"u4' ", "^,1/2,&/^,1/2,&/"},
-	{"d3 ", "&,2/1,^/&,2/"},
-	{"d3' ", "1,^/&,2/1,^/"},
-	{"d4", "&,2/1,^/&,2/&,2"},
-	{"d4' ", "1,^/&,2/1,^/&,2/"},
-	{"UU", "1,0/5,&/9,0/1,1/9,0/&,0"},
-	{"UU'", "1,0/2,&/1,1/2,&/7,1/&,0"},
-	{"FV", "0,&/1,^/&,2/1,^/&,2/0,1"},
-	{"VF", "1,0/2,&/^,1/2,&/^,1/&,0"},
-	{" JJ ", "/0,9/3,3/9,0/"},
-	{" jJ ", "/0,9/3,3/9,0/"},
-	{" Jj ", "/0,9/3,3/9,0/"},
-	{" jj ", "/0,9/3,3/9,0/"},
-	{" bJJ ", "/9,0/3,3/0,9/"},
-	{" bjJ ", "/9,0/3,3/0,9/"},
-	{" bJj ", "/9,0/3,3/0,9/"},
-	{" bjj ", "/9,0/3,3/0,9/"},
-	{" JN ", "/0,9/0,3/0,9/0,3/"},
-	{" jN ", "/0,9/0,3/0,9/0,3/"},
-	{" Jn ", "/0,9/0,3/0,9/0,3/"},
-	{" jn ", "/0,9/0,3/0,9/0,3/"},
-	{" NN ", "/9,3/3,9/"},
-	{" Nn ", "/9,3/3,9/"},
-	{" nN ", "/9,3/3,9/"},
-	{" nn ", "/9,3/3,9/"},
-	{" NJ ", "/3,0/9,0/3,0/9,0/"},
-	{" nJ ", "/3,0/9,0/3,0/9,0/"},
-	{" Nj ", "/3,0/9,0/3,0/9,0/"},
-	{" nj ", "/3,0/9,0/3,0/9,0/"},
-	{" 3Adj ", "/3,0/&,&/^,1/"},
-	{" 03Adj ", "/0,3/&,&/1,^/"},
-	{" JR ", "/9,9/2,&/^,1/3,3/"},
-	{" jR ", "/9,9/2,&/^,1/3,3/"},
-	{" Jr ", "/9,9/1,^/&,2/3,3/"},
-	{" jr ", "/9,9/1,^/&,2/3,3/"},
-	{" RJ ", "/3,3/1,^/&,2/9,9/"},
-	{" rJ ", "/3,3/2,&/^,1/9,9/"},
-	{" Rj ", "/3,3/1,^/&,2/9,9/"},
-	{" rj ", "/3,3/2,&/^,1/9,9/"},
-	{" bRJ ", "/9,9/^,1/2,&/3,3/"},
-	{"brJ ", "1,0/9,9/&,2/1,^/3,3/&,0/"},
-	{"bRj ", "0,&/9,9/^,1/2,&/3,3/0,1/"},
-	{"brj ", "1,&/9,9/&,2/1,^/3,3/&,1/"},
-	{"RR ", "1,0/2,&/^,4/5,&/^,1/&,0/"},
-	{"rr ", "0,&/^,1/5,&/^,4/2,&/0,1/"},
-	{"pJ", "0&/^,1/2,2/0,9/0,1"},
-	{"pj", "0,&/1,^/2,2/9,0/0,1"},
-	{"pN", "1,0/2,8/^,4/&,0"},
-	{"fpJ", "1,0/2,&/^,^/0,3/&,0"},
-	{"AA ", "1,0/0,9/2,2/0,9/^,4/&,0/"},
-	{"aa", "0&/1,^/2,2/1,^/8,2/0,1"},
-	{"TT", "1,0/5,&/9,0/^,^/0,3/&,0"},	
-	{"OppOpp", "1,0/&,&/6,0/1,1/&,0"},
-	{"FF", "1,0/0,9/2,2/0,9/1,1/9,3/&,0"},
-	{"M2", "1,0/&,&/0,1"},
-	{"m2", "1,0/5,&/7,1/&,0"}
-};
+#include "karnotation.h"
 
 int verbosity = 5;
 bool generator=false;
@@ -170,6 +62,7 @@ int metric = TURN_METRIC;
 int maxX = 6;
 int maxY = 6;
 int maxTotal = 12;
+std::vector<int> specificDepths;
 
 class HalfLayer {
 public:
@@ -949,6 +842,7 @@ public:
 		}
 		return false;
 	}
+
 };
 
 //pruning table for combination of shape,edgecolouring,cornercolouring.
@@ -1202,7 +1096,7 @@ class PositionSolver {
 				if (!fp.has2GenCorners()) return 19;
 			}
 		}
-		
+
 		// run the solve
 		moveLen=0;
 		unsigned long nodes=0;
@@ -1211,6 +1105,13 @@ class PositionSolver {
 		if (metric == TWIST_METRIC && middle==1) l=-2;
 		// do ida
 		int optimalMoves = -1;
+		if (!specificDepths.empty()) {
+			for (int depth : specificDepths) {
+				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
+				for(int i=0;i<6;i++) lastTurns[i]=0;
+				search(depth, 3, &nodes, twoGen, keepCubeShape);
+			}
+		} else {
 		while(true){
 			l++;
 			if (metric == TWIST_METRIC && middle!=0) l++;
@@ -1222,6 +1123,7 @@ class PositionSolver {
 				if (l >= optimalMoves + extraMoves || (metric == TWIST_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
 			}
 		};
+		}
 		return 0;
 	}
 	virtual inline bool isSolved() {
@@ -1265,6 +1167,8 @@ class PositionSolver {
 
 		// check if it is now solved
 		if( l==0 ){
+			// Block pure (6,0) or (0,6): U2 or D2 alone with no matching layer turn
+			if ((lastTurns[4]==6 && lastTurns[5]==0) || (lastTurns[4]==0 && lastTurns[5]==6)) return 0;
 			if(isSolved()){
 				printsol();
 				if(verbosity>=6) std::cout<<"Nodes="<<*nodes<<std::endl<<std::flush;
@@ -1319,6 +1223,9 @@ class PositionSolver {
 		}
 		// try twist move
 		if( lm!=2 && l>0){
+			// Block pure (6,0) or (0,6) pairs before this twist
+			bool block60 = (lastTurns[4]==6 && lastTurns[5]==0) || (lastTurns[4]==0 && lastTurns[5]==6);
+			if (!block60) {
 			int lt0=lastTurns[0], lt1=lastTurns[1];
 			lastTurns[0]=lastTurns[2];
 			lastTurns[1]=lastTurns[3];
@@ -1341,6 +1248,7 @@ class PositionSolver {
 			lastTurns[2]=lastTurns[0];
 			lastTurns[1]=lt1;
 			lastTurns[0]=lt0;
+			} // end block60 check
 		}
 		return r;
 	}
@@ -1414,20 +1322,21 @@ class PositionSolver {
 		out += printmove(mu, md, karnotation);
 		if (karnotation) {
 			out = replaceAll(out, std::string(" "), std::string(""));
-			
+
 			// replace all negative numbers to avoid e.g. (-2,-4) -> -T
 			out = replaceAll(out, std::string("-1"), std::string("&"));
 			out = replaceAll(out, std::string("-2"), std::string("^"));
 			out = replaceAll(out, std::string("-3"), std::string("9"));
 			out = replaceAll(out, std::string("-4"), std::string("8"));
 			out = replaceAll(out, std::string("-5"), std::string("7"));
-			
+
 			// do the karnotation replacements
 			for (int i = KARNOTATION_LEN-1; i>=0; i--)
 			{
+				if (KARNOTATION[i][1].empty()) continue; // skip padding entries — empty from causes infinite loop
 				out = replaceAll(out, KARNOTATION[i][1], KARNOTATION[i][0]);
 			}
-			
+
 			out = replaceAll(out, std::string("/"), std::string(" "));
 			out = replaceAll(out, std::string("\\"), std::string("/")); // handle slashes for E/, e/
 			out = replaceAll(out, std::string(","), std::string(""));
@@ -1509,7 +1418,7 @@ public:
 				return 19;
 			}
 		}
-		
+
 		// run the solve
 		moveLen=0;
 		unsigned long nodes=0;
@@ -1518,6 +1427,13 @@ public:
 		if( metric==TWIST_METRIC && middle==1 ) l=-2;
 		// do ida
 		int optimalMoves = -1;
+		if (!specificDepths.empty()) {
+			for (int depth : specificDepths) {
+				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
+				for(int i=0;i<6;i++) lastTurns[i]=0;
+				search(depth, 3, &nodes, twoGen, keepCubeShape);
+			}
+		} else {
 		while(true){
 			l++;
 			if( metric==TWIST_METRIC && middle!=0 ) l++;
@@ -1529,6 +1445,7 @@ public:
 				if (l >= optimalMoves + extraMoves || (metric==TWIST_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
 			}
 		};
+		}
 		return 0;
 	}
 	inline bool isSolved() {
@@ -1693,6 +1610,20 @@ int main(int argc, char* argv[]){
 					parsedValue = parseInteger(argv[i]+2);
 					if (parsedValue >= 1 && parsedValue <= 12) maxTotal = parsedValue;
 					break;
+				case 'd':
+				case 'D':
+					{
+						std::string ds(argv[i]+2);
+						std::stringstream ss(ds);
+						std::string token;
+						while(std::getline(ss, token, ',')) {
+							token.erase(std::remove_if(token.begin(), token.end(), ::isspace), token.end());
+							if (!token.empty()) {
+								try { specificDepths.push_back(std::stoi(token)); } catch(...) {}
+							}
+						}
+					}
+					break;
 				default:
 					return show(1);
 			}
@@ -1702,10 +1633,10 @@ int main(int argc, char* argv[]){
 			return show(2);
 		}
 	}
-	
+
 	if (twoGen == 2 && keepCubeShape) return show(18);
 	// don't use the equivalence if we want to limit move amounts
-	if (maxX != 6 || maxY != 6 || maxTotal != 12) ignoreTrans = true; 
+	if (maxX != 6 || maxY != 6 || maxTotal != 12) ignoreTrans = true;
 
 	FullPosition p;
 	std::ifstream is;
@@ -1798,7 +1729,7 @@ int main(int argc, char* argv[]){
 			int r = ps.solve(twoGen, extraMoves, keepCubeShape);
 			if (r) show(r);
 		}
-		
+
 		if (verbosity>=6) std::cout << "Time: " << (clock() - now);
 		std::cout<<std::endl;
 	}while( posArg<0 && ( (inpFile!=NULL && !is.eof() ) || (inpFile==NULL && (numpos==0 || numpos-- > 1)) ));
@@ -1821,5 +1752,3 @@ pt: 70*70*7356 chars colour 1,2
 pt: 70*70*7356 chars colour 3
 
 */
-
-

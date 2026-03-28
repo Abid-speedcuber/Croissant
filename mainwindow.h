@@ -1,12 +1,10 @@
 #pragma once
 #include <QMainWindow>
 #include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
 #include <QString>
 #include <QStringList>
+#include <QPointer>
 
-// Forward declarations
 class Sq1Widget;
 class QCheckBox;
 class QLineEdit;
@@ -15,9 +13,6 @@ class QPushButton;
 class QLabel;
 class QProgressBar;
 
-// -------------------------------------------------------
-// Worker thread: runs the solver without freezing the UI
-// -------------------------------------------------------
 class SolverWorker : public QThread {
     Q_OBJECT
 public:
@@ -29,9 +24,6 @@ signals:
     void finished(int exitCode);
 };
 
-// -------------------------------------------------------
-// Main Window
-// -------------------------------------------------------
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -44,39 +36,41 @@ private slots:
     void onSolverLine(QString line);
     void onSolverDone(int code);
     void updateCommand();
+    void onRankErgoToggled(bool checked);
 
 private:
     void buildUI();
     void buildStyles();
-    QString buildCommandArgs();   // returns args string for display
-    QStringList buildArgList();   // returns actual args list for solver
+    QStringList buildArgList();
 
-    // Canvas widget (the cube visualizer)
-    Sq1Widget*   cubeWidget;
-
-    // Controls
-    QCheckBox*   chkTwist;
-    QCheckBox*   chkAllOptimal;
-    QLineEdit*   txtSuboptimal;
-    QCheckBox*   chkGenerator;
-    QCheckBox*   chk2gen;
-    QCheckBox*   chkPseudo2gen;
-    QCheckBox*   chkCubeshape;
-    QCheckBox*   chkKarnotation;
-    QCheckBox*   chkMaxX;
-    QLineEdit*   txtMaxX;
-    QCheckBox*   chkMaxY;
-    QLineEdit*   txtMaxY;
-    QCheckBox*   chkMaxTotal;
-    QLineEdit*   txtMaxTotal;
-
-    QLineEdit*   txtCommand;   // read-only preview
-    QPushButton* btnSolve;
-    QPushButton* btnCopy;
-    QPushButton* btnReset;
-    QTextEdit*   txtOutput;
-    QLabel*      lblStatus;
+    Sq1Widget*    cubeWidget;
+    QCheckBox*    chkTwist;
+    QCheckBox*    chkAllOptimal;
+    QLineEdit*    txtSuboptimal;
+    QCheckBox*    chkDepths;
+    QLineEdit*    txtDepths;
+    QCheckBox*    chkGenerator;
+    QCheckBox*    chk2gen;
+    QCheckBox*    chkPseudo2gen;
+    QCheckBox*    chkCubeshape;
+    QCheckBox*    chkKarnotation;
+    QCheckBox*    chkMaxX;
+    QLineEdit*    txtMaxX;
+    QCheckBox*    chkMaxY;
+    QLineEdit*    txtMaxY;
+    QCheckBox*    chkMaxTotal;
+    QLineEdit*    txtMaxTotal;
+    QLineEdit*    txtCommand;
+    QPushButton*  btnSolve;
+    QPushButton*  btnCopy;
+    QPushButton*  btnReset;
+    QTextEdit*    txtOutput;
+    QLabel*       lblStatus;
     QProgressBar* progressBar;
+    QCheckBox*    chkRankErgo;
 
-    SolverWorker* worker = nullptr;
+    QPointer<SolverWorker> worker;  // QPointer auto-nulls on deletion — safe for repeated solves
+    QStringList   m_rawLines;
+    QStringList   m_solutionLines;
+    QString       m_posHex;          // position hex captured at solve time for ergo rating
 };

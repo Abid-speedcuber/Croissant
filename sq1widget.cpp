@@ -83,12 +83,17 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     drawLayer(p, 12, 24, {BOT_CX, BOT_CY},  105);  // bot layer, starts at 105 deg
 
     // Middle band
-    double x1 = TOP_CX - (MAIN_LEN+SUB_LEN)*0.97;
-    double x2 = TOP_CX - (MAIN_LEN+SUB_LEN)*0.28;
-    double x3 = TOP_CX + (MAIN_LEN+SUB_LEN)*0.97;
+    // x1..x2 = thin left strip (always red).
+    // Square: x2..x3 = wide right strip (red). Kite: x2..x2b = narrow right strip (orange), rest black.
+    double r_len = (MAIN_LEN + SUB_LEN);
+    double x1  = TOP_CX - r_len * 0.97;
+    double x2  = TOP_CX - r_len * 0.28;   // split: left strip is narrow
+    double x3  = TOP_CX + r_len * 0.97;
+    double x2b = TOP_CX + r_len * 0.28;   // kite end: mirrors left strip width
     drawPoly(p, {{x1,MID_TOP},{x2,MID_TOP},{x2,MID_BOT},{x1,MID_BOT}}, colors[2]);
-    drawPoly(p, {{x2,MID_TOP},{x3,MID_TOP},{x3,MID_BOT},{x2,MID_BOT}},
-             middle_partial>0 ? colors[6] : colors[middle==0?2:4]);
+    QColor rightColor = middle_partial > 0 ? colors[6] : colors[middle == 0 ? 2 : 4];
+    double x_end = (middle == 0 || middle_partial > 0) ? x3 : x2b;
+    drawPoly(p, {{x2,MID_TOP},{x_end,MID_TOP},{x_end,MID_BOT},{x2,MID_BOT}}, rightColor);
 }
 
 // ------- Hit testing -------
@@ -123,7 +128,15 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
     }
 
     if(isMiddle) {
-        middle_partial = 1 - middle_partial;
+        // Cycle: square (middle=0, partial=0) → kite (middle=1, partial=0) → either (partial=1) → square
+        if (middle_partial == 0 && middle == 0) {
+            middle = 1;
+        } else if (middle_partial == 0 && middle == 1) {
+            middle_partial = 1;
+        } else {
+            middle = 0;
+            middle_partial = 0;
+        }
     } else if(piece >= 0) {
         if(event->button() == Qt::RightButton) {
             partiality[piece] = (partiality[piece]+1)%3;
@@ -213,13 +226,13 @@ void Sq1Widget::doSlice() {
 
 void Sq1Widget::keyPressEvent(QKeyEvent* e) {
     switch(e->key()) {
-        case Qt::Key_I: case Qt::Key_K: doSlice(); break;
-        case Qt::Key_J: doU(); break;
-        case Qt::Key_F: doUPrime(); break;
-        case Qt::Key_S: doD(); break;
-        case Qt::Key_L: doDPrime(); break;
-        case Qt::Key_Escape: reset(); break;
-        default: QWidget::keyPressEvent(e);
+    case Qt::Key_I: case Qt::Key_K: doSlice(); break;
+    case Qt::Key_J: doU(); break;
+    case Qt::Key_F: doUPrime(); break;
+    case Qt::Key_S: doD(); break;
+    case Qt::Key_L: doDPrime(); break;
+    case Qt::Key_Escape: reset(); break;
+    default: QWidget::keyPressEvent(e);
     }
 }
 
