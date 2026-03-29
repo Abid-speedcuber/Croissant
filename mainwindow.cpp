@@ -11,9 +11,11 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QScrollArea>
+#include <QSpinBox>
 #include <QProgressBar>
 #include <QGroupBox>
 #include <QClipboard>
+#include <QSet>
 #include <QProcess>
 #include <QCoreApplication>
 #include <algorithm>
@@ -118,16 +120,40 @@ static std::string replaceAll(std::string str, const std::string& from, const st
     return str;
 }
 
+// addCommasToMove: given a purely-numeric token (digits and minus signs only), insert a
+// comma to produce a "top,bot" pair.  Tokens that already contain a comma or non-numeric
+// characters are returned unchanged.  Mirrors the JavaScript addCommas() helper.
+static std::string addCommasToMove(const std::string& move) {
+    if (move.empty()) return move;
+    for (char c : move)
+        if (c != '-' && !std::isdigit((unsigned char)c)) return move; // already has comma or non-numeric
+    switch (move.size()) {
+        case 1: return move + ",0";
+        case 2: return move[0] == '-' ? move + ",0"
+                                      : std::string(1, move[0]) + "," + std::string(1, move[1]);
+        case 3: return move[0] == '-' ? move.substr(0,2) + "," + std::string(1, move[2])
+                                      : std::string(1, move[0]) + "," + move.substr(1);
+        case 4: return move.substr(0,2) + "," + move.substr(2);
+        default: return move; // unexpected length — pass through unchanged
+    }
+}
+
 // unkarnify: convert a space-separated karnotation alg to slash-separated numeric tuples.
 // Uses KARNOTATION from karnotation.h: for each space-separated token, find the matching
 // KARNOTATION[i][0] (trimmed) and replace with KARNOTATION[i][1].
 // Searches in reverse order so longer/more-specific entries (U3', U3, U2, U') match before U.
 // After expansion, decodes sq1opt's single-char shorthands: &=-1, ^=-2, 9=-3, 8=-4, 7=-5.
 static std::string unkarnify(const std::string& algIn) {
+    // If the alg begins with '/' (leading slice, restored by sq1opt change #1), strip it
+    // before tokenising so the fused "/token" (e.g. "/e") doesn't prevent KARNOTATION lookup.
+    // The slash is reattached to the final result so rateAlg sees the correct structure.
+    bool startsWithSlice = (!algIn.empty() && algIn[0] == '/');
+    const std::string& algWork = startsWithSlice ? algIn.substr(1) : algIn;
+
     // Split karn alg into space-separated tokens
     std::vector<std::string> tokens;
     {
-        std::istringstream iss(algIn);
+        std::istringstream iss(algWork);
         std::string t;
         while (iss >> t) tokens.push_back(t);
     }
@@ -165,6 +191,18 @@ static std::string unkarnify(const std::string& algIn) {
     result = replaceAll(result, "9", "-3");
     result = replaceAll(result, "8", "-4");
     result = replaceAll(result, "7", "-5");
+
+    // Insert missing commas into any slash-separated part that is purely numeric
+    // (e.g. "30" → "3,0", "-36" → "-3,6").  Parts already formatted as "top,bot" pass through.
+    auto parts = splitStr(result, '/');
+    result.clear();
+    for (const auto& part : parts) {
+        if (!result.empty()) result += "/";
+        result += addCommasToMove(part);
+    }
+
+    // Reattach the leading slash that was stripped before tokenising.
+    if (startsWithSlice) result = "/" + result;
 
     return result;
 }
@@ -214,6 +252,7 @@ static std::pair<int,int> getOverwork(const std::vector<std::string>& moves) {
 
 struct AlgRating {
     double FINAL;
+    std::string sliceStart;
 };
 
 // initial_top_A: true when the top-layer seam slot holds an edge (digit) in the starting
@@ -232,14 +271,20 @@ static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
     std::string numeric = isKarnAlg ? unkarnify(a) : replaceAll(a, " ", "");
     auto rawParts = splitStr(numeric, '/');
     std::vector<std::string> r;
-    for (auto& p : rawParts) { std::string pt = trimStr(p); if (!pt.empty()) r.push_back(pt); }
-    if (r.size() < 2) return {W4}; // degenerate
+    for (size_t i = 0; i < rawParts.size(); i++) {
+        std::string pt = trimStr(rawParts[i]);
+        // Always keep r[0] even if empty: an empty first element means the alg begins with a
+        // slice (AUF = 0,0).  Filtering it out shifts all subsequent indices by one, corrupting
+        // alignment tracking through the rest of the alg.  Trailing empties are still dropped.
+        if (i == 0 || !pt.empty()) r.push_back(pt);
+    }
+    if (r.size() < 2) return {W4, ""}; // degenerate
 
     // r has N elements where r[0] is the AUF, r[1..N-2] are real moves, r[N-1] is the sentinel.
     // In alg_rater.html: sliceCount = count of "/" = N-1, and r (after pop) has N-1 elements.
     // Our r still has the sentinel as last element, so: sliceCount = r.size() - 1.
     int sliceCount = (int)r.size() - 1;
-    if (sliceCount <= 0) return {W4};
+    if (sliceCount <= 0) return {W4, ""};
 
     // Phase 1: ergonomics — iterate r[0..N-2] only (exclude sentinel r[N-1])
     double ergo_up = 0, ergo_down = 0;
@@ -257,8 +302,8 @@ static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
             odd_slice = true;
             continue;
         }
-        double vu = getMoveValue(is_top_A,  odd_slice, r[i]);
-        double vd = getMoveValue(is_top_A, !odd_slice, r[i]);
+        int vu = getMoveValue(is_top_A,  odd_slice, r[i]);
+        int vd = getMoveValue(is_top_A, !odd_slice, r[i]);
         ergo_up   += vu;
         ergo_down += vd;
         auto c = r[i].find(',');
@@ -268,6 +313,10 @@ static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
         odd_slice = !odd_slice;
     }
     double PHASE1 = W1 * std::max(ergo_up, ergo_down) / sliceCount;
+    std::string sliceStart;
+    if ((std::abs(ergo_up - ergo_down) / sliceCount) > 5) {
+        sliceStart = (ergo_up > ergo_down) ? "/" : "\\";
+    } else sliceStart = " ";
 
     // Phase 2: penalize slice count
     double PHASE2 = W2 * sliceCount;
@@ -279,7 +328,7 @@ static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
     double PHASE4 = bonus * W5 / sliceCount;
 
     double FINAL = PHASE1 - PHASE2 - PHASE3 + PHASE4 + W4;
-    return {FINAL};
+    return {FINAL, sliceStart};
 }
 
 // Rate a list of solution lines and return them sorted highest→lowest.
@@ -289,7 +338,7 @@ static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
 //   letter (A-H / U-W) = corner,  digit (1-8) / X-Z = edge.
 // A digit (or partial-edge letter X-Z) means the top layer starts in the A-aligned state.
 static std::vector<std::pair<QString, double>>
-rateAndSort(const QStringList& solutionLines, const QString& posHex) {
+rateAndSort(const QStringList& solutionLines, const QString& posHex, bool useKarnotation) {
     // Determine initial top-layer alignment from the position hex.
     // Letters A-H (corners) or U/V/W (partial corners) = corner at seam  → is_top_A = false.
     // Digits 1-8 (edges)   or X/Y/Z  (partial edges)   = edge at seam   → is_top_A = true.
@@ -302,7 +351,7 @@ rateAndSort(const QStringList& solutionLines, const QString& posHex) {
 
     const double W1=34, W2=100, W3=38, W4=500, W5=10;
     std::vector<std::pair<QString, double>> results;
-    for (const QString& line : solutionLines) {
+    for (QString line : solutionLines) {
         // The alg string is the part before the [...] annotation
         std::string algStr = line.toStdString();
         // strip the [tw|tu] part for rating but keep original line for display
@@ -312,7 +361,26 @@ rateAndSort(const QStringList& solutionLines, const QString& posHex) {
                                   : trimStr(algStr);
         double score = W4;
         try {
-            score = rateAlg(algOnly, initial_top_A, W1, W2, W3, W4, W5).FINAL;
+            auto rating = rateAlg(algOnly, initial_top_A, W1, W2, W3, W4, W5);
+            score = rating.FINAL;
+            QString sliceStr = QString::fromStdString(rating.sliceStart);
+            if (!useKarnotation) {
+                // Non-karnotation: replace the first "/" with sliceStart
+                int slash_pos = line.indexOf('/');
+                if (slash_pos >= 0)
+                    line.replace(slash_pos, 1, sliceStr);
+            } else if (line.startsWith('/')) {
+                // Karnotation + solution starts with a slice (leading "/" from change #1):
+                // replace it with "\" only when sliceStart is "\"; if " ", leave it alone.
+                if (sliceStr == "\\")
+                    line.replace(0, 1, QString("\\"));
+            } else {
+                // Karnotation + solution doesn't start with a slice:
+                // replace the first space with sliceStart.
+                int space_pos = line.indexOf(' ');
+                if (space_pos >= 0)
+                    line.replace(space_pos, 1, sliceStr);
+            }
         } catch (...) {}
         results.push_back({line, score});
     }
@@ -379,6 +447,7 @@ void SolverWorker::run() {
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("Square-1 Optimizer");
     setMinimumSize(720, 560);
+    resize(860, 700);
     buildUI();
     buildStyles();
     updateCommand();
@@ -391,7 +460,7 @@ void MainWindow::buildUI() {
     root->setSpacing(12);
     root->setContentsMargins(12,12,12,12);
 
-    // ---- LEFT: cube widget + move buttons, inside a scroll area so it survives short windows ----
+    // ---- LEFT: cube widget + move buttons ----
     QWidget* leftContainer = new QWidget();
     leftContainer->setFixedWidth(300);
     QVBoxLayout* leftCol = new QVBoxLayout(leftContainer);
@@ -419,7 +488,6 @@ void MainWindow::buildUI() {
     btnReset = new QPushButton("Reset  [Esc]");
     btnReset->setObjectName("btnReset");
     leftCol->addWidget(btnReset);
-
     leftCol->addStretch();
 
     QScrollArea* leftScroll = new QScrollArea();
@@ -428,7 +496,7 @@ void MainWindow::buildUI() {
     leftScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     leftScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     leftScroll->setFrameShape(QFrame::NoFrame);
-    leftScroll->setFixedWidth(320); // 300 content + 20 for scrollbar when needed
+    leftScroll->setFixedWidth(320);
 
     connect(btnU,     &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_J,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnUP,    &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_F,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
@@ -448,58 +516,145 @@ void MainWindow::buildUI() {
     QGridLayout* grid = new QGridLayout(grpOptions);
     grid->setVerticalSpacing(4);
 
-    chkTwist      = new QCheckBox("Twist metric");
-    chkAllOptimal = new QCheckBox("All optimal sequences");
-    txtSuboptimal = new QLineEdit("0"); txtSuboptimal->setFixedWidth(40);
-    chkDepths     = new QCheckBox("Specific depths:");
-    txtDepths     = new QLineEdit(); txtDepths->setFixedWidth(80); txtDepths->setPlaceholderText("e.g. 8,9");
-    chkGenerator  = new QCheckBox("Generator alg");
-    chk2gen       = new QCheckBox("2Gen");
-    chkPseudo2gen = new QCheckBox("Pseudo 2Gen");
-    chkCubeshape  = new QCheckBox("Stay in cubeshape");
-    chkKarnotation= new QCheckBox("Karnotation");
-    chkMaxX       = new QCheckBox("Max top turn:");
-    txtMaxX       = new QLineEdit("3"); txtMaxX->setFixedWidth(40);
-    chkMaxY       = new QCheckBox("Max bottom turn:");
-    txtMaxY       = new QLineEdit("3"); txtMaxY->setFixedWidth(40);
-    chkMaxTotal   = new QCheckBox("Max total turn:");
-    txtMaxTotal   = new QLineEdit("6"); txtMaxTotal->setFixedWidth(40);
+    // ── Widgets ──────────────────────────────────────────────────────────────
+    chkTwist = new QCheckBox("Twist metric");
+    chkTwist->setToolTip("Count only slices (twists) as moves, not layer turns.\n"
+                         "Maps to the -w flag.");
+
+    chkAllOptimal = new QCheckBox("All optimal");
+    chkAllOptimal->setToolTip("Find every optimal solution, not just the first one.\n"
+                              "The spinner sets how many extra moves beyond optimal to also find.\n"
+                              "0 = optimal only.  Maps to -a or -a<n>.");
+    spnSuboptimal = new QSpinBox();
+    spnSuboptimal->setRange(0, 9);
+    spnSuboptimal->setValue(0);
+    spnSuboptimal->setFixedWidth(48);
+    spnSuboptimal->setToolTip("Extra moves beyond optimal (0 = optimal only).\n"
+                              "Hidden when 'Specific depths' is active (depth pins the search\n"
+                              "depth explicitly, making an extra-move count meaningless).");
+
+    // Container for the All-optimal row so we can control row height and keep
+    // "+suboptimal:" flush against the spinbox with a stretch on the left.
+    QWidget* allOptRow = new QWidget();
+    allOptRow->setMinimumHeight(30);
+    QHBoxLayout* allOptLayout = new QHBoxLayout(allOptRow);
+    allOptLayout->setContentsMargins(0, 0, 0, 0);
+    allOptLayout->setSpacing(4);
+    allOptLayout->addWidget(chkAllOptimal);
+    allOptLayout->addStretch(1);
+    QLabel* lblSuboptLabel = new QLabel("+suboptimal:");
+    lblSuboptLabel->setObjectName("lblSuboptLabel");
+    allOptLayout->addWidget(lblSuboptLabel);
+    allOptLayout->addWidget(spnSuboptimal);
+
+    chkDepths = new QCheckBox("Specific depths:");
+    chkDepths->setToolTip("Search only the listed twist/turn depths instead of iterating from 0.\n"
+                          "Comma-separated, e.g. 8,9.  Maps to -d<list>.\n"
+                          "When active, the suboptimal-count field is hidden and -a is used\n"
+                          "without a number (extra-move count has no effect with fixed depths).");
+    txtDepths = new QLineEdit();
+    txtDepths->setFixedWidth(80);
+    txtDepths->setPlaceholderText("e.g. 8,9");
+    txtDepths->setToolTip("Comma-separated list of depths to search.");
+
+    chkGenerator = new QCheckBox("Generator alg");
+    chkGenerator->setToolTip("Treat input as a generating sequence (forward) rather than a\n"
+                             "solution sequence (reverse).  Maps to -g.");
+
+    chk2gen = new QCheckBox("2Gen  (top layer + slices only)");
+    chk2gen->setToolTip("Restrict to 2-generator moves: top-layer turns and slices only.\n"
+                        "Requires pieces G, 8, H to already be solved.\n"
+                        "Incompatible with 'Stay in cubeshape' and 'Pseudo 2Gen'.\n"
+                        "Maps to -2.");
+
+    chkPseudo2gen = new QCheckBox("Pseudo 2Gen  (bottom: ±1 only)");
+    chkPseudo2gen->setToolTip("Restrict bottom-layer turns to ±1 only (pseudo-2-generator).\n"
+                              "Incompatible with '2Gen'.\n"
+                              "Maps to -p.");
+
+    chkCubeshape = new QCheckBox("Stay in cubeshape");
+    chkCubeshape->setToolTip("Only generate algs that keep the puzzle in a square/square\n"
+                             "(cubeshape) throughout.  Incompatible with '2Gen'.\n"
+                             "Maps to -c.");
+
+    chkIgnoreMid = new QCheckBox("Ignore middle layer");
+    chkIgnoreMid->setToolTip("Treat the middle layer orientation as irrelevant.\n"
+                             "Useful when you don't care whether the middle ends as square or kite.\n"
+                             "Maps to -m.");
+
+    chkKarnotation = new QCheckBox("Karnotation output");
+    chkKarnotation->setToolTip("Display solutions in Karnotation (named move notation)\n"
+                               "instead of raw (x,y)/ tuples.  Maps to -k.");
+
+    chkMaxX = new QCheckBox("Max top turn:");
+    chkMaxX->setToolTip("Limit the maximum top-layer turn size (0–6 twelfths).\n"
+                        "Enabling this also disables the transformation equivalence (-x).\n"
+                        "Maps to -X<n>.");
+    spnMaxX = new QSpinBox();
+    spnMaxX->setRange(0, 6);
+    spnMaxX->setValue(3);
+    spnMaxX->setFixedWidth(48);
+    spnMaxX->setToolTip("Maximum top-layer turn in twelfths of a full rotation (0–6).");
+
+    chkMaxY = new QCheckBox("Max bottom turn:");
+    chkMaxY->setToolTip("Limit the maximum bottom-layer turn size (0–6 twelfths).\n"
+                        "Maps to -Y<n>.");
+    spnMaxY = new QSpinBox();
+    spnMaxY->setRange(0, 6);
+    spnMaxY->setValue(3);
+    spnMaxY->setFixedWidth(48);
+    spnMaxY->setToolTip("Maximum bottom-layer turn in twelfths of a full rotation (0–6).");
+
+    chkMaxTotal = new QCheckBox("Max total turn:");
+    chkMaxTotal->setToolTip("Limit the combined |top|+|bottom| turn per move pair (1–12).\n"
+                            "Maps to -Z<n>.");
+    spnMaxTotal = new QSpinBox();
+    spnMaxTotal->setRange(1, 12);
+    spnMaxTotal->setValue(6);
+    spnMaxTotal->setFixedWidth(48);
+    spnMaxTotal->setToolTip("Maximum combined turn amount per move pair (1–12).");
 
     chkTwist->setChecked(true);
     chkKarnotation->setChecked(true);
 
+    // ── Grid layout ──────────────────────────────────────────────────────────
     int row = 0;
     grid->addWidget(chkTwist,      row++, 0, 1, 2);
-    grid->addWidget(chkAllOptimal, row,   0);
-    grid->addWidget(txtSuboptimal, row++, 1);
+    grid->addWidget(allOptRow,     row++, 0, 1, 2);
     grid->addWidget(chkDepths,     row,   0);
     grid->addWidget(txtDepths,     row++, 1);
     grid->addWidget(chkGenerator,  row++, 0, 1, 2);
     grid->addWidget(chk2gen,       row++, 0, 1, 2);
     grid->addWidget(chkPseudo2gen, row++, 0, 1, 2);
     grid->addWidget(chkCubeshape,  row++, 0, 1, 2);
+    grid->addWidget(chkIgnoreMid,  row++, 0, 1, 2);
     grid->addWidget(chkKarnotation,row++, 0, 1, 2);
-    grid->addWidget(chkMaxX,       row,   0); grid->addWidget(txtMaxX,    row++, 1);
-    grid->addWidget(chkMaxY,       row,   0); grid->addWidget(txtMaxY,    row++, 1);
-    grid->addWidget(chkMaxTotal,   row,   0); grid->addWidget(txtMaxTotal,row++, 1);
+    grid->addWidget(chkMaxX,       row,   0); grid->addWidget(spnMaxX,    row++, 1);
+    grid->addWidget(chkMaxY,       row,   0); grid->addWidget(spnMaxY,    row++, 1);
+    grid->addWidget(chkMaxTotal,   row,   0); grid->addWidget(spnMaxTotal,row++, 1);
 
-    auto upd = [this]{ updateCommand(); };
+    // ── Connections ──────────────────────────────────────────────────────────
+    // updateConstraints fires first (may hide/disable widgets), then updateCommand rebuilds
+    // the command string from the final valid state.
+    auto upd = [this]{ updateConstraints(); updateCommand(); };
+
     connect(chkTwist,      &QCheckBox::toggled, this, upd);
     connect(chkAllOptimal, &QCheckBox::toggled, this, upd);
-    connect(txtSuboptimal, &QLineEdit::textChanged, this, upd);
+    connect(spnSuboptimal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkDepths,     &QCheckBox::toggled, this, upd);
     connect(txtDepths,     &QLineEdit::textChanged, this, upd);
     connect(chkGenerator,  &QCheckBox::toggled, this, upd);
     connect(chk2gen,       &QCheckBox::toggled, this, upd);
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
     connect(chkCubeshape,  &QCheckBox::toggled, this, upd);
+    connect(chkIgnoreMid,  &QCheckBox::toggled, this, upd);
     connect(chkKarnotation,&QCheckBox::toggled, this, upd);
     connect(chkMaxX,       &QCheckBox::toggled, this, upd);
-    connect(txtMaxX,       &QLineEdit::textChanged, this, upd);
+    connect(spnMaxX,       QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkMaxY,       &QCheckBox::toggled, this, upd);
-    connect(txtMaxY,       &QLineEdit::textChanged, this, upd);
+    connect(spnMaxY,       QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkMaxTotal,   &QCheckBox::toggled, this, upd);
-    connect(txtMaxTotal,   &QLineEdit::textChanged, this, upd);
+    connect(spnMaxTotal,   QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
 
     rightCol->addWidget(grpOptions);
 
@@ -548,6 +703,61 @@ void MainWindow::buildUI() {
     connect(btnSolve,    &QPushButton::clicked,  this, &MainWindow::onSolve);
     connect(btnCopy,     &QPushButton::clicked,  this, &MainWindow::onCopy);
     connect(chkRankErgo, &QCheckBox::toggled,    this, &MainWindow::onRankErgoToggled);
+
+    // Apply initial constraint state
+    updateConstraints();
+}
+
+// Enforce option incompatibilities and enable/disable dependent fields.
+// Called before updateCommand() so the command is always built from valid state.
+void MainWindow::updateConstraints() {
+    const bool is2gen    = chk2gen->isChecked();
+    const bool isPseudo  = chkPseudo2gen->isChecked();
+    const bool isAllOpt  = chkAllOptimal->isChecked();
+    const bool isDepths  = chkDepths->isChecked();
+
+    // Helper: disable a checkbox and silently uncheck it if currently checked.
+    // blockSignals prevents updateConstraints from being re-entered.
+    auto disableCheck = [](QCheckBox* cb) {
+        cb->setEnabled(false);
+        if (cb->isChecked()) {
+            cb->blockSignals(true);
+            cb->setChecked(false);
+            cb->blockSignals(false);
+        }
+    };
+
+    // ── 2Gen × Cubeshape: sq1opt error 18 ────────────────────────────────────
+    // 2gen requires the bottom layer to be fixed; cubeshape solves both layers.
+    if (is2gen)   disableCheck(chkCubeshape);
+    else          chkCubeshape->setEnabled(true);
+
+    if (chkCubeshape->isChecked()) disableCheck(chk2gen);
+    else if (!is2gen)              chk2gen->setEnabled(true);
+
+    // ── 2Gen × Pseudo2Gen: same twoGen variable, last writer wins ────────────
+    // Both set twoGen; having both active is meaningless. Disable the other.
+    if (is2gen)  disableCheck(chkPseudo2gen);
+    else         chkPseudo2gen->setEnabled(true);
+
+    if (isPseudo) disableCheck(chk2gen);
+    else if (!chkCubeshape->isChecked()) chk2gen->setEnabled(true);
+
+    // ── Specific depths × suboptimal count ───────────────────────────────────
+    // When a fixed depth is set, extraMoves (the +N number) is meaningless:
+    // sq1opt simply searches those exact depths without comparing to optimal.
+    // Hide the spinbox so the user can't enter a misleading value; emit -a only.
+    spnSuboptimal->setVisible(isAllOpt && !isDepths);
+    if (QLabel* lbl = findChild<QLabel*>("lblSuboptLabel"))
+        lbl->setVisible(isAllOpt && !isDepths);
+
+    // Dependent text field: only editable when its checkbox is active
+    txtDepths->setEnabled(isDepths);
+
+    // Max-turn spinboxes: only meaningful when their checkbox is active
+    spnMaxX->setEnabled(chkMaxX->isChecked());
+    spnMaxY->setEnabled(chkMaxY->isChecked());
+    spnMaxTotal->setEnabled(chkMaxTotal->isChecked());
 }
 
 void MainWindow::buildStyles() {
@@ -559,8 +769,23 @@ void MainWindow::buildStyles() {
         QCheckBox::indicator { width:14px; height:14px; border-radius:3px; border:1px solid #666; background:#2a2a3e; }
         QCheckBox::indicator:checked { background: #4a90d9; border-color: #4a90d9; }
         QCheckBox#chkRankErgo::indicator:checked { background: #d97a4a; border-color: #d97a4a; }
+        QCheckBox:disabled { color: #555; }
+        QCheckBox::indicator:disabled { border-color: #3a3a4e; background: #1e1e30; }
         QLineEdit { background: #2a2a3e; border: 1px solid #555; border-radius: 4px; padding: 3px 6px; color: #fff; }
+        QLineEdit:disabled { color: #555; background: #1e1e30; border-color: #3a3a4e; }
         QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; }
+        QSpinBox { background: #2a2a3e; border: 1px solid #555; border-radius: 4px;
+                   padding: 2px 4px; color: #fff; }
+        QSpinBox:disabled { color: #555; background: #1e1e30; border-color: #3a3a4e; }
+        QSpinBox::up-button, QSpinBox::down-button {
+            background: #3a3a5e; border: none; border-radius: 2px; width: 14px; }
+        QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: #4a4a7e; }
+        QSpinBox::up-arrow  { image: none; border-left: 4px solid transparent;
+                              border-right: 4px solid transparent;
+                              border-bottom: 5px solid #aaa; width: 0; height: 0; }
+        QSpinBox::down-arrow { image: none; border-left: 4px solid transparent;
+                               border-right: 4px solid transparent;
+                               border-top: 5px solid #aaa; width: 0; height: 0; }
         QTextEdit#txtOutput { background: #0d1117; border: 1px solid #444; border-radius: 4px;
                               font-family: monospace; font-size: 12px; color: #7ec8e3; }
         QPushButton { background: #2a2a3e; border: 1px solid #555; border-radius: 5px; padding: 5px 12px; color: #ddd; }
@@ -583,33 +808,37 @@ void MainWindow::buildStyles() {
 
 QStringList MainWindow::buildArgList() {
     QStringList args;
-    if (chkTwist->isChecked())      args << "-w";
+
+    if (chkTwist->isChecked()) args << "-w";
+
+    // -a / -a<n>: when specific depths are active, emit -a only (the +N extra-moves
+    // count is meaningless when the search depth is pinned by -d).
     if (chkAllOptimal->isChecked()) {
-        QString sub = txtSuboptimal->text().trimmed();
-        bool ok; int n = sub.toInt(&ok);
-        args << (ok && n > 0 ? QString("-a%1").arg(n) : QString("-a"));
+        const bool useNumber = !chkDepths->isChecked() && spnSuboptimal->value() > 0;
+        args << (useNumber ? QString("-a%1").arg(spnSuboptimal->value()) : QString("-a"));
     }
+
     if (chkDepths->isChecked()) {
         QString dv = txtDepths->text().trimmed().remove(' ');
         if (!dv.isEmpty()) args << QString("-d%1").arg(dv);
     }
+
     if (chkGenerator->isChecked())  args << "-g";
+
+    // 2gen / pseudo-2gen: updateConstraints() ensures at most one is checked.
     if (chk2gen->isChecked())       args << "-2";
     if (chkPseudo2gen->isChecked()) args << "-p";
+
     if (chkCubeshape->isChecked())  args << "-c";
+    if (chkIgnoreMid->isChecked())  args << "-m";
     if (chkKarnotation->isChecked())args << "-k";
-    if (chkMaxX->isChecked()) {
-        bool ok; int v = txtMaxX->text().toInt(&ok);
-        if (ok && v >= 0 && v <= 6) args << QString("-X%1").arg(v);
-    }
-    if (chkMaxY->isChecked()) {
-        bool ok; int v = txtMaxY->text().toInt(&ok);
-        if (ok && v >= 0 && v <= 6) args << QString("-Y%1").arg(v);
-    }
-    if (chkMaxTotal->isChecked()) {
-        bool ok; int v = txtMaxTotal->text().toInt(&ok);
-        if (ok && v >= 1 && v <= 12) args << QString("-Z%1").arg(v);
-    }
+
+    // Max-turn limits: spinboxes are disabled (not hidden) when their checkbox is off,
+    // so we only need to check isChecked().
+    if (chkMaxX->isChecked())     args << QString("-X%1").arg(spnMaxX->value());
+    if (chkMaxY->isChecked())     args << QString("-Y%1").arg(spnMaxY->value());
+    if (chkMaxTotal->isChecked()) args << QString("-Z%1").arg(spnMaxTotal->value());
+
     return args;
 }
 
@@ -624,6 +853,7 @@ void MainWindow::onSolve() {
     txtOutput->clear();
     m_rawLines.clear();
     m_solutionLines.clear();
+    m_seenSolutions.clear();
     chkRankErgo->setVisible(false);
     chkRankErgo->setChecked(false);
     lblStatus->setText("Solving...");
@@ -643,8 +873,15 @@ void MainWindow::onSolve() {
 }
 
 void MainWindow::onSolverLine(QString line) {
-    m_rawLines.append(line);
     bool isSolution = line.contains('[') && line.contains(']');
+    if (isSolution) {
+        // Deduplicate on the alg text before the "[tw|tu]" annotation.
+        int bracketPos = line.indexOf('[');
+        QString algKey = (bracketPos >= 0) ? line.left(bracketPos).trimmed() : line.trimmed();
+        if (m_seenSolutions.contains(algKey)) return;
+        m_seenSolutions.insert(algKey);
+    }
+    m_rawLines.append(line);
     if (isSolution) {
         m_solutionLines.append(line);
         txtOutput->append("<span style='color:#00ff88;font-weight:bold;'>" +
@@ -670,6 +907,7 @@ void MainWindow::onReset() {
     txtOutput->clear();
     m_rawLines.clear();
     m_solutionLines.clear();
+    m_seenSolutions.clear();
     chkRankErgo->setVisible(false);
     chkRankErgo->setChecked(false);
     lblStatus->setText("Ready.");
@@ -696,7 +934,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
     }
     if (m_solutionLines.isEmpty()) return;
     lblStatus->setText("Rating algorithms...");
-    auto rated = rateAndSort(m_solutionLines, m_posHex);
+    auto rated = rateAndSort(m_solutionLines, m_posHex, chkKarnotation->isChecked());
     for (auto& [origLine, score] : rated) {
         QString ranked = QString("%1  (%2)").arg(origLine).arg(score, 0, 'f', 2);
         txtOutput->append("<span style='color:#00ff88;font-weight:bold;'>" +

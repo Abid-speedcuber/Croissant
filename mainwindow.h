@@ -4,6 +4,7 @@
 #include <QString>
 #include <QStringList>
 #include <QPointer>
+#include <QSpinBox>
 
 class Sq1Widget;
 class QCheckBox;
@@ -36,6 +37,7 @@ private slots:
     void onSolverLine(QString line);
     void onSolverDone(int code);
     void updateCommand();
+    void updateConstraints();          // enforces option incompatibilities + enables/disables fields
     void onRankErgoToggled(bool checked);
 
 private:
@@ -46,20 +48,21 @@ private:
     Sq1Widget*    cubeWidget;
     QCheckBox*    chkTwist;
     QCheckBox*    chkAllOptimal;
-    QLineEdit*    txtSuboptimal;
+    QSpinBox*     spnSuboptimal;       // extra moves beyond optimal (0 = optimal only); hidden with -d
     QCheckBox*    chkDepths;
     QLineEdit*    txtDepths;
     QCheckBox*    chkGenerator;
     QCheckBox*    chk2gen;
     QCheckBox*    chkPseudo2gen;
     QCheckBox*    chkCubeshape;
+    QCheckBox*    chkIgnoreMid;        // -m: ignore middle-layer shape
     QCheckBox*    chkKarnotation;
     QCheckBox*    chkMaxX;
-    QLineEdit*    txtMaxX;
+    QSpinBox*     spnMaxX;
     QCheckBox*    chkMaxY;
-    QLineEdit*    txtMaxY;
+    QSpinBox*     spnMaxY;
     QCheckBox*    chkMaxTotal;
-    QLineEdit*    txtMaxTotal;
+    QSpinBox*     spnMaxTotal;
     QLineEdit*    txtCommand;
     QPushButton*  btnSolve;
     QPushButton*  btnCopy;
@@ -72,5 +75,6 @@ private:
     QPointer<SolverWorker> worker;  // QPointer auto-nulls on deletion — safe for repeated solves
     QStringList   m_rawLines;
     QStringList   m_solutionLines;
+    QSet<QString> m_seenSolutions;
     QString       m_posHex;          // position hex captured at solve time for ergo rating
 };

@@ -1346,6 +1346,11 @@ class PositionSolver {
 			out = replaceAll(out, std::string("9"), std::string("-3"));
 			out = replaceAll(out, std::string("8"), std::string("-4"));
 			out = replaceAll(out, std::string("7"), std::string("-5"));
+			// If the solution began with a slice, the leading "/" became a space
+			// during karnotation processing; restore it so the GUI can detect it.
+			if (!out.empty() && out[0] == ' ') {
+				out[0] = '/';
+			}
 		}
 		std::cout << out;
 		std::cout <<"  ["<<tw<<"|"<<tu;
