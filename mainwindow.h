@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QPointer>
 #include <QSpinBox>
+#include <QKeyEvent>
 
 class Sq1Widget;
 class QCheckBox;
@@ -39,6 +40,9 @@ private slots:
     void updateCommand();
     void updateConstraints();          // enforces option incompatibilities + enables/disables fields
     void onRankErgoToggled(bool checked);
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     void buildUI();

@@ -913,6 +913,32 @@ void MainWindow::onReset() {
     lblStatus->setText("Ready.");
 }
 
+void MainWindow::keyPressEvent(QKeyEvent* event) {
+    // All input fields are number-only (spinboxes, digit/comma line edits, read-only outputs),
+    // so letter keys are never needed for text entry — always route them to the cube.
+    auto sendCube = [this](Qt::Key k) {
+        QKeyEvent e(QEvent::KeyPress, k, Qt::NoModifier);
+        QApplication::sendEvent(cubeWidget, &e);
+    };
+
+    switch (event->key()) {
+    // Single-move shortcuts — forwarded straight to cubeWidget.
+    case Qt::Key_I: case Qt::Key_K:
+    case Qt::Key_J: case Qt::Key_F:
+    case Qt::Key_S: case Qt::Key_L:
+    case Qt::Key_Escape:
+        sendCube(static_cast<Qt::Key>(event->key()));
+        break;
+    // Double-move shortcuts.
+    case Qt::Key_H: sendCube(Qt::Key_J); sendCube(Qt::Key_J); break; // h = U U  (jj)
+    case Qt::Key_G: sendCube(Qt::Key_F); sendCube(Qt::Key_F); break; // g = U'U' (ff)
+    case Qt::Key_O: sendCube(Qt::Key_L); sendCube(Qt::Key_L); break; // o = D'D' (ll)
+    case Qt::Key_W: sendCube(Qt::Key_S); sendCube(Qt::Key_S); break; // w = D D  (ss)
+    default:
+        QMainWindow::keyPressEvent(event);
+    }
+}
+
 void MainWindow::onCopy() {
     QApplication::clipboard()->setText(txtCommand->text());
     lblStatus->setText("Copied to clipboard!");

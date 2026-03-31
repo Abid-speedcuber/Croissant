@@ -117,14 +117,26 @@ int Sq1Widget::hitTestBot(QPointF pt) {
 void Sq1Widget::mousePressEvent(QMouseEvent* event) {
     QPointF pt = event->position();
     int piece = -1;
-    bool isMiddle = (pt.y() >= MID_TOP && pt.y() < MID_BOT);
+    constexpr double r_len = MAIN_LEN + SUB_LEN;   // max drawn radius = 75 px
 
-    if(pt.y() < MID_TOP) {
-        piece = hitTestTop(pt);
-    } else if(pt.y() < MID_BOT) {
-        // middle strip
+    bool isMiddle = false;
+
+    if (pt.y() < MID_TOP) {
+        // Top layer: only accept clicks within the drawn circle.
+        double dx = pt.x() - TOP_CX, dy = pt.y() - TOP_CY;
+        if (dx*dx + dy*dy <= r_len*r_len)
+            piece = hitTestTop(pt);
+    } else if (pt.y() < MID_BOT) {
+        // Equator band: only accept clicks within the drawn rectangle x-extent.
+        double x1 = TOP_CX - r_len * 0.97;
+        double x3 = TOP_CX + r_len * 0.97;
+        if (pt.x() >= x1 && pt.x() <= x3)
+            isMiddle = true;
     } else {
-        piece = hitTestBot(pt);
+        // Bottom layer: only accept clicks within the drawn circle.
+        double dx = pt.x() - BOT_CX, dy = pt.y() - BOT_CY;
+        if (dx*dx + dy*dy <= r_len*r_len)
+            piece = hitTestBot(pt);
     }
 
     if(isMiddle) {
@@ -175,6 +187,7 @@ bool Sq1Widget::isTwistable() {
 }
 
 void Sq1Widget::doU() {
+    selected = -1;
     for(int moves=0;moves<12;moves++) {
         int c=position[11]; int d=partiality[11];
         for(int i=11;i>0;i--) { position[i]=position[i-1]; partiality[i]=partiality[i-1]; }
@@ -185,6 +198,7 @@ void Sq1Widget::doU() {
 }
 
 void Sq1Widget::doUPrime() {
+    selected = -1;
     for(int moves=0;moves<12;moves++) {
         int c=position[0]; int d=partiality[0];
         for(int i=0;i<11;i++) { position[i]=position[i+1]; partiality[i]=partiality[i+1]; }
@@ -195,6 +209,7 @@ void Sq1Widget::doUPrime() {
 }
 
 void Sq1Widget::doD() {
+    selected = -1;
     for(int moves=0;moves<12;moves++) {
         int c=position[23]; int d=partiality[23];
         for(int i=23;i>12;i--) { position[i]=position[i-1]; partiality[i]=partiality[i-1]; }
@@ -205,6 +220,7 @@ void Sq1Widget::doD() {
 }
 
 void Sq1Widget::doDPrime() {
+    selected = -1;
     for(int moves=0;moves<12;moves++) {
         int c=position[12]; int d=partiality[12];
         for(int i=12;i<23;i++) { position[i]=position[i+1]; partiality[i]=partiality[i+1]; }
@@ -215,6 +231,7 @@ void Sq1Widget::doDPrime() {
 }
 
 void Sq1Widget::doSlice() {
+    selected = -1;
     if(!isTwistable()) return;
     for(int i=6;i<12;i++) {
         std::swap(position[i],   position[i+6]);

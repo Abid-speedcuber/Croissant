@@ -1267,7 +1267,9 @@ class PositionSolver {
 		}
 		if( mu!=0 || md!=0 ) {
 			if( usebrackets && !karnotation ) out += "(";
-			out += std::to_string(mu) + "," + std::to_string(md);
+			out += std::to_string(mu);
+			if (!karnotation) out += ",";
+			out += std::to_string(md);
 			if( usebrackets && !karnotation ) out += ")";
 		}
 		return out;
@@ -1285,9 +1287,11 @@ class PositionSolver {
 		int mu=0, md=0;
 		int angle=0;
 		if( generator ){
+			bool isFirstOutputSlice = true;
 			for( int i=moveLen-1; i>=0; i--){
-				if( moveList[i]==0 ){
-					out += printmove(mu, md, (tw==0 && karnotation));
+				if( moveList[i]==0 ) {
+					out += printmove(mu, md, isFirstOutputSlice);
+					isFirstOutputSlice = false;
 					mu = md = 0;
 					out += "/";
 					tu++; tw++; angle++;
@@ -1303,8 +1307,8 @@ class PositionSolver {
 			}
 		}else{
 			for( int i=0; i<moveLen; i++){
-				if( moveList[i]==0 ){
-					out += printmove(mu, md, (tw==0 && karnotation));
+				if( moveList[i]==0 ) {
+					out += printmove(mu, md, false);
 					mu = md = 0;
 					out += "/";
 					tu++; tw++; angle++;
@@ -1319,16 +1323,9 @@ class PositionSolver {
 				}
 			}
 		}
-		out += printmove(mu, md, karnotation);
+		out += printmove(mu, md, !generator);
 		if (karnotation) {
 			out = replaceAll(out, std::string(" "), std::string(""));
-
-			// replace all negative numbers to avoid e.g. (-2,-4) -> -T
-			out = replaceAll(out, std::string("-1"), std::string("&"));
-			out = replaceAll(out, std::string("-2"), std::string("^"));
-			out = replaceAll(out, std::string("-3"), std::string("9"));
-			out = replaceAll(out, std::string("-4"), std::string("8"));
-			out = replaceAll(out, std::string("-5"), std::string("7"));
 
 			// do the karnotation replacements
 			for (int i = KARNOTATION_LEN-1; i>=0; i--)
@@ -1340,12 +1337,6 @@ class PositionSolver {
 			out = replaceAll(out, std::string("/"), std::string(" "));
 			out = replaceAll(out, std::string("\\"), std::string("/")); // handle slashes for E/, e/
 			out = replaceAll(out, std::string(","), std::string(""));
-			// undo number replacement
-			out = replaceAll(out, std::string("&"), std::string("-1"));
-			out = replaceAll(out, std::string("^"), std::string("-2"));
-			out = replaceAll(out, std::string("9"), std::string("-3"));
-			out = replaceAll(out, std::string("8"), std::string("-4"));
-			out = replaceAll(out, std::string("7"), std::string("-5"));
 			// If the solution began with a slice, the leading "/" became a space
 			// during karnotation processing; restore it so the GUI can detect it.
 			if (!out.empty() && out[0] == ' ') {
