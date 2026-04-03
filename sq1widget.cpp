@@ -38,6 +38,8 @@ void Sq1Widget::drawSelection(QPainter& p, QVector<QPointF> pts) {
 
 void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, double startAngle) {
     double angle = startAngle;
+    QVector<QPointF> selPts;   // accumulated during geometry pass; drawn last
+
     for(int i=start; i<end; ) {
         int x = position[i];
         int pi = i;
@@ -54,7 +56,7 @@ void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, doubl
             // side faces
             drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]]);
             drawPoly(p, {p2, p2x, p3x, p3}, partiality[i]>0 ? colors[6] : colors[side_colors[x][1]]);
-            if(selected == pi) drawSelection(p, {center, p1x, p2x, p3x});
+            if(selected == pi) selPts = {center, p1x, p2x, p3x};
             i++; // skip duplicate corner slot
             angle -= 60;
         } else {
@@ -67,11 +69,14 @@ void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, doubl
             drawPoly(p, {center, p1, p2}, partiality[i]>1 ? colors[6] : colors[x<12?0:1]);
             // side face
             drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]]);
-            if(selected == pi) drawSelection(p, {center, p1x, p2x});
+            if(selected == pi) selPts = {center, p1x, p2x};
             angle -= 30;
         }
         i++;
     }
+
+    // Second pass: draw selection highlight on top of all geometry in this layer
+    if (!selPts.isEmpty()) drawSelection(p, selPts);
 }
 
 void Sq1Widget::paintEvent(QPaintEvent*) {
@@ -99,44 +104,79 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
 // ------- Hit testing -------
 
 int Sq1Widget::hitTestTop(QPointF pt) {
-    double dx = pt.x() - TOP_CX, dy = TOP_CY - pt.y();
-    double angleDeg = qRadiansToDegrees(qAtan2(dy, dx));
-    int slot = (5 + (int)qFloor((105 - angleDeg)/30)) % 12;
-    if(slot>0 && position[slot]==position[slot-1]) slot--;
-    return slot;
+    // Mirror drawLayer(0,12,{TOP_CX,TOP_CY},-105) exactly, test each piece polygon.
+    QPointF center(TOP_CX, TOP_CY);
+    double angle = -105.0;
+    for (int i = 0; i < 12; ) {
+        int x  = position[i];
+        int pi = i;
+        QPolygonF poly;
+        if (x < 8) {
+            // Corner hull: (center, p1x, p2x, p3x)
+            poly << center
+                 << polar(center, angle,    MAIN_LEN + SUB_LEN)
+                 << polar(center, angle-30, (MAIN_LEN + SUB_LEN) / CORNER_FACTOR)
+                 << polar(center, angle-60, MAIN_LEN + SUB_LEN);
+            i++;          // skip duplicate slot
+            angle -= 60.0;
+        } else {
+            // Edge hull: (center, p1x, p2x)
+            poly << center
+                 << polar(center, angle,    MAIN_LEN + SUB_LEN)
+                 << polar(center, angle-30, MAIN_LEN + SUB_LEN);
+            angle -= 30.0;
+        }
+        i++;
+        if (poly.containsPoint(pt, Qt::OddEvenFill)) return pi;
+    }
+    return -1;
 }
 
 int Sq1Widget::hitTestBot(QPointF pt) {
-    double dx = pt.x() - BOT_CX, dy = BOT_CY - pt.y();
-    double angleDeg = qRadiansToDegrees(qAtan2(dy, dx));
-    int slot = (12 + (int)qFloor((105 - angleDeg)/30))%12 + 12;
-    if(slot>12 && position[slot]==position[slot-1]) slot--;
-    return slot;
+    // Mirror drawLayer(12,24,{BOT_CX,BOT_CY},105) exactly, test each piece polygon.
+    QPointF center(BOT_CX, BOT_CY);
+    double angle = 105.0;
+    for (int i = 12; i < 24; ) {
+        int x  = position[i];
+        int pi = i;
+        QPolygonF poly;
+        if (x < 8) {
+            poly << center
+                 << polar(center, angle,    MAIN_LEN + SUB_LEN)
+                 << polar(center, angle-30, (MAIN_LEN + SUB_LEN) / CORNER_FACTOR)
+                 << polar(center, angle-60, MAIN_LEN + SUB_LEN);
+            i++;
+            angle -= 60.0;
+        } else {
+            poly << center
+                 << polar(center, angle,    MAIN_LEN + SUB_LEN)
+                 << polar(center, angle-30, MAIN_LEN + SUB_LEN);
+            angle -= 30.0;
+        }
+        i++;
+        if (poly.containsPoint(pt, Qt::OddEvenFill)) return pi;
+    }
+    return -1;
 }
 
 void Sq1Widget::mousePressEvent(QMouseEvent* event) {
     QPointF pt = event->position();
     int piece = -1;
-    constexpr double r_len = MAIN_LEN + SUB_LEN;   // max drawn radius = 75 px
-
     bool isMiddle = false;
 
     if (pt.y() < MID_TOP) {
-        // Top layer: only accept clicks within the drawn circle.
-        double dx = pt.x() - TOP_CX, dy = pt.y() - TOP_CY;
-        if (dx*dx + dy*dy <= r_len*r_len)
-            piece = hitTestTop(pt);
+        // Top layer: polygon hit test handles exact containment.
+        piece = hitTestTop(pt);
     } else if (pt.y() < MID_BOT) {
-        // Equator band: only accept clicks within the drawn rectangle x-extent.
+        // Equator band: accept clicks within the drawn rectangle x-extent.
+        constexpr double r_len = MAIN_LEN + SUB_LEN;
         double x1 = TOP_CX - r_len * 0.97;
         double x3 = TOP_CX + r_len * 0.97;
         if (pt.x() >= x1 && pt.x() <= x3)
             isMiddle = true;
     } else {
-        // Bottom layer: only accept clicks within the drawn circle.
-        double dx = pt.x() - BOT_CX, dy = pt.y() - BOT_CY;
-        if (dx*dx + dy*dy <= r_len*r_len)
-            piece = hitTestBot(pt);
+        // Bottom layer: polygon hit test handles exact containment.
+        piece = hitTestBot(pt);
     }
 
     if(isMiddle) {

@@ -6,7 +6,9 @@
 #include <QPointer>
 #include <QSpinBox>
 #include <QKeyEvent>
+#include <atomic>
 
+class QProcess;
 class Sq1Widget;
 class QCheckBox;
 class QLineEdit;
@@ -21,9 +23,12 @@ public:
     QString positionStr;
     QStringList flags;
     void run() override;
+    void requestStop();                     // kill the running process from any thread
 signals:
     void lineReady(QString line);
     void finished(int exitCode);
+private:
+    std::atomic<QProcess*> m_proc{nullptr}; // set while process is live; null otherwise
 };
 
 class MainWindow : public QMainWindow {
@@ -31,35 +36,40 @@ class MainWindow : public QMainWindow {
 public:
     MainWindow(QWidget* parent = nullptr);
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override; // global key routing + stop
+    void keyPressEvent(QKeyEvent* event) override;
+
 private slots:
+    void onSolveButtonClicked();    // dispatches to onSolve() or stopSolver()
     void onSolve();
     void onCopy();
     void onReset();
     void onSolverLine(QString line);
     void onSolverDone(int code);
     void updateCommand();
-    void updateConstraints();          // enforces option incompatibilities + enables/disables fields
+    void updateConstraints();       // enforces option incompatibilities + enables/disables fields
     void onRankErgoToggled(bool checked);
-
-protected:
-    void keyPressEvent(QKeyEvent* event) override;
+    void stopSolver();              // kill worker and update UI
+    void toggleExpand();            // expand / shrink the output terminal
 
 private:
     void buildUI();
     void buildStyles();
     QStringList buildArgList();
+    void updateRankErgoState();     // enable/disable chkRankErgo and refresh its tooltip
 
     Sq1Widget*    cubeWidget;
     QCheckBox*    chkTwist;
     QCheckBox*    chkAllOptimal;
-    QSpinBox*     spnSuboptimal;       // extra moves beyond optimal (0 = optimal only); hidden with -d
+    QSpinBox*     spnSuboptimal;    // extra moves beyond optimal (0 = optimal only); hidden with -d
     QCheckBox*    chkDepths;
     QLineEdit*    txtDepths;
     QCheckBox*    chkGenerator;
     QCheckBox*    chk2gen;
     QCheckBox*    chkPseudo2gen;
     QCheckBox*    chkCubeshape;
-    QCheckBox*    chkIgnoreMid;        // -m: ignore middle-layer shape
+    QCheckBox*    chkIgnoreMid;     // -m: ignore middle-layer shape
     QCheckBox*    chkKarnotation;
     QCheckBox*    chkMaxX;
     QSpinBox*     spnMaxX;
@@ -71,14 +81,19 @@ private:
     QPushButton*  btnSolve;
     QPushButton*  btnCopy;
     QPushButton*  btnReset;
+    QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
+    QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
+    QWidget*      m_leftPanel;      // cube widget column (hidden when expanded)
     QTextEdit*    txtOutput;
     QLabel*       lblStatus;
     QProgressBar* progressBar;
     QCheckBox*    chkRankErgo;
 
-    QPointer<SolverWorker> worker;  // QPointer auto-nulls on deletion — safe for repeated solves
+    QPointer<SolverWorker> worker;
     QStringList   m_rawLines;
     QStringList   m_solutionLines;
     QSet<QString> m_seenSolutions;
-    QString       m_posHex;          // position hex captured at solve time for ergo rating
+    QString       m_posHex;         // position hex captured at solve time for ergo rating
+    bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
+    bool          m_expanded{false};// true when output terminal is in full-screen mode
 };
