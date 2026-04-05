@@ -84,6 +84,7 @@ private:
     QPushButton*  btnReset;
     QLineEdit*    txtScramble;
     QPushButton*  btnApplyScramble;
+    QPushButton*  btnScrambleMode;  // toggles scramble / algorithm mode
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
@@ -101,4 +102,5 @@ private:
     bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
     qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
+    bool          m_scrambleIsAlg{false}; // true = input alg mode (inverts before applying)
 };

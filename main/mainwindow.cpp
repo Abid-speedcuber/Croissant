@@ -476,11 +476,23 @@ void MainWindow::buildUI() {
     txtScramble = new QLineEdit();
     txtScramble->setPlaceholderText("e.g. (-5,-3)/ (0,-3)/ ...");
     txtScramble->setToolTip("Enter a move sequence in (x,y)/ format and press Apply.\n"
-                            "The cube visualization and command line will update.");
+                            "The cube visualization and command line will update.\n"
+                            "Empty input resets to solved.");
+    scrambleLay->addWidget(txtScramble);
+
+    QHBoxLayout* scrambleBtnRow = new QHBoxLayout();
+    scrambleBtnRow->setSpacing(4);
+    btnScrambleMode = new QPushButton("Scramble");
+    btnScrambleMode->setObjectName("btnScrambleMode");
+    btnScrambleMode->setToolTip("Click to switch between Scramble mode and Algorithm mode.\n"
+                                "Algorithm mode inverts the sequence before applying.");
+    btnScrambleMode->setCheckable(true);
+    btnScrambleMode->setChecked(false);
     btnApplyScramble = new QPushButton("Apply");
     btnApplyScramble->setObjectName("btnApplyScramble");
-    scrambleLay->addWidget(txtScramble);
-    scrambleLay->addWidget(btnApplyScramble);
+    scrambleBtnRow->addWidget(btnScrambleMode);
+    scrambleBtnRow->addWidget(btnApplyScramble);
+    scrambleLay->addLayout(scrambleBtnRow);
     leftCol->addWidget(grpScramble);
     leftCol->addStretch();
 
@@ -502,6 +514,10 @@ void MainWindow::buildUI() {
     connect(btnReset, &QPushButton::clicked, this, &MainWindow::onReset);
     connect(btnApplyScramble, &QPushButton::clicked, this, &MainWindow::onApplyScramble);
     connect(txtScramble, &QLineEdit::returnPressed, this, &MainWindow::onApplyScramble);
+    connect(btnScrambleMode, &QPushButton::toggled, this, [this](bool checked){
+        m_scrambleIsAlg = checked;
+        btnScrambleMode->setText(checked ? "Algorithm" : "Scramble");
+    });
 
     root->addWidget(leftScroll);
 
@@ -884,6 +900,9 @@ void MainWindow::buildStyles() {
         QPushButton#btnReset { background: #6b1a1a; border-color: #b52d2d; color: #fdd; }
         QPushButton#btnApplyScramble { background: #1a3a6b; border-color: #2d6bb5; color: #ddf; }
         QPushButton#btnApplyScramble:hover { background: #1e4a8a; }
+        QPushButton#btnScrambleMode { background: #2a2a3e; border-color: #555; color: #aaa; }
+        QPushButton#btnScrambleMode:checked { background: #1a4a2a; border-color: #2db570; color: #afd; }
+        QPushButton#btnScrambleMode:hover { background: #3a3a5e; }
         QPushButton#btnExpand, QPushButton#btnCopyTerminal {
             background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
             color: #7a7aaa; font-size: 13px; padding: 0;
@@ -1093,15 +1112,17 @@ void MainWindow::onReset() {
 // -------------------------------------------------------
 void MainWindow::onApplyScramble() {
     QString raw = txtScramble->text().trimmed();
-    if (raw.isEmpty()) return;
 
-    // Parse (x,y)/ move sequence and apply to a fresh solved position
-    // Position array: indices 0-11 top layer, 12-23 bottom layer
-    // Solved: {0,0,8,1,1,9,2,2,10,3,3,11,  12,4,4,13,5,5,14,6,6,15,7,7}
+    // Empty input = reset to solved
+    if (raw.isEmpty()) {
+        cubeWidget->reset();
+        onReset();
+        return;
+    }
+
     int pos[24] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
-    int mid = 0; // 0=square, 1=kite
+    int mid = 0;
 
-    // Helper lambdas mirroring sq1opt FullPosition logic
     auto doTop = [&](int m) {
         m = ((m % 12) + 12) % 12;
         for (int moves = 0; moves < m; moves++) {
@@ -1128,29 +1149,67 @@ void MainWindow::onApplyScramble() {
         mid = 1 - mid;
     };
 
-    // Tokenise: strip brackets, split on '/'
-    QString cleaned = raw;
-    cleaned.remove('(').remove(')');
-    QStringList tokens = cleaned.split('/', Qt::SkipEmptyParts);
+    // ── Parse the move sequence correctly ────────────────────────────────────
+    // The format is a series of moves separated by '/'.
+    // Each '/' is a slice. A turn (x,y) precedes the slash that follows it.
+    // Examples:
+    //   "(1,0)/(3,3)"  → turn(1,0), slice, turn(3,3)          [no trailing slice]
+    //   "(1,0)/(3,3)/" → turn(1,0), slice, turn(3,3), slice
+    //   "/(1,0)"       → slice, turn(1,0)
+    //   "/"            → slice only
+    //
+    // Algorithm: scan character by character, collecting turn tokens and
+    // counting '/' separators explicitly so leading/trailing slashes are preserved.
 
+    struct Move { bool isSlice; int x, y; };
+    QVector<Move> moves;
+
+    QString s = raw;
+    int idx = 0;
     bool ok = true;
-    for (int t = 0; t < tokens.size(); t++) {
-        QString tok = tokens[t].trimmed();
-        if (tok.isEmpty()) {
-            // bare slash = slice only
-            doSlice();
-            continue;
+
+    // If the sequence starts with '/' it means a leading slice before any turn.
+    // We'll handle this by treating the string as a sequence of:
+    //   [optional leading /] (turn /) * [optional trailing turn]
+    // We do a character-level parse.
+
+    while (idx < s.size() && ok) {
+        // Skip whitespace
+        while (idx < s.size() && s[idx].isSpace()) idx++;
+        if (idx >= s.size()) break;
+
+        if (s[idx] == '/') {
+            // Slash = slice
+            moves.append({true, 0, 0});
+            idx++;
+        } else if (s[idx] == '(' || s[idx].isDigit() || s[idx] == '-') {
+            // Turn: optional '(' x ',' y optional ')'
+            if (s[idx] == '(') idx++;
+            // parse x
+            while (idx < s.size() && s[idx].isSpace()) idx++;
+            int sign = 1;
+            if (idx < s.size() && s[idx] == '-') { sign = -1; idx++; }
+            int num = 0; bool hasDigit = false;
+            while (idx < s.size() && s[idx].isDigit()) { num = num*10+(s[idx].toLatin1()-'0'); idx++; hasDigit = true; }
+            if (!hasDigit) { ok = false; break; }
+            int x = sign * num;
+            while (idx < s.size() && s[idx].isSpace()) idx++;
+            if (idx >= s.size() || s[idx] != ',') { ok = false; break; }
+            idx++; // skip ','
+            // parse y
+            while (idx < s.size() && s[idx].isSpace()) idx++;
+            sign = 1;
+            if (idx < s.size() && s[idx] == '-') { sign = -1; idx++; }
+            num = 0; hasDigit = false;
+            while (idx < s.size() && s[idx].isDigit()) { num = num*10+(s[idx].toLatin1()-'0'); idx++; hasDigit = true; }
+            if (!hasDigit) { ok = false; break; }
+            int y = sign * num;
+            while (idx < s.size() && s[idx].isSpace()) idx++;
+            if (idx < s.size() && s[idx] == ')') idx++;
+            moves.append({false, x, y});
+        } else {
+            ok = false; break;
         }
-        // expect "x,y"
-        int comma = tok.indexOf(',');
-        if (comma < 0) { ok = false; break; }
-        bool okX, okY;
-        int x = tok.left(comma).trimmed().toInt(&okX);
-        int y = tok.mid(comma+1).trimmed().toInt(&okY);
-        if (!okX || !okY) { ok = false; break; }
-        doTop(x);
-        doBot(y);
-        doSlice();
     }
 
     if (!ok) {
@@ -1158,20 +1217,36 @@ void MainWindow::onApplyScramble() {
         return;
     }
 
+    // ── Optionally invert if "Input algorithm" mode ───────────────────────────
+    if (m_scrambleIsAlg) {
+        // Invert: reverse the move list and negate all turns
+        QVector<Move> inv;
+        for (int i = moves.size()-1; i >= 0; i--) {
+            Move mv = moves[i];
+            if (!mv.isSlice) { mv.x = -mv.x; mv.y = -mv.y; }
+            inv.append(mv);
+        }
+        moves = inv;
+    }
+
+    // ── Apply moves ───────────────────────────────────────────────────────────
+    for (const Move& mv : moves) {
+        if (mv.isSlice) doSlice();
+        else { doTop(mv.x); doBot(mv.y); }
+    }
+
     // Build position string
     const QString pieceChars = "ABCDEFGH12345678";
     QString posStr;
     for (int i = 0; i < 24; i++) {
         posStr += pieceChars[pos[i]];
-        if (pos[i] < 8) i++; // skip duplicate corner slot
+        if (pos[i] < 8) i++;
     }
     posStr += (mid == 0 ? '-' : '/');
 
-    // Update cube widget via existing parser
     cubeWidget->setPositionFromString(posStr);
-    // Update command line
     updateCommand();
-    lblStatus->setText("Scramble applied.");
+    lblStatus->setText(m_scrambleIsAlg ? "Algorithm applied (inverted)." : "Scramble applied.");
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
