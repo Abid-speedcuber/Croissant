@@ -468,6 +468,20 @@ void MainWindow::buildUI() {
     btnReset = new QPushButton("Reset  [Esc]");
     btnReset->setObjectName("btnReset");
     leftCol->addWidget(btnReset);
+
+    QGroupBox* grpScramble = new QGroupBox("Scramble input");
+    QVBoxLayout* scrambleLay = new QVBoxLayout(grpScramble);
+    scrambleLay->setSpacing(4);
+    scrambleLay->setContentsMargins(6,8,6,6);
+    txtScramble = new QLineEdit();
+    txtScramble->setPlaceholderText("e.g. (-5,-3)/ (0,-3)/ ...");
+    txtScramble->setToolTip("Enter a move sequence in (x,y)/ format and press Apply.\n"
+                            "The cube visualization and command line will update.");
+    btnApplyScramble = new QPushButton("Apply");
+    btnApplyScramble->setObjectName("btnApplyScramble");
+    scrambleLay->addWidget(txtScramble);
+    scrambleLay->addWidget(btnApplyScramble);
+    leftCol->addWidget(grpScramble);
     leftCol->addStretch();
 
     QScrollArea* leftScroll = new QScrollArea();
@@ -486,6 +500,8 @@ void MainWindow::buildUI() {
     connect(btnDP,    &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnReset, &QPushButton::clicked, cubeWidget, &Sq1Widget::reset);
     connect(btnReset, &QPushButton::clicked, this, &MainWindow::onReset);
+    connect(btnApplyScramble, &QPushButton::clicked, this, &MainWindow::onApplyScramble);
+    connect(txtScramble, &QLineEdit::returnPressed, this, &MainWindow::onApplyScramble);
 
     root->addWidget(leftScroll);
 
@@ -866,6 +882,8 @@ void MainWindow::buildStyles() {
         QPushButton#btnSolve:hover { background: #227a47; }
         QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
         QPushButton#btnReset { background: #6b1a1a; border-color: #b52d2d; color: #fdd; }
+        QPushButton#btnApplyScramble { background: #1a3a6b; border-color: #2d6bb5; color: #ddf; }
+        QPushButton#btnApplyScramble:hover { background: #1e4a8a; }
         QPushButton#btnExpand, QPushButton#btnCopyTerminal {
             background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
             color: #7a7aaa; font-size: 13px; padding: 0;
@@ -1073,6 +1091,89 @@ void MainWindow::onReset() {
 // keyPressEvent — the global eventFilter handles all routing;
 // this is kept only as a fallback for events that slip through.
 // -------------------------------------------------------
+void MainWindow::onApplyScramble() {
+    QString raw = txtScramble->text().trimmed();
+    if (raw.isEmpty()) return;
+
+    // Parse (x,y)/ move sequence and apply to a fresh solved position
+    // Position array: indices 0-11 top layer, 12-23 bottom layer
+    // Solved: {0,0,8,1,1,9,2,2,10,3,3,11,  12,4,4,13,5,5,14,6,6,15,7,7}
+    int pos[24] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
+    int mid = 0; // 0=square, 1=kite
+
+    // Helper lambdas mirroring sq1opt FullPosition logic
+    auto doTop = [&](int m) {
+        m = ((m % 12) + 12) % 12;
+        for (int moves = 0; moves < m; moves++) {
+            int c = pos[11];
+            for (int i = 11; i > 0; i--) pos[i] = pos[i-1];
+            pos[0] = c;
+        }
+    };
+    auto doBot = [&](int m) {
+        m = ((m % 12) + 12) % 12;
+        for (int moves = 0; moves < m; moves++) {
+            int c = pos[23];
+            for (int i = 23; i > 12; i--) pos[i] = pos[i-1];
+            pos[12] = c;
+        }
+    };
+    auto isTwistable = [&]() {
+        return pos[0]!=pos[11] && pos[5]!=pos[6] &&
+               pos[12]!=pos[23] && pos[17]!=pos[18];
+    };
+    auto doSlice = [&]() {
+        if (!isTwistable()) return;
+        for (int i = 6; i < 12; i++) std::swap(pos[i], pos[i+6]);
+        mid = 1 - mid;
+    };
+
+    // Tokenise: strip brackets, split on '/'
+    QString cleaned = raw;
+    cleaned.remove('(').remove(')');
+    QStringList tokens = cleaned.split('/', Qt::SkipEmptyParts);
+
+    bool ok = true;
+    for (int t = 0; t < tokens.size(); t++) {
+        QString tok = tokens[t].trimmed();
+        if (tok.isEmpty()) {
+            // bare slash = slice only
+            doSlice();
+            continue;
+        }
+        // expect "x,y"
+        int comma = tok.indexOf(',');
+        if (comma < 0) { ok = false; break; }
+        bool okX, okY;
+        int x = tok.left(comma).trimmed().toInt(&okX);
+        int y = tok.mid(comma+1).trimmed().toInt(&okY);
+        if (!okX || !okY) { ok = false; break; }
+        doTop(x);
+        doBot(y);
+        doSlice();
+    }
+
+    if (!ok) {
+        lblStatus->setText("Could not parse scramble.");
+        return;
+    }
+
+    // Build position string
+    const QString pieceChars = "ABCDEFGH12345678";
+    QString posStr;
+    for (int i = 0; i < 24; i++) {
+        posStr += pieceChars[pos[i]];
+        if (pos[i] < 8) i++; // skip duplicate corner slot
+    }
+    posStr += (mid == 0 ? '-' : '/');
+
+    // Update cube widget via existing parser
+    cubeWidget->setPositionFromString(posStr);
+    // Update command line
+    updateCommand();
+    lblStatus->setText("Scramble applied.");
+}
+
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     QMainWindow::keyPressEvent(event);
 }

@@ -6,6 +6,6 @@ int main(int argc, char* argv[]) {
     app.setApplicationName("Square-1 Optimizer");
     app.setApplicationVersion("2.1");
     MainWindow w;
-    w.show();
+    w.showMaximized();
     return app.exec();
 }

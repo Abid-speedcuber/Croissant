@@ -51,6 +51,7 @@ private slots:
     void updateConstraints();       // enforces option incompatibilities + enables/disables fields
     void onRankErgoToggled(bool checked);
     void stopSolver();              // kill worker and update UI
+    void onApplyScramble();
     void toggleExpand();            // expand / shrink the output terminal
 
 private:
@@ -81,6 +82,8 @@ private:
     QPushButton*  btnSolve;
     QPushButton*  btnCopy;
     QPushButton*  btnReset;
+    QLineEdit*    txtScramble;
+    QPushButton*  btnApplyScramble;
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
