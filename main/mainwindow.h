@@ -82,6 +82,7 @@ private:
     QPushButton*  btnCopy;
     QPushButton*  btnReset;
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
+    QPushButton*  btnCopyTerminal;  // copy terminal contents
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
     QWidget*      m_leftPanel;      // cube widget column (hidden when expanded)
     QTextEdit*    txtOutput;

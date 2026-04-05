@@ -22,6 +22,7 @@
 #include <QToolTip>
 #include <QHelpEvent>
 #include <QTextBlock>
+#include <QScrollBar>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <algorithm>
@@ -676,7 +677,7 @@ void MainWindow::buildUI() {
     QHBoxLayout* cmdRow = new QHBoxLayout(cmdRowWidget);
     cmdRow->setContentsMargins(0, 0, 0, 0);
     txtCommand = new QLineEdit();
-    txtCommand->setReadOnly(true);
+    txtCommand->setReadOnly(false);
     txtCommand->setObjectName("txtCommand");
     btnCopy = new QPushButton("Copy");
     btnCopy->setFixedWidth(60);
@@ -706,10 +707,16 @@ void MainWindow::buildUI() {
     btnExpand->setObjectName("btnExpand");
     btnExpand->setFixedSize(22, 22);
     btnExpand->setToolTip("Expand terminal");
+    btnCopyTerminal = new QPushButton("⎘");
+    btnCopyTerminal->setObjectName("btnCopyTerminal");
+    btnCopyTerminal->setFixedSize(22, 22);
+    btnCopyTerminal->setToolTip("Copy terminal contents");
     rhLay->addWidget(lblOut);
     rhLay->addStretch();
+    rhLay->addWidget(btnCopyTerminal);
     rhLay->addWidget(btnExpand);
-    btnExpand->setVisible(false);   // shown only when solutions are present
+    btnExpand->setVisible(false);
+    btnCopyTerminal->setVisible(false);
     rightCol->addWidget(resultsHeader);
 
     txtOutput = new QTextEdit();
@@ -731,9 +738,13 @@ void MainWindow::buildUI() {
     root->addLayout(rightCol, 1);
 
     // ── Button connections ────────────────────────────────────────────────────
-    connect(btnSolve,    &QPushButton::clicked,  this, &MainWindow::onSolveButtonClicked);
-    connect(btnCopy,     &QPushButton::clicked,  this, &MainWindow::onCopy);
-    connect(btnExpand,   &QPushButton::clicked,  this, &MainWindow::toggleExpand);
+    connect(btnSolve,        &QPushButton::clicked,  this, &MainWindow::onSolveButtonClicked);
+    connect(btnCopy,         &QPushButton::clicked,  this, &MainWindow::onCopy);
+    connect(btnExpand,       &QPushButton::clicked,  this, &MainWindow::toggleExpand);
+    connect(btnCopyTerminal, &QPushButton::clicked,  this, [this]{
+        QApplication::clipboard()->setText(txtOutput->toPlainText());
+        lblStatus->setText("Terminal copied to clipboard!");
+    });
     connect(chkRankErgo, &QCheckBox::toggled,    this, &MainWindow::onRankErgoToggled);
 
     updateConstraints();
@@ -844,11 +855,11 @@ void MainWindow::buildStyles() {
         QPushButton#btnSolve:hover { background: #227a47; }
         QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
         QPushButton#btnReset { background: #6b1a1a; border-color: #b52d2d; color: #fdd; }
-        QPushButton#btnExpand {
+        QPushButton#btnExpand, QPushButton#btnCopyTerminal {
             background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
             color: #7a7aaa; font-size: 13px; padding: 0;
         }
-        QPushButton#btnExpand:hover { background: #2a2a4a; border-color: #5a5a8a; color: #b0b0dd; }
+        QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover { background: #2a2a4a; border-color: #5a5a8a; color: #b0b0dd; }
         QProgressBar { border: none; background: #2a2a3e; border-radius: 3px; }
         QProgressBar::chunk { background: #4a90d9; border-radius: 3px; }
         QLabel#lblStatus { color: #888; font-size: 11px; }
@@ -978,7 +989,8 @@ void MainWindow::onSolverLine(QString line) {
     m_rawLines.append(line);
     if (isSolution) {
         m_solutionLines.append(line);
-        btnExpand->setVisible(true);  // reveal once there's something to expand for
+        btnExpand->setVisible(true);
+        btnCopyTerminal->setVisible(true);
         // Alternate row backgrounds: near-black vs subtle dark-blue, text always light blue
         const char* bg = (m_solutionLines.size() % 2 == 1) ? "#0d1117" : "#131c28";
         txtOutput->append(QString(
@@ -1030,6 +1042,7 @@ void MainWindow::onReset() {
     lblStatus->setText("Ready.");
     // Hide the expand button and collapse if currently expanded.
     btnExpand->setVisible(false);
+    btnCopyTerminal->setVisible(false);
     if (m_expanded) toggleExpand();
     updateRankErgoState();
 }
@@ -1055,6 +1068,7 @@ void MainWindow::onCopy() {
 // -------------------------------------------------------
 void MainWindow::onRankErgoToggled(bool checked) {
     txtOutput->clear();
+    txtOutput->verticalScrollBar()->setValue(0);
     if (!checked) {
         int solIdx = 0;
         for (const QString& line : m_rawLines) {
