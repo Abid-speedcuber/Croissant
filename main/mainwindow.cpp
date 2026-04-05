@@ -469,30 +469,42 @@ void MainWindow::buildUI() {
     btnReset->setObjectName("btnReset");
     leftCol->addWidget(btnReset);
 
-    QGroupBox* grpScramble = new QGroupBox("Scramble input");
+    QGroupBox* grpScramble = new QGroupBox("Scramble / Alg input");
     QVBoxLayout* scrambleLay = new QVBoxLayout(grpScramble);
     scrambleLay->setSpacing(4);
     scrambleLay->setContentsMargins(6,8,6,6);
-    txtScramble = new QLineEdit();
-    txtScramble->setPlaceholderText("e.g. (-5,-3)/ (0,-3)/ ...");
-    txtScramble->setToolTip("Enter a move sequence in (x,y)/ format and press Apply.\n"
-                            "The cube visualization and command line will update.\n"
-                            "Empty input resets to solved.");
-    scrambleLay->addWidget(txtScramble);
+    QHBoxLayout* scrambleInputRow = new QHBoxLayout();
+    scrambleInputRow->setSpacing(0);
+    scrambleInputRow->setContentsMargins(0,0,0,0);
 
-    QHBoxLayout* scrambleBtnRow = new QHBoxLayout();
-    scrambleBtnRow->setSpacing(4);
-    btnScrambleMode = new QPushButton("Scramble");
+    btnScrambleMode = new QPushButton("scram");
     btnScrambleMode->setObjectName("btnScrambleMode");
-    btnScrambleMode->setToolTip("Click to switch between Scramble mode and Algorithm mode.\n"
-                                "Algorithm mode inverts the sequence before applying.");
     btnScrambleMode->setCheckable(true);
     btnScrambleMode->setChecked(false);
+    btnScrambleMode->setFixedWidth(48);
+    btnScrambleMode->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    btnScrambleMode->setToolTip("Toggle between Scramble and Algorithm mode.\n"
+                                "Algorithm mode inverts the sequence before applying.");
+
+    txtScramble = new QLineEdit();
+    txtScramble->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
+    txtScramble->setToolTip("Enter a move sequence in (x,y)/ format.\n"
+                            "Empty input resets to solved.");
+    txtScramble->setObjectName("txtScramble");
+
+    scrambleInputRow->addWidget(btnScrambleMode);
+    scrambleInputRow->addWidget(txtScramble);
+    scrambleLay->addLayout(scrambleInputRow);
+
+    lblScrambleError = new QLabel("");
+    lblScrambleError->setObjectName("lblScrambleError");
+    lblScrambleError->setWordWrap(true);
+    lblScrambleError->setVisible(false);
+    scrambleLay->addWidget(lblScrambleError);
+
     btnApplyScramble = new QPushButton("Apply");
     btnApplyScramble->setObjectName("btnApplyScramble");
-    scrambleBtnRow->addWidget(btnScrambleMode);
-    scrambleBtnRow->addWidget(btnApplyScramble);
-    scrambleLay->addLayout(scrambleBtnRow);
+    scrambleLay->addWidget(btnApplyScramble);
     leftCol->addWidget(grpScramble);
     leftCol->addStretch();
 
@@ -514,9 +526,13 @@ void MainWindow::buildUI() {
     connect(btnReset, &QPushButton::clicked, this, &MainWindow::onReset);
     connect(btnApplyScramble, &QPushButton::clicked, this, &MainWindow::onApplyScramble);
     connect(txtScramble, &QLineEdit::returnPressed, this, &MainWindow::onApplyScramble);
+    connect(txtScramble, &QLineEdit::textEdited, this, [this]{
+        lblScrambleError->setVisible(false);
+        txtScramble->setStyleSheet("");
+    });
     connect(btnScrambleMode, &QPushButton::toggled, this, [this](bool checked){
         m_scrambleIsAlg = checked;
-        btnScrambleMode->setText(checked ? "Algorithm" : "Scramble");
+        btnScrambleMode->setText(checked ? "Alg" : "Scram");
     });
 
     root->addWidget(leftScroll);
@@ -898,11 +914,21 @@ void MainWindow::buildStyles() {
         QPushButton#btnSolve:hover { background: #227a47; }
         QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
         QPushButton#btnReset { background: #6b1a1a; border-color: #b52d2d; color: #fdd; }
-        QPushButton#btnApplyScramble { background: #1a3a6b; border-color: #2d6bb5; color: #ddf; }
-        QPushButton#btnApplyScramble:hover { background: #1e4a8a; }
-        QPushButton#btnScrambleMode { background: #2a2a3e; border-color: #555; color: #aaa; }
-        QPushButton#btnScrambleMode:checked { background: #1a4a2a; border-color: #2db570; color: #afd; }
+        QPushButton#btnApplyScramble {
+            background: #2a2a3e; border: 1px solid #555;
+            border-radius: 4px; color: #ddd; padding: 4px 8px;
+        }
+        QPushButton#btnApplyScramble:hover { background: #3a3a5e; border-color: #777; }
+        QPushButton#btnScrambleMode {
+            background: #2a2a3e; border: 1px solid #555;
+            border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+            border-right: none; color: #aaa; padding: 0 6px; font-size: 11px;
+        }
+        QPushButton#btnScrambleMode:checked { color: #fff; background: #333350; }
         QPushButton#btnScrambleMode:hover { background: #3a3a5e; }
+        QLineEdit#txtScramble {
+            border-top-left-radius: 0; border-bottom-left-radius: 0;
+        }
         QPushButton#btnExpand, QPushButton#btnCopyTerminal {
             background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
             color: #7a7aaa; font-size: 13px; padding: 0;
@@ -911,6 +937,7 @@ void MainWindow::buildStyles() {
         QProgressBar { border: none; background: #2a2a3e; border-radius: 3px; }
         QProgressBar::chunk { background: #4a90d9; border-radius: 3px; }
         QLabel#lblStatus { color: #888; font-size: 11px; }
+        QLabel#lblScrambleError { color: #ff5555; font-size: 11px; padding: 2px 2px; }
         QScrollBar:vertical { background: #0d1117; width: 12px; border-radius: 6px; margin: 0; }
         QScrollBar::handle:vertical { background: #4a4a6e; border-radius: 6px; min-height: 24px; }
         QScrollBar::handle:vertical:hover { background: #6a6aae; }
@@ -1213,7 +1240,13 @@ void MainWindow::onApplyScramble() {
     }
 
     if (!ok) {
-        lblStatus->setText("Could not parse scramble.");
+        int approxPos = idx;
+        QString ctx = raw.mid(qMax(0, approxPos-6), 12).trimmed();
+        QString msg = QString("Parse error near \"%1\" (col %2) — expected (x,y) or /.")
+                          .arg(ctx).arg(approxPos);
+        lblScrambleError->setText(msg);
+        lblScrambleError->setVisible(true);
+        txtScramble->setStyleSheet("QLineEdit { border-color: #ff5555; }");
         return;
     }
 
@@ -1244,7 +1277,16 @@ void MainWindow::onApplyScramble() {
     }
     posStr += (mid == 0 ? '-' : '/');
 
-    cubeWidget->setPositionFromString(posStr);
+    bool applied = cubeWidget->setPositionFromString(posStr);
+    if (!applied) {
+        lblScrambleError->setText("Resulting position is invalid — check your move sequence.");
+        lblScrambleError->setVisible(true);
+        txtScramble->setStyleSheet("QLineEdit { border-color: #ff5555; }");
+        return;
+    }
+    // Clear any previous error
+    lblScrambleError->setVisible(false);
+    txtScramble->setStyleSheet("");
     updateCommand();
     lblStatus->setText(m_scrambleIsAlg ? "Algorithm applied (inverted)." : "Scramble applied.");
 }

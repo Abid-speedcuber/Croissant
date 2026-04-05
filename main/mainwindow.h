@@ -85,6 +85,7 @@ private:
     QLineEdit*    txtScramble;
     QPushButton*  btnApplyScramble;
     QPushButton*  btnScrambleMode;  // toggles scramble / algorithm mode
+    QLabel*       lblScrambleError; // red error shown below the input bar
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
