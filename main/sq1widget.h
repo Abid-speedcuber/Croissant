@@ -19,6 +19,8 @@ public:
 
     // Reset to solved state
     void reset();
+    // Parse a position string and update the cube display
+    bool setPositionFromString(const QString& pos);
 
 signals:
     void positionChanged(); // emitted whenever cube state changes

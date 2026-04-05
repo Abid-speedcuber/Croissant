@@ -96,5 +96,6 @@ private:
     QSet<QString> m_seenSolutions;
     QString       m_posHex;         // position hex captured at solve time for ergo rating
     bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
+    qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
 };

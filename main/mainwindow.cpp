@@ -23,6 +23,7 @@
 #include <QHelpEvent>
 #include <QTextBlock>
 #include <QScrollBar>
+#include <QDateTime>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <algorithm>
@@ -746,6 +747,16 @@ void MainWindow::buildUI() {
         lblStatus->setText("Terminal copied to clipboard!");
     });
     connect(chkRankErgo, &QCheckBox::toggled,    this, &MainWindow::onRankErgoToggled);
+    connect(txtCommand, &QLineEdit::textEdited, this, [this](const QString& text){
+        // Extract the last token (position string) from the command line
+        QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
+        if (parts.isEmpty()) return;
+        QString pos = parts.last();
+        // Only try to parse if it looks like a position string (letters/digits, no commas)
+        if (pos.contains(',') || pos.startsWith('-')) return;
+        if (pos.length() < 15 || pos.length() > 17) return;
+        cubeWidget->setPositionFromString(pos);
+    });
 
     updateConstraints();
 }
@@ -963,6 +974,7 @@ void MainWindow::onSolve() {
     connect(worker, &SolverWorker::lineReady, this, &MainWindow::onSolverLine, Qt::QueuedConnection);
     connect(worker, &SolverWorker::finished,  this, &MainWindow::onSolverDone, Qt::QueuedConnection);
     connect(worker, &SolverWorker::finished,  worker, &QObject::deleteLater);
+    m_solveStartMs = QDateTime::currentMSecsSinceEpoch();
     worker->start();
 }
 
@@ -1015,12 +1027,22 @@ void MainWindow::onSolverDone(int code) {
     btnSolve->setText("▶  Solve");
     btnSolve->setStyleSheet(""); // revert to stylesheet-defined look
 
+    const int n = m_solutionLines.size();
+    double secs = (QDateTime::currentMSecsSinceEpoch() - m_solveStartMs) / 1000.0;
+    QString secsStr = QString::number(secs, 'f', 2);
+
     if (m_stopped) {
-        const int n = m_solutionLines.size();
-        lblStatus->setText(QString("Stopped — %1 solution%2 found.")
-                           .arg(n).arg(n == 1 ? "" : "s"));
+        QString summary = QString("Stopped — %1 solution%2 found in %3s.")
+                              .arg(n).arg(n == 1 ? "" : "s").arg(secsStr);
+        lblStatus->setText(summary);
+        txtOutput->append(QString("<div style='color:#888;padding:1px 4px;margin:4px 0 0 0;"
+                                  "border-top:1px solid #2a2a3e;'>%1</div>").arg(summary.toHtmlEscaped()));
     } else if (code == 0) {
-        lblStatus->setText("Done.");
+        QString summary = QString("Done — %1 solution%2 found in %3s.")
+                              .arg(n).arg(n == 1 ? "" : "s").arg(secsStr);
+        lblStatus->setText(summary);
+        txtOutput->append(QString("<div style='color:#888;padding:1px 4px;margin:4px 0 0 0;"
+                                  "border-top:1px solid #2a2a3e;'>%1</div>").arg(summary.toHtmlEscaped()));
     } else {
         lblStatus->setText("Error (code " + QString::number(code) + ")");
     }
@@ -1068,7 +1090,6 @@ void MainWindow::onCopy() {
 // -------------------------------------------------------
 void MainWindow::onRankErgoToggled(bool checked) {
     txtOutput->clear();
-    txtOutput->verticalScrollBar()->setValue(0);
     if (!checked) {
         int solIdx = 0;
         for (const QString& line : m_rawLines) {
@@ -1085,6 +1106,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
             }
         }
         lblStatus->setText("Done.");
+        txtOutput->verticalScrollBar()->setValue(0);
         return;
     }
     if (m_solutionLines.isEmpty()) return;
@@ -1099,6 +1121,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
             .arg(bg).arg(ranked.toHtmlEscaped()));
     }
     lblStatus->setText(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
+    txtOutput->verticalScrollBar()->setValue(0);
 }
 
 // -------------------------------------------------------
