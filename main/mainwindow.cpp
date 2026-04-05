@@ -760,19 +760,74 @@ void MainWindow::buildUI() {
     btnCopyTerminal->setObjectName("btnCopyTerminal");
     btnCopyTerminal->setFixedSize(22, 22);
     btnCopyTerminal->setToolTip("Copy terminal contents");
+    btnTableMode = new QPushButton("⊞");
+    btnTableMode->setObjectName("btnTableMode");
+    btnTableMode->setFixedSize(22, 22);
+    btnTableMode->setToolTip("Switch to table view");
     rhLay->addWidget(lblOut);
     rhLay->addStretch();
     rhLay->addWidget(btnCopyTerminal);
+    rhLay->addWidget(btnTableMode);
     rhLay->addWidget(btnExpand);
     btnExpand->setVisible(false);
     btnCopyTerminal->setVisible(false);
+    btnTableMode->setVisible(false);
     rightCol->addWidget(resultsHeader);
 
     txtOutput = new QTextEdit();
     txtOutput->setReadOnly(true);
     txtOutput->setObjectName("txtOutput");
     txtOutput->setMinimumHeight(120);
-    rightCol->addWidget(txtOutput, 1);
+
+    // Table view
+    m_tableContainer = new QWidget();
+    m_tableContainer->setVisible(false);
+    QVBoxLayout* tableLay = new QVBoxLayout(m_tableContainer);
+    tableLay->setContentsMargins(0,0,0,0);
+    tableLay->setSpacing(4);
+
+    QHBoxLayout* tableToolRow = new QHBoxLayout();
+    tableToolRow->setContentsMargins(0,0,0,0);
+    btnTableSort = new QPushButton("⇅  Optimal order");
+    btnTableSort->setObjectName("btnTableSort");
+    btnTableSort->setCheckable(true);
+    btnTableSort->setChecked(false);
+    btnTableSort->setFixedHeight(24);
+    tableToolRow->addWidget(btnTableSort);
+    tableToolRow->addStretch();
+    tableLay->addLayout(tableToolRow);
+
+    m_solutionTable = new QTableWidget();
+    m_solutionTable->setObjectName("m_solutionTable");
+    m_solutionTable->setColumnCount(5);
+    m_solutionTable->setHorizontalHeaderLabels({"#", "Solution", "Moves", "Slices", "Ergo"});
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_solutionTable->verticalHeader()->setVisible(false);
+    m_solutionTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_solutionTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_solutionTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_solutionTable->setShowGrid(false);
+    m_solutionTable->setAlternatingRowColors(false); // we do it manually
+    tableLay->addWidget(m_solutionTable, 1);
+
+    // Stack terminal and table in a stacked-like layout using a container
+    QWidget* outputStack = new QWidget();
+    QVBoxLayout* stackLay = new QVBoxLayout(outputStack);
+    stackLay->setContentsMargins(0,0,0,0);
+    stackLay->setSpacing(0);
+    stackLay->addWidget(txtOutput);
+    stackLay->addWidget(m_tableContainer);
+    rightCol->addWidget(outputStack, 1);
+
+    connect(btnTableSort, &QPushButton::toggled, this, [this](bool ergo){
+        m_tableErgoSort = ergo;
+        btnTableSort->setText(ergo ? "⇅  Ergo order" : "⇅  Optimal order");
+        rebuildTable(ergo);
+    });
 
     // Always visible; enabled only when eligible (cubeshape + solutions present).
     chkRankErgo = new QCheckBox("Roughly rank algs based on relative ergonomics");
@@ -793,6 +848,14 @@ void MainWindow::buildUI() {
     connect(btnCopyTerminal, &QPushButton::clicked,  this, [this]{
         QApplication::clipboard()->setText(txtOutput->toPlainText());
         lblStatus->setText("Terminal copied to clipboard!");
+    });
+    connect(btnTableMode, &QPushButton::clicked, this, [this]{
+        m_tableVisible = !m_tableVisible;
+        txtOutput->setVisible(!m_tableVisible);
+        m_tableContainer->setVisible(m_tableVisible);
+        btnTableMode->setText(m_tableVisible ? "▤" : "⊞");
+        btnTableMode->setToolTip(m_tableVisible ? "Switch to terminal view" : "Switch to table view");
+        if (m_tableVisible) rebuildTable(m_tableErgoSort);
     });
     connect(chkRankErgo, &QCheckBox::toggled,    this, &MainWindow::onRankErgoToggled);
     connect(txtCommand, &QLineEdit::textEdited, this, [this](const QString& text){
@@ -943,6 +1006,32 @@ void MainWindow::buildStyles() {
         QScrollBar::handle:vertical:hover { background: #6a6aae; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; border: 0; }
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
+        QTableWidget#m_solutionTable {
+            background: #0d1117; border: 1px solid #444;
+            border-radius: 4px; gridline-color: #0d1117;
+            font-family: monospace; font-size: 12px;
+        }
+        QTableWidget#m_solutionTable QHeaderView::section {
+            background: #1a1a2e; color: #7a9ab8; border: none;
+            border-bottom: 1px solid #2a2a4a; padding: 4px;
+            font-size: 11px; font-weight: bold;
+        }
+        QTableWidget#m_solutionTable::item:selected {
+            background: #1e3a5a; color: #ffffff;
+        }
+        QPushButton#btnTableSort {
+            background: #1e1e30; border: 1px solid #3a3a5e;
+            border-radius: 4px; color: #7a9ab8; font-size: 11px; padding: 2px 8px;
+        }
+        QPushButton#btnTableSort:checked {
+            background: #1a3a2a; border-color: #2db570; color: #7fd4a8;
+        }
+        QPushButton#btnTableSort:hover { background: #2a2a4a; }
+        QPushButton#btnTableMode {
+            background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
+            color: #7a7aaa; font-size: 13px; padding: 0;
+        }
+        QPushButton#btnTableMode:hover { background: #2a2a4a; border-color: #5a5a8a; color: #b0b0dd; }
         QToolTip {
             background: #252540;
             color: #d8d8f0;
@@ -1067,6 +1156,7 @@ void MainWindow::onSolverLine(QString line) {
         m_solutionLines.append(line);
         btnExpand->setVisible(true);
         btnCopyTerminal->setVisible(true);
+        btnTableMode->setVisible(true);
         // Alternate row backgrounds: near-black vs subtle dark-blue, text always light blue
         const char* bg = (m_solutionLines.size() % 2 == 1) ? "#0d1117" : "#131c28";
         txtOutput->append(QString(
@@ -1112,6 +1202,14 @@ void MainWindow::onSolverDone(int code) {
     }
 
     updateRankErgoState();
+    if (!m_solutionLines.isEmpty()) {
+        m_tableVisible = true;
+        txtOutput->setVisible(false);
+        m_tableContainer->setVisible(true);
+        btnTableMode->setText("▤");
+        btnTableMode->setToolTip("Switch to terminal view");
+        rebuildTable(m_tableErgoSort);
+    }
 }
 
 // -------------------------------------------------------
@@ -1129,6 +1227,10 @@ void MainWindow::onReset() {
     // Hide the expand button and collapse if currently expanded.
     btnExpand->setVisible(false);
     btnCopyTerminal->setVisible(false);
+    btnTableMode->setVisible(false);
+    m_tableVisible = false;
+    txtOutput->setVisible(true);
+    m_tableContainer->setVisible(false);
     if (m_expanded) toggleExpand();
     updateRankErgoState();
 }
@@ -1289,6 +1391,91 @@ void MainWindow::onApplyScramble() {
     txtScramble->setStyleSheet("");
     updateCommand();
     lblStatus->setText(m_scrambleIsAlg ? "Algorithm applied (inverted)." : "Scramble applied.");
+}
+
+void MainWindow::rebuildTable(bool ergo) {
+    m_solutionTable->setRowCount(0);
+    if (m_solutionLines.isEmpty()) return;
+
+    // Parse move count and slice count from bracket annotation e.g. "[7|14]"
+    auto parseCounts = [](const QString& line, int& moves, int& slices){
+        moves = 0; slices = 0;
+        int lb = line.lastIndexOf('[');
+        int rb = line.lastIndexOf(']');
+        if (lb < 0 || rb < 0) return;
+        QString bracket = line.mid(lb+1, rb-lb-1); // e.g. "7|14"
+        QStringList parts = bracket.split('|');
+        if (parts.size() >= 2) {
+            slices = parts[0].trimmed().toInt();
+            moves  = parts[1].trimmed().toInt();
+        }
+    };
+
+    // Strip bracket annotation from display
+    auto stripBracket = [](const QString& line) -> QString {
+        int lb = line.lastIndexOf('[');
+        return lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+    };
+
+    struct Row { QString alg; int moves; int slices; double ergo; };
+    QVector<Row> rows;
+
+    bool useKarn = chkKarnotation->isChecked();
+    auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
+    // Build a map from stripped alg -> ergo score
+    QMap<QString, double> ergoMap;
+    for (auto& [line, score] : rated)
+        ergoMap[stripBracket(line)] = score;
+
+    for (const QString& line : m_solutionLines) {
+        int mv, sl;
+        parseCounts(line, mv, sl);
+        QString alg = stripBracket(line);
+        double eg = ergoMap.value(alg, 0.0);
+        rows.append({alg, mv, sl, eg});
+    }
+
+    if (ergo) {
+        std::stable_sort(rows.begin(), rows.end(),
+            [](const Row& a, const Row& b){ return a.ergo > b.ergo; });
+    } else {
+        std::stable_sort(rows.begin(), rows.end(),
+            [](const Row& a, const Row& b){
+                if (a.slices != b.slices) return a.slices < b.slices;
+                return a.moves < b.moves;
+            });
+    }
+
+    const QColor rowA("#0d1117");
+    const QColor rowB("#131c28");
+    const QColor textCol("#7abfe8");
+    const QColor metaCol("#9aacbe");
+
+    m_solutionTable->setRowCount(rows.size());
+    for (int i = 0; i < rows.size(); i++) {
+        const Row& r = rows[i];
+        QColor bg = (i % 2 == 0) ? rowA : rowB;
+
+        auto cell = [&](int col, const QString& txt, bool isMeta = false) {
+            QTableWidgetItem* item = new QTableWidgetItem(txt);
+            item->setBackground(bg);
+            item->setForeground(isMeta ? metaCol : textCol);
+            item->setTextAlignment(Qt::AlignCenter);
+            m_solutionTable->setItem(i, col, item);
+        };
+
+        cell(0, QString::number(i+1), true);
+        // Solution column: left-aligned
+        QTableWidgetItem* algItem = new QTableWidgetItem(r.alg);
+        algItem->setBackground(bg);
+        algItem->setForeground(QColor("#7abfe8"));
+        algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+        m_solutionTable->setItem(i, 1, algItem);
+        cell(2, QString::number(r.moves), true);
+        cell(3, QString::number(r.slices), true);
+        cell(4, QString::number(r.ergo, 'f', 1), true);
+        m_solutionTable->setRowHeight(i, 24);
+    }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {

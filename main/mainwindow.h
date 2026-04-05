@@ -5,6 +5,8 @@
 #include <QStringList>
 #include <QPointer>
 #include <QSpinBox>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QKeyEvent>
 #include <atomic>
 
@@ -91,9 +93,16 @@ private:
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
     QWidget*      m_leftPanel;      // cube widget column (hidden when expanded)
     QTextEdit*    txtOutput;
+    QWidget*      m_tableContainer;
+    QTableWidget* m_solutionTable;
+    QPushButton*  btnTableMode;     // switches between table and terminal view
+    QPushButton*  btnTableSort;     // toggles optimal / ergo sort
     QLabel*       lblStatus;
     QProgressBar* progressBar;
     QCheckBox*    chkRankErgo;
+    bool          m_tableVisible{false};
+    bool          m_tableErgoSort{false};
+    void          rebuildTable(bool ergo);
 
     QPointer<SolverWorker> worker;
     QStringList   m_rawLines;
