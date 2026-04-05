@@ -492,7 +492,10 @@ void MainWindow::buildUI() {
     rightCol->setSpacing(6);
 
     QGroupBox* grpOptions = new QGroupBox("Options");
-    QGridLayout* grid = new QGridLayout(grpOptions);
+    grpOptions->setMinimumHeight(200);
+
+    QWidget* optionsInner = new QWidget();
+    QGridLayout* grid = new QGridLayout(optionsInner);
     grid->setVerticalSpacing(2);
 
     // ── Widgets ──────────────────────────────────────────────────────────────
@@ -623,6 +626,17 @@ void MainWindow::buildUI() {
 
     // Uniform row height — set after all rows are populated.
     for (int r = 0; r < row; r++) grid->setRowMinimumHeight(r, 28);
+
+    QScrollArea* optionsScroll = new QScrollArea();
+    optionsScroll->setWidget(optionsInner);
+    optionsScroll->setWidgetResizable(true);
+    optionsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    optionsScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    optionsScroll->setFrameShape(QFrame::NoFrame);
+    optionsScroll->setMinimumHeight(120);
+    grpOptions->setLayout(new QVBoxLayout());
+    grpOptions->layout()->setContentsMargins(4, 16, 4, 4);
+    grpOptions->layout()->addWidget(optionsScroll);
 
     // ── Connections ──────────────────────────────────────────────────────────
     auto upd = [this]{ updateConstraints(); updateCommand(); };
