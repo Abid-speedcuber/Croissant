@@ -59,4 +59,8 @@ Makefile*
 /release
 /debug
 /.qtcreator
+/.vscode
+/main/.qtcreator
 /main/build
+
+compile_log.txt
