@@ -1106,7 +1106,20 @@ class PositionSolver {
 		// do ida
 		int optimalMoves = -1;
 		if (!specificDepths.empty()) {
+			// Save the initial encoded state. After search() returns early (e.g. first
+			// solution found with !findAll), the rotation loops in search() are aborted
+			// mid-cycle, leaving shp/e*/c* in a partially-rotated (wrong) state. We must
+			// restore everything before each depth so every search starts from the same
+			// original position.
+			int saved_e0=e0, saved_e1=e1, saved_e2=e2;
+			int saved_c0=c0, saved_c1=c1, saved_c2=c2;
+			int saved_shp=shp, saved_shp2=shp2, saved_middle=middle;
 			for (int depth : specificDepths) {
+				// Restore encoded state before each depth search
+				e0=saved_e0; e1=saved_e1; e2=saved_e2;
+				c0=saved_c0; c1=saved_c1; c2=saved_c2;
+				shp=saved_shp; shp2=saved_shp2; middle=saved_middle;
+				moveLen=0;
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
 				for(int i=0;i<6;i++) lastTurns[i]=0;
 				search(depth, 3, &nodes, twoGen, keepCubeShape);
@@ -1424,7 +1437,22 @@ public:
 		// do ida
 		int optimalMoves = -1;
 		if (!specificDepths.empty()) {
+			// Save all state that search() may leave corrupted on early exit.
+			// This includes the base-class encoded state as well as PartialPositionSolver's
+			// extra shapes and the FullPosition used by isSolved().
+			int saved_e0=e0, saved_e1=e1, saved_e2=e2;
+			int saved_c0=c0, saved_c1=c1, saved_c2=c2;
+			int saved_shp=shp, saved_shp2=shp2, saved_middle=middle;
+			int saved_shpx=shpx, saved_shpx2=shpx2;
+			FullPosition saved_fp=fp;
 			for (int depth : specificDepths) {
+				// Restore all encoded state before each depth search
+				e0=saved_e0; e1=saved_e1; e2=saved_e2;
+				c0=saved_c0; c1=saved_c1; c2=saved_c2;
+				shp=saved_shp; shp2=saved_shp2; middle=saved_middle;
+				shpx=saved_shpx; shpx2=saved_shpx2;
+				fp=saved_fp;
+				moveLen=0;
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
 				for(int i=0;i<6;i++) lastTurns[i]=0;
 				search(depth, 3, &nodes, twoGen, keepCubeShape);
