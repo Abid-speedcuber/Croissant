@@ -88,6 +88,7 @@ private:
     QPushButton*  btnApplyScramble;
     QPushButton*  btnScrambleMode;  // toggles scramble / algorithm mode
     QLabel*       lblScrambleError; // red error shown below the input bar
+    QLabel*       lblCommandError;  // red error shown below the command line
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
@@ -96,13 +97,11 @@ private:
     QWidget*      m_tableContainer;
     QTableWidget* m_solutionTable;
     QPushButton*  btnTableMode;     // switches between table and terminal view
-    QPushButton*  btnTableSort;     // toggles optimal / ergo sort
     QLabel*       lblStatus;
     QProgressBar* progressBar;
     QCheckBox*    chkRankErgo;
     bool          m_tableVisible{false};
-    bool          m_tableErgoSort{false};
-    void          rebuildTable(bool ergo);
+    void          rebuildTable();
 
     QPointer<SolverWorker> worker;
     QStringList   m_rawLines;
@@ -112,5 +111,6 @@ private:
     bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
     qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
-    bool          m_scrambleIsAlg{false}; // true = input alg mode (inverts before applying)
+    bool          m_scrambleIsAlg{false};    // true = input alg mode (inverts before applying)
+    bool          m_cubeshapeWasActive{false}; // cubeshape state captured at solve time
 };

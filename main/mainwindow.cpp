@@ -23,6 +23,7 @@
 #include <QHelpEvent>
 #include <QTextBlock>
 #include <QScrollBar>
+#include <QMenu>
 #include <QDateTime>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
@@ -734,6 +735,12 @@ void MainWindow::buildUI() {
     cmdRow->addWidget(btnCopy);
     topLay->addWidget(cmdRowWidget);
 
+    lblCommandError = new QLabel("");
+    lblCommandError->setObjectName("lblCommandError");
+    lblCommandError->setWordWrap(true);
+    lblCommandError->setVisible(false);
+    topLay->addWidget(lblCommandError);
+
     btnSolve = new QPushButton("▶  Solve");
     btnSolve->setObjectName("btnSolve");
     btnSolve->setFixedHeight(38);
@@ -782,36 +789,50 @@ void MainWindow::buildUI() {
     // Table view
     m_tableContainer = new QWidget();
     m_tableContainer->setVisible(false);
+    m_tableContainer->setMinimumHeight(120);
     QVBoxLayout* tableLay = new QVBoxLayout(m_tableContainer);
     tableLay->setContentsMargins(0,0,0,0);
     tableLay->setSpacing(4);
 
-    QHBoxLayout* tableToolRow = new QHBoxLayout();
-    tableToolRow->setContentsMargins(0,0,0,0);
-    btnTableSort = new QPushButton("⇅  Optimal order");
-    btnTableSort->setObjectName("btnTableSort");
-    btnTableSort->setCheckable(true);
-    btnTableSort->setChecked(false);
-    btnTableSort->setFixedHeight(24);
-    tableToolRow->addWidget(btnTableSort);
-    tableToolRow->addStretch();
-    tableLay->addLayout(tableToolRow);
-
     m_solutionTable = new QTableWidget();
     m_solutionTable->setObjectName("m_solutionTable");
-    m_solutionTable->setColumnCount(5);
-    m_solutionTable->setHorizontalHeaderLabels({"#", "Solution", "Moves", "Slices", "Ergo"});
+    m_solutionTable->setColumnCount(4);
+    m_solutionTable->setHorizontalHeaderLabels({"#", "Solution", "Moves", "Slices"});
     m_solutionTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_solutionTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_solutionTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_solutionTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_solutionTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_solutionTable->verticalHeader()->setVisible(false);
     m_solutionTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_solutionTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_solutionTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_solutionTable->setShowGrid(false);
     m_solutionTable->setAlternatingRowColors(false); // we do it manually
+    m_solutionTable->setTextElideMode(Qt::ElideNone);
+    m_solutionTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_solutionTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint& pos){
+        int row = m_solutionTable->rowAt(pos.y());
+        if (row < 0) return;
+        QMenu menu(this);
+        QAction* copyRow = menu.addAction("Copy row");
+        QAction* copyAlg = menu.addAction("Copy algorithm");
+        QAction* chosen = menu.exec(m_solutionTable->viewport()->mapToGlobal(pos));
+        if (chosen == copyRow) {
+            QStringList parts;
+            for (int c = 0; c < m_solutionTable->columnCount(); c++) {
+                QTableWidgetItem* it = m_solutionTable->item(row, c);
+                if (it) parts << it->text();
+            }
+            QApplication::clipboard()->setText(parts.join("\t"));
+            lblStatus->setText("Row copied to clipboard.");
+        } else if (chosen == copyAlg) {
+            QTableWidgetItem* it = m_solutionTable->item(row, 1);
+            if (it) {
+                QApplication::clipboard()->setText(it->text());
+                lblStatus->setText("Algorithm copied to clipboard.");
+            }
+        }
+    });
     tableLay->addWidget(m_solutionTable, 1);
 
     // Stack terminal and table in a stacked-like layout using a container
@@ -822,12 +843,6 @@ void MainWindow::buildUI() {
     stackLay->addWidget(txtOutput);
     stackLay->addWidget(m_tableContainer);
     rightCol->addWidget(outputStack, 1);
-
-    connect(btnTableSort, &QPushButton::toggled, this, [this](bool ergo){
-        m_tableErgoSort = ergo;
-        btnTableSort->setText(ergo ? "⇅  Ergo order" : "⇅  Optimal order");
-        rebuildTable(ergo);
-    });
 
     // Always visible; enabled only when eligible (cubeshape + solutions present).
     chkRankErgo = new QCheckBox("Roughly rank algs based on relative ergonomics");
@@ -855,18 +870,62 @@ void MainWindow::buildUI() {
         m_tableContainer->setVisible(m_tableVisible);
         btnTableMode->setText(m_tableVisible ? "▤" : "⊞");
         btnTableMode->setToolTip(m_tableVisible ? "Switch to terminal view" : "Switch to table view");
-        if (m_tableVisible) rebuildTable(m_tableErgoSort);
+        if (m_tableVisible) rebuildTable();
     });
     connect(chkRankErgo, &QCheckBox::toggled,    this, &MainWindow::onRankErgoToggled);
     connect(txtCommand, &QLineEdit::textEdited, this, [this](const QString& text){
-        // Extract the last token (position string) from the command line
+        auto showCmdError = [this](const QString& msg) {
+            lblCommandError->setText(msg);
+            lblCommandError->setVisible(true);
+            txtCommand->setStyleSheet(
+                "QLineEdit#txtCommand { font-family: monospace; color: #ff5555; font-size: 12px; border-color: #ff5555; }");
+        };
+        auto clearCmdError = [this]() {
+            lblCommandError->setVisible(false);
+            txtCommand->setStyleSheet(
+                "QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; }");
+        };
+
         QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
-        if (parts.isEmpty()) return;
+        if (parts.isEmpty()) { clearCmdError(); return; }
+
         QString pos = parts.last();
-        // Only try to parse if it looks like a position string (letters/digits, no commas)
-        if (pos.contains(',') || pos.startsWith('-')) return;
-        if (pos.length() < 15 || pos.length() > 17) return;
-        cubeWidget->setPositionFromString(pos);
+
+        // Must not look like a flag
+        if (pos.startsWith('-') || pos.contains(',')) {
+            showCmdError("No position string at end of command — last token looks like a flag.");
+            return;
+        }
+        if (pos.length() < 15 || pos.length() > 17) {
+            if (pos.length() > 0)
+                showCmdError(QString("Position string should be 15–17 characters, got %1.").arg(pos.length()));
+            else
+                clearCmdError();
+            return;
+        }
+
+        // Validate characters before passing to setPositionFromString to prevent crashes.
+        // Valid chars: A-H, 1-8, U, V, W, X, Y, Z, and optional trailing - or /
+        static const QString validChars = "ABCDEFGHabcdefgh12345678UVWXYZuvwxyz-/";
+        bool validCharsOk = true;
+        for (int ci = 0; ci < pos.length(); ci++) {
+            if (!validChars.contains(pos[ci])) {
+                validCharsOk = false;
+                break;
+            }
+        }
+        if (!validCharsOk) {
+            showCmdError("Invalid character in position string.");
+            return;
+        }
+
+        // Safe to call setPositionFromString now
+        bool applied = cubeWidget->setPositionFromString(pos);
+        if (!applied) {
+            showCmdError("Invalid position string — duplicate or unrecognised pieces.");
+            return;
+        }
+        clearCmdError();
     });
 
     updateConstraints();
@@ -1001,6 +1060,7 @@ void MainWindow::buildStyles() {
         QProgressBar::chunk { background: #4a90d9; border-radius: 3px; }
         QLabel#lblStatus { color: #888; font-size: 11px; }
         QLabel#lblScrambleError { color: #ff5555; font-size: 11px; padding: 2px 2px; }
+        QLabel#lblCommandError  { color: #ff5555; font-size: 11px; padding: 2px 2px; }
         QScrollBar:vertical { background: #0d1117; width: 12px; border-radius: 6px; margin: 0; }
         QScrollBar::handle:vertical { background: #4a4a6e; border-radius: 6px; min-height: 24px; }
         QScrollBar::handle:vertical:hover { background: #6a6aae; }
@@ -1019,14 +1079,6 @@ void MainWindow::buildStyles() {
         QTableWidget#m_solutionTable::item:selected {
             background: #1e3a5a; color: #ffffff;
         }
-        QPushButton#btnTableSort {
-            background: #1e1e30; border: 1px solid #3a3a5e;
-            border-radius: 4px; color: #7a9ab8; font-size: 11px; padding: 2px 8px;
-        }
-        QPushButton#btnTableSort:checked {
-            background: #1a3a2a; border-color: #2db570; color: #7fd4a8;
-        }
-        QPushButton#btnTableSort:hover { background: #2a2a4a; }
         QPushButton#btnTableMode {
             background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
             color: #7a7aaa; font-size: 13px; padding: 0;
@@ -1080,6 +1132,8 @@ void MainWindow::updateCommand() {
     QString pos = cubeWidget->getPositionString();
     QStringList args = buildArgList();
     txtCommand->setText("sq1opt " + args.join(" ") + " " + pos);
+    lblCommandError->setVisible(false);
+    txtCommand->setStyleSheet("QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; }");
 }
 
 // -------------------------------------------------------
@@ -1103,6 +1157,12 @@ void MainWindow::onSolve() {
     m_rawLines.clear();
     m_solutionLines.clear();
     m_seenSolutions.clear();
+    // Always go back to terminal view while solving
+    m_tableVisible = false;
+    txtOutput->setVisible(true);
+    m_tableContainer->setVisible(false);
+    btnTableMode->setText("⊞");
+    btnTableMode->setToolTip("Switch to table view");
     chkRankErgo->blockSignals(true);
     chkRankErgo->setChecked(false);
     chkRankErgo->blockSignals(false);
@@ -1124,6 +1184,7 @@ void MainWindow::onSolve() {
     worker->positionStr = cubeWidget->getPositionString();
     m_posHex = worker->positionStr;
     worker->flags = buildArgList();
+    m_cubeshapeWasActive = chkCubeshape->isChecked();
     connect(worker, &SolverWorker::lineReady, this, &MainWindow::onSolverLine, Qt::QueuedConnection);
     connect(worker, &SolverWorker::finished,  this, &MainWindow::onSolverDone, Qt::QueuedConnection);
     connect(worker, &SolverWorker::finished,  worker, &QObject::deleteLater);
@@ -1208,7 +1269,7 @@ void MainWindow::onSolverDone(int code) {
         m_tableContainer->setVisible(true);
         btnTableMode->setText("▤");
         btnTableMode->setToolTip("Switch to terminal view");
-        rebuildTable(m_tableErgoSort);
+        rebuildTable();
     }
 }
 
@@ -1393,7 +1454,19 @@ void MainWindow::onApplyScramble() {
     lblStatus->setText(m_scrambleIsAlg ? "Algorithm applied (inverted)." : "Scramble applied.");
 }
 
-void MainWindow::rebuildTable(bool ergo) {
+void MainWindow::rebuildTable() {
+    const bool ergo = chkRankErgo->isChecked();
+    const bool showErgo = m_cubeshapeWasActive;  // captured at solve time, not current checkbox
+    m_solutionTable->setColumnCount(showErgo ? 5 : 4);
+    m_solutionTable->setHorizontalHeaderLabels(
+        showErgo ? QStringList{"#", "Solution", "Moves", "Slices", "Ergo"}
+                 : QStringList{"#", "Solution", "Moves", "Slices"});
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    if (showErgo)
+        m_solutionTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_solutionTable->setRowCount(0);
     if (m_solutionLines.isEmpty()) return;
 
@@ -1420,7 +1493,7 @@ void MainWindow::rebuildTable(bool ergo) {
     struct Row { QString alg; int moves; int slices; double ergo; };
     QVector<Row> rows;
 
-    bool useKarn = chkKarnotation->isChecked();
+    bool useKarn = chkKarnotation->isChecked(); // showErgo already declared above
     auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
     // Build a map from stripped alg -> ergo score
     QMap<QString, double> ergoMap;
@@ -1435,7 +1508,7 @@ void MainWindow::rebuildTable(bool ergo) {
         rows.append({alg, mv, sl, eg});
     }
 
-    if (ergo) {
+    if (ergo && showErgo) {
         std::stable_sort(rows.begin(), rows.end(),
             [](const Row& a, const Row& b){ return a.ergo > b.ergo; });
     } else {
@@ -1473,7 +1546,8 @@ void MainWindow::rebuildTable(bool ergo) {
         m_solutionTable->setItem(i, 1, algItem);
         cell(2, QString::number(r.moves), true);
         cell(3, QString::number(r.slices), true);
-        cell(4, QString::number(r.ergo, 'f', 1), true);
+        if (showErgo)
+            cell(4, QString::number(r.ergo, 'f', 1), true);
         m_solutionTable->setRowHeight(i, 24);
     }
 }
@@ -1512,6 +1586,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
         }
         lblStatus->setText("Done.");
         txtOutput->verticalScrollBar()->setValue(0);
+        if (m_tableVisible) rebuildTable();
         return;
     }
     if (m_solutionLines.isEmpty()) return;
@@ -1527,6 +1602,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
     }
     lblStatus->setText(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
     txtOutput->verticalScrollBar()->setValue(0);
+    if (m_tableVisible) rebuildTable();
 }
 
 // -------------------------------------------------------
