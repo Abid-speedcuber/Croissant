@@ -625,6 +625,9 @@ void MainWindow::buildUI() {
     chkKarnotation->setToolTip("Display solutions in Karnotation (named move notation)\n"
                                "instead of raw (x,y)/ tuples.  Maps to -k.");
 
+    chkSpecificAngle = new QCheckBox("Generate alg from this specific angle");
+    chkSpecificAngle->setObjectName("chkSpecificAngle");
+
     chkMaxX = new QCheckBox("Max top turn:");
     chkMaxX->setToolTip("Limit the maximum top-layer turn size (0–6 twelfths).\n"
                         "Enabling this also disables the transformation equivalence (-x).\n"
@@ -671,6 +674,7 @@ void MainWindow::buildUI() {
     grid->addWidget(chkCubeshape,  row++, 0, 1, 2);
     grid->addWidget(chkIgnoreMid,  row++, 0, 1, 2);
     grid->addWidget(chkKarnotation,row++, 0, 1, 2);
+    grid->addWidget(chkSpecificAngle, row++, 0,1,2);
     grid->addWidget(chkMaxX,       row,   0); grid->addWidget(spnMaxX,    row++, 1);
     grid->addWidget(chkMaxY,       row,   0); grid->addWidget(spnMaxY,    row++, 1);
     grid->addWidget(chkMaxTotal,   row,   0); grid->addWidget(spnMaxTotal,row++, 1);
@@ -703,6 +707,7 @@ void MainWindow::buildUI() {
     connect(chkCubeshape,  &QCheckBox::toggled, this, upd);
     connect(chkIgnoreMid,  &QCheckBox::toggled, this, upd);
     connect(chkKarnotation,&QCheckBox::toggled, this, upd);
+    connect(chkSpecificAngle,&QCheckBox::toggled,this,upd);
     connect(chkMaxX,       &QCheckBox::toggled, this, upd);
     connect(spnMaxX,       QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkMaxY,       &QCheckBox::toggled, this, upd);
@@ -1120,6 +1125,7 @@ QStringList MainWindow::buildArgList() {
     if (chkCubeshape->isChecked())  args << "-c";
     if (chkIgnoreMid->isChecked())  args << "-m";
     if (chkKarnotation->isChecked())args << "-k";
+    if (chkSpecificAngle->isChecked())args<<"-n";
 
     if (chkMaxX->isChecked())     args << QString("-X%1").arg(spnMaxX->value());
     if (chkMaxY->isChecked())     args << QString("-Y%1").arg(spnMaxY->value());

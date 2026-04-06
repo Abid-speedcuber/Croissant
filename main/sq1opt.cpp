@@ -58,6 +58,7 @@ bool generator=false;
 bool usenegative=false;
 bool usebrackets=false;
 bool karnotation=false;
+bool specificAngle=false;
 int metric = TURN_METRIC;
 int maxX = 6;
 int maxY = 6;
@@ -1105,6 +1106,7 @@ class PositionSolver {
 		if (metric == TWIST_METRIC && middle==1) l=-2;
 		// do ida
 		int optimalMoves = -1;
+		std::cout<<specificAngle<<std::endl;
 		if (!specificDepths.empty()) {
 			// Save the initial encoded state. After search() returns early (e.g. first
 			// solution found with !findAll), the rotation loops in search() are aborted
@@ -1122,7 +1124,7 @@ class PositionSolver {
 				moveLen=0;
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
 				for(int i=0;i<6;i++) lastTurns[i]=0;
-				search(depth, 3, &nodes, twoGen, keepCubeShape);
+				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngle);
 			}
 		} else {
 		while(true){
@@ -1130,7 +1132,7 @@ class PositionSolver {
 			if (metric == TWIST_METRIC && middle!=0) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
-			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape);
+			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngle);
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
 				if (l >= optimalMoves + extraMoves || (metric == TWIST_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
@@ -1150,7 +1152,7 @@ class PositionSolver {
 		if( pr2.table[shp2][e2][c2]>l+1 ) return true;
 		return false;
 	}
-	int search( const int l, const int lm, unsigned long *nodes, int twoGen, bool keepCubeShape){
+	int search( const int l, const int lm, unsigned long *nodes, int twoGen, bool keepCubeShape, bool keepAngle){
 		int i,r=0;
 
 		// search for l more moves. previous move was lm.
@@ -1199,10 +1201,10 @@ class PositionSolver {
 				// qq note: Jaap's solver pruned the transformation by only allowing U moves between
 				// 0 and 5. I think it's better to do this on D, see below. We then allow any (x,0).
 				int absTopMove = i>6 ? 12-i : i;
-				if (absTopMove <= maxX && absTopMove <= maxTotal) {
+				if (absTopMove <= maxX && absTopMove <= maxTotal && (!keepAngle || absTopMove < 2)) {
 					moveList[moveLen++]=i;
 					lastTurns[4]=i;
-					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absTopMove:l, 0, nodes, twoGen, keepCubeShape);
+					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absTopMove:l, 0, nodes, twoGen, keepCubeShape, keepAngle);
 					moveLen--;
 					if(r!=0 && !findAll) return(r);
 				}
@@ -1221,11 +1223,11 @@ class PositionSolver {
 				int topMove = lastTurns[4];
 				int absTopMove = topMove>6 ? 12-topMove : topMove;
 				int absBottomMove = i>6 ? 12-i : i;
-				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || l<2 || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))) {
+				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || l<2 || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngle || absBottomMove < 2)) {
 					moveList[moveLen++]=i+12;
 					lastTurns[5]=i;
 					if (twoGen != 1 || i==1 || i==11) {
-						r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape);
+						r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape, keepAngle);
 					}
 					moveLen--;
 					if(r!=0 && !findAll) return(r);
@@ -1250,7 +1252,7 @@ class PositionSolver {
 			if (!keepCubeShape || ((shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163))) {
 				moveList[moveLen++]=0;
 				// note that if angle metric is defined to count twists as 0, it will sometimes miss the optimal solution because the current pruning tables count how many twists a position is away from solved
-				r+=search(l-1, 2, nodes, twoGen, keepCubeShape);
+				r+=search(l-1, 2, nodes, twoGen, keepCubeShape, false);
 				moveLen--;
 				if(r!=0 && !findAll) return(r);
 			}
@@ -1455,7 +1457,7 @@ public:
 				moveLen=0;
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
 				for(int i=0;i<6;i++) lastTurns[i]=0;
-				search(depth, 3, &nodes, twoGen, keepCubeShape);
+				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngle);
 			}
 		} else {
 		while(true){
@@ -1463,7 +1465,7 @@ public:
 			if( metric==TWIST_METRIC && middle!=0 ) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
-			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape);
+			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngle);
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
 				if (l >= optimalMoves + extraMoves || (metric==TWIST_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
@@ -1579,10 +1581,6 @@ int main(int argc, char* argv[]){
 				case 'm':
 				case 'M':
 					ignoreMid=true; break;
-				case 'n':
-				case 'N':
-					// "use negatives" flag has been removed
-					break;
 				case 'b':
 				case 'B':
 					usebrackets=true; break;
@@ -1621,6 +1619,10 @@ int main(int argc, char* argv[]){
 				case 'k':
 				case 'K':
 					karnotation = true;
+					break;
+				case 'n':
+				case 'N':
+					specificAngle = true;
 					break;
 				case 'X':
 					parsedValue = parseInteger(argv[i]+2);

@@ -74,6 +74,7 @@ private:
     QCheckBox*    chkCubeshape;
     QCheckBox*    chkIgnoreMid;     // -m: ignore middle-layer shape
     QCheckBox*    chkKarnotation;
+    QCheckBox*    chkSpecificAngle;
     QCheckBox*    chkMaxX;
     QSpinBox*     spnMaxX;
     QCheckBox*    chkMaxY;
