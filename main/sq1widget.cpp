@@ -11,45 +11,74 @@ Sq1Widget::Sq1Widget(QWidget* parent) : QWidget(parent) {
 }
 
 bool Sq1Widget::setPositionFromString(const QString& pos) {
-    std::string s = pos.toStdString();
-    if (s.size() < 15 || s.size() > 17) return false;
-    int pi[24];
-    int j = 0;
-    int nextPartialCorner = -3;
-    int nextPartialEdge = 18;
-    int parArr[24] = {};
-    int pieceCount[16] = {};
-    for (int i = 0; i < 16 && j < 24; i++) {
-        int k = s[i];
-        int par = 0;
-        if (k >= 'a' && k <= 'z') k += ('A'-'a');
-        if      (k >= 'A' && k <= 'H') { k -= 'A'; par = 0; }
-        else if (k >= '1' && k <= '8') { k -= '1'-8; par = 0; }
-        else if (k == 'U') { k = nextPartialCorner; nextPartialCorner -= 3; par = 1; }
-        else if (k == 'V') { k = nextPartialCorner; nextPartialCorner -= 3; par = 1; }
-        else if (k == 'W') { k = nextPartialCorner; nextPartialCorner -= 3; par = 2; }
-        else if (k == 'X') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 1; }
-        else if (k == 'Y') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 1; }
-        else if (k == 'Z') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 2; }
-        else return false;
-        if (k >= 0 && k <= 15) pieceCount[k]++;
-        pi[j] = k; parArr[j] = par; j++;
-        if ((k >= 0 && k < 8) || (k < 0 && k % 3 != -1 && k % 3 != 2)) {
+    try {
+        std::string s = pos.toStdString();
+        if (s.size() < 15 || s.size() > 17) return false;
+        int pi[24] = {};
+        int j = 0;
+        int nextPartialCorner = -3;
+        int nextPartialEdge = 18;
+        int parArr[24] = {};
+        int pieceCount[16] = {};
+
+        for (int i = 0; i < 16 && j < 24; i++) {
+            int k = (unsigned char)s[i];
+            int par = 0;
+
+            // Uppercase only
+            if (k >= 'a' && k <= 'z') k += ('A' - 'a');
+
+            if      (k >= 'A' && k <= 'H') { k -= 'A'; par = 0; }
+            else if (k >= '1' && k <= '8') { k -= ('1' - 8); par = 0; }
+            else if (k == 'U') { k = nextPartialCorner; nextPartialCorner -= 3; par = 1; }
+            else if (k == 'V') { k = nextPartialCorner; nextPartialCorner -= 3; par = 1; }
+            else if (k == 'W') { k = nextPartialCorner; nextPartialCorner -= 3; par = 2; }
+            else if (k == 'X') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 1; }
+            else if (k == 'Y') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 1; }
+            else if (k == 'Z') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 2; }
+            else return false; // reject any unrecognised character immediately
+
+            // Bounds check: concrete piece indices must be 0-15
+            if (k >= 0 && k <= 15) {
+                pieceCount[k]++;
+                if (pieceCount[k] > 2) return false; // impossible piece count
+            }
+
+            // Guard j bounds before writing
+            if (j >= 24) return false;
             pi[j] = k; parArr[j] = par; j++;
+
+            // Corner occupies two slots
+            bool isConcreteCorner = (k >= 0 && k < 8);
+            bool isPartialCorner  = (k < 0 && (k % 3 == 0 || k % 3 == -2)); // U or V type
+            if (isConcreteCorner || isPartialCorner) {
+                if (j >= 24) return false;
+                pi[j] = k; parArr[j] = par; j++;
+            }
         }
+
+        if (j != 24) return false;
+
+        // Each concrete piece may appear at most once (corners appear twice in array = once as piece)
+        for (int i = 0; i < 8; i++)  if (pieceCount[i] > 2) return false; // corners stored twice
+        for (int i = 8; i < 16; i++) if (pieceCount[i] > 1) return false; // edges stored once
+
+        int mid = 0, mid_par = 0;
+        if (s.size() == 17) {
+            if      (s[16] == '-') { mid = 0; mid_par = 0; }
+            else if (s[16] == '/') { mid = 1; mid_par = 0; }
+            else                   { mid = 0; mid_par = 1; }
+        }
+
+        // All checks passed — commit to state
+        for (int i = 0; i < 24; i++) { position[i] = pi[i]; partiality[i] = parArr[i]; }
+        middle = mid; middle_partial = mid_par; selected = -1;
+        update();
+        return true;
+
+    } catch (...) {
+        return false; // never crash the UI
     }
-    if (j != 24) return false;
-    for (int i = 0; i < 16; i++) if (pieceCount[i] > 1) return false;
-    int mid = 0, mid_par = 0;
-    if (s.size() == 17) {
-        if      (s[16] == '-') mid = 0;
-        else if (s[16] == '/') mid = 1;
-        else mid_par = 1;
-    }
-    for (int i = 0; i < 24; i++) { position[i] = pi[i]; partiality[i] = parArr[i]; }
-    middle = mid; middle_partial = mid_par; selected = -1;
-    update();
-    return true;
 }
 
 void Sq1Widget::reset() {
