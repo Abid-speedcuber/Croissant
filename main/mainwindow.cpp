@@ -24,6 +24,7 @@
 #include <QTextBlock>
 #include <QScrollBar>
 #include <QMenu>
+#include <QTimer>
 #include <QDateTime>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
@@ -950,6 +951,35 @@ void MainWindow::toggleExpand() {
         btnExpand->setText("⤢");
         btnExpand->setToolTip("Expand terminal");
     }
+    // Rerender output with expanded styles
+    rebuildTerminalView();
+}
+
+void MainWindow::rebuildTerminalView() {
+    txtOutput->clear();
+    int solIdx = 0;
+    for (const QString& line : m_rawLines) {
+        bool isSol = line.contains('[') && line.contains(']');
+        if (isSol) {
+            const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
+            QString color   = m_expanded
+                ? (solIdx % 2 == 0 ? "#7abfe8" : "#f0d060")
+                : "#7abfe8";
+            QString fsStyle = m_expanded
+                ? "font-size:15px;line-height:1.7;"
+                : "";
+            txtOutput->append(QString(
+                "<div style='background:%1;color:%2;font-weight:bold;"
+                "padding:2px 6px;margin:0;%3'>%4</div>")
+                .arg(bg).arg(color).arg(fsStyle).arg(line.toHtmlEscaped()));
+            solIdx++;
+        } else {
+            QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
+            txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
+                .arg(fsStyle).arg(line.toHtmlEscaped()));
+        }
+    }
+    txtOutput->verticalScrollBar()->setValue(0);
 }
 
 // -------------------------------------------------------
@@ -1195,6 +1225,8 @@ void MainWindow::onSolve() {
     connect(worker, &SolverWorker::finished,  this, &MainWindow::onSolverDone, Qt::QueuedConnection);
     connect(worker, &SolverWorker::finished,  worker, &QObject::deleteLater);
     m_solveStartMs = QDateTime::currentMSecsSinceEpoch();
+    m_firstSolutionMs = 0;
+    m_hadFirstSolution = false;
     worker->start();
 }
 
@@ -1221,20 +1253,30 @@ void MainWindow::onSolverLine(QString line) {
     m_rawLines.append(line);
     if (isSolution) {
         m_solutionLines.append(line);
+        if (!m_hadFirstSolution) {
+            m_hadFirstSolution = true;
+            m_firstSolutionMs = QDateTime::currentMSecsSinceEpoch();
+        }
         btnExpand->setVisible(true);
         btnCopyTerminal->setVisible(true);
         btnTableMode->setVisible(true);
         // Alternate row backgrounds: near-black vs subtle dark-blue, text always light blue
         const char* bg = (m_solutionLines.size() % 2 == 1) ? "#0d1117" : "#131c28";
+        QString solColor = m_expanded
+            ? (m_solutionLines.size() % 2 == 1 ? "#7abfe8" : "#f0d060")
+            : "#7abfe8";
+        QString solFsStyle = m_expanded ? "font-size:15px;line-height:1.7;" : "";
         txtOutput->append(QString(
-            "<div style='background:%1;color:#7abfe8;font-weight:bold;"
-            "padding:1px 4px;margin:0;'>%2</div>")
-            .arg(bg).arg(line.toHtmlEscaped()));
+            "<div style='background:%1;color:%2;font-weight:bold;"
+            "padding:2px 6px;margin:0;%3'>%4</div>")
+            .arg(bg).arg(solColor).arg(solFsStyle).arg(line.toHtmlEscaped()));
         // Enable rank button as soon as the first solution arrives — even mid-solve —
         // so stopping early still allows ranking whatever was found.
         updateRankErgoState();
     } else {
-        txtOutput->append("<span style='color:#888;'>" + line.toHtmlEscaped() + "</span>");
+        QString nonsolFs = m_expanded ? "font-size:13px;line-height:1.6;" : "";
+        txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
+            .arg(nonsolFs).arg(line.toHtmlEscaped()));
     }
 }
 
@@ -1270,12 +1312,18 @@ void MainWindow::onSolverDone(int code) {
 
     updateRankErgoState();
     if (!m_solutionLines.isEmpty()) {
-        m_tableVisible = true;
-        txtOutput->setVisible(false);
-        m_tableContainer->setVisible(true);
-        btnTableMode->setText("▤");
-        btnTableMode->setToolTip("Switch to terminal view");
-        rebuildTable();
+        qint64 elapsed = m_hadFirstSolution
+            ? (QDateTime::currentMSecsSinceEpoch() - m_firstSolutionMs)
+            : 3000;
+        int delay = (elapsed < 3000) ? 400 : 0;
+        QTimer::singleShot(delay, this, [this]{
+            m_tableVisible = true;
+            txtOutput->setVisible(false);
+            m_tableContainer->setVisible(true);
+            btnTableMode->setText("▤");
+            btnTableMode->setToolTip("Switch to terminal view");
+            rebuildTable();
+        });
     }
 }
 
@@ -1619,7 +1667,8 @@ void MainWindow::onRankErgoToggled(bool checked) {
 void MainWindow::updateRankErgoState() {
     const bool cubeshapeActive = chkCubeshape->isChecked();
     const bool hasSolutions    = !m_solutionLines.isEmpty();
-    const bool canRank         = cubeshapeActive && hasSolutions;
+    const bool solving         = worker && worker->isRunning();
+const bool canRank         = cubeshapeActive && hasSolutions && !solving;
 
     chkRankErgo->setEnabled(canRank);
 
