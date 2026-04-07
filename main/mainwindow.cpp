@@ -951,8 +951,11 @@ void MainWindow::toggleExpand() {
         btnExpand->setText("⤢");
         btnExpand->setToolTip("Expand terminal");
     }
-    // Rerender output with expanded styles
-    rebuildTerminalView();
+    // Rerender output/table with expanded styles
+    if (m_tableVisible)
+        rebuildTable();
+    else
+        rebuildTerminalView();
 }
 
 void MainWindow::rebuildTerminalView() {
@@ -963,15 +966,16 @@ void MainWindow::rebuildTerminalView() {
         if (isSol) {
             const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
             QString color   = m_expanded
-                ? (solIdx % 2 == 0 ? "#7abfe8" : "#f0d060")
+                ? (solIdx % 2 == 0 ? "#7abfe8" : "#cbcbcb")
                 : "#7abfe8";
             QString fsStyle = m_expanded
-                ? "font-size:15px;line-height:1.7;"
+                ? "font-size:15px;line-height:1.9;"
                 : "";
+            QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
             txtOutput->append(QString(
                 "<div style='background:%1;color:%2;font-weight:bold;"
-                "padding:2px 6px;margin:0;%3'>%4</div>")
-                .arg(bg).arg(color).arg(fsStyle).arg(line.toHtmlEscaped()));
+                "margin:0;%3%4'>%5</div>")
+                .arg(bg).arg(color).arg(fsStyle).arg(padding).arg(line.toHtmlEscaped()));
             solIdx++;
         } else {
             QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
@@ -1263,13 +1267,14 @@ void MainWindow::onSolverLine(QString line) {
         // Alternate row backgrounds: near-black vs subtle dark-blue, text always light blue
         const char* bg = (m_solutionLines.size() % 2 == 1) ? "#0d1117" : "#131c28";
         QString solColor = m_expanded
-            ? (m_solutionLines.size() % 2 == 1 ? "#7abfe8" : "#f0d060")
+            ? (m_solutionLines.size() % 2 == 1 ? "#7abfe8" : "#cbcbcb")
             : "#7abfe8";
-        QString solFsStyle = m_expanded ? "font-size:15px;line-height:1.7;" : "";
+        QString solFsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
+        QString solPadding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
         txtOutput->append(QString(
             "<div style='background:%1;color:%2;font-weight:bold;"
-            "padding:2px 6px;margin:0;%3'>%4</div>")
-            .arg(bg).arg(solColor).arg(solFsStyle).arg(line.toHtmlEscaped()));
+            "margin:0;%3%4'>%5</div>")
+            .arg(bg).arg(solColor).arg(solFsStyle).arg(solPadding).arg(line.toHtmlEscaped()));
         // Enable rank button as soon as the first solution arrives — even mid-solve —
         // so stopping early still allows ranking whatever was found.
         updateRankErgoState();
@@ -1576,17 +1581,31 @@ void MainWindow::rebuildTable() {
     const QColor rowA("#0d1117");
     const QColor rowB("#131c28");
     const QColor textCol("#7abfe8");
+    const QColor textColAlt = m_expanded ? QColor("#cbcbcb") : textCol;
     const QColor metaCol("#9aacbe");
+    const QColor metaColAlt = m_expanded ? QColor("#969696ee") : metaCol;
+    const int rowH = m_expanded ? 36 : 24;
+    const int fontSize = m_expanded ? 15 : 12;
 
     m_solutionTable->setRowCount(rows.size());
     for (int i = 0; i < rows.size(); i++) {
         const Row& r = rows[i];
         QColor bg = (i % 2 == 0) ? rowA : rowB;
 
+        bool isAltRow = (i % 2 == 1);
         auto cell = [&](int col, const QString& txt, bool isMeta = false) {
             QTableWidgetItem* item = new QTableWidgetItem(txt);
             item->setBackground(bg);
-            item->setForeground(isMeta ? metaCol : textCol);
+            if (m_expanded) {
+                QColor c = isMeta ? (isAltRow ? metaColAlt : metaCol)
+                                  : (isAltRow ? textColAlt : textCol);
+                item->setForeground(c);
+                QFont f = item->font();
+                f.setPointSize(fontSize);
+                item->setFont(f);
+            } else {
+                item->setForeground(isMeta ? metaCol : textCol);
+            }
             item->setTextAlignment(Qt::AlignCenter);
             m_solutionTable->setItem(i, col, item);
         };
@@ -1595,14 +1614,19 @@ void MainWindow::rebuildTable() {
         // Solution column: left-aligned
         QTableWidgetItem* algItem = new QTableWidgetItem(r.alg);
         algItem->setBackground(bg);
-        algItem->setForeground(QColor("#7abfe8"));
+        algItem->setForeground(m_expanded && isAltRow ? textColAlt : textCol);
         algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+        if (m_expanded) {
+            QFont f = algItem->font();
+            f.setPointSize(fontSize);
+            algItem->setFont(f);
+        }
         m_solutionTable->setItem(i, 1, algItem);
         cell(2, QString::number(r.moves), true);
         cell(3, QString::number(r.slices), true);
         if (showErgo)
             cell(4, QString::number(r.ergo, 'f', 1), true);
-        m_solutionTable->setRowHeight(i, 24);
+        m_solutionTable->setRowHeight(i, rowH);
     }
 }
 
