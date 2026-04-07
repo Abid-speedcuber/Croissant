@@ -1780,7 +1780,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
             const char* bg = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
             bool isAltRow = (solIdx % 2 == 1);
             QString color = m_expanded
-                ? (isAltRow ? "#f0d060" : "#7abfe8")
+                ? (isAltRow ? "#cdcdcd" : "#7abfe8")
                 : "#7abfe8";
             QString fsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
             QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
