@@ -877,6 +877,8 @@ void MainWindow::buildUI() {
         btnTableMode->setText(m_tableVisible ? "▤" : "⊞");
         btnTableMode->setToolTip(m_tableVisible ? "Switch to terminal view" : "Switch to table view");
         if (m_tableVisible) rebuildTable();
+        else if (chkRankErgo->isChecked()) onRankErgoToggled(true);
+        else rebuildTerminalView();
     });
     connect(chkRankErgo, &QCheckBox::toggled,    this, &MainWindow::onRankErgoToggled);
     connect(txtCommand, &QLineEdit::textEdited, this, [this](const QString& text){
@@ -932,6 +934,7 @@ void MainWindow::buildUI() {
             return;
         }
         clearCmdError();
+        syncFlagsFromCommand(text);
     });
 
     updateConstraints();
@@ -1168,6 +1171,74 @@ QStringList MainWindow::buildArgList() {
     return args;
 }
 
+void MainWindow::syncFlagsFromCommand(const QString& text) {
+    QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
+    // Remove the executable name and position string (first and last tokens)
+    if (parts.size() >= 1 && parts[0] == "sq1opt") parts.removeFirst();
+    if (!parts.isEmpty() && !parts.last().startsWith('-')) parts.removeLast();
+
+    auto has = [&](const QString& flag) {
+        return parts.contains(flag);
+    };
+    auto hasPrefix = [&](const QString& prefix) -> QString {
+        for (const QString& p : parts)
+            if (p.startsWith(prefix) && p.length() > prefix.length())
+                return p.mid(prefix.length());
+        return QString();
+    };
+
+    // Block all signals while we sync so updateCommand isn't re-triggered
+    auto block = [](QObject* o, bool b){ o->blockSignals(b); };
+
+    block(chkTwist,        true); chkTwist->setChecked(has("-w"));        block(chkTwist,        false);
+    block(chkGenerator,    true); chkGenerator->setChecked(has("-g"));    block(chkGenerator,    false);
+    block(chk2gen,         true); chk2gen->setChecked(has("-2"));         block(chk2gen,         false);
+    block(chkPseudo2gen,   true); chkPseudo2gen->setChecked(has("-p"));   block(chkPseudo2gen,   false);
+    block(chkCubeshape,    true); chkCubeshape->setChecked(has("-c"));    block(chkCubeshape,    false);
+    block(chkIgnoreMid,    true); chkIgnoreMid->setChecked(has("-m"));    block(chkIgnoreMid,    false);
+    block(chkKarnotation,  true); chkKarnotation->setChecked(has("-k"));  block(chkKarnotation,  false);
+    block(chkSpecificAngle,true); chkSpecificAngle->setChecked(has("-n"));block(chkSpecificAngle,false);
+
+    // -a / -a<n>
+    bool hasA = false;
+    int subopt = 0;
+    for (const QString& p : parts) {
+        if (p == "-a") { hasA = true; subopt = 0; break; }
+        if (p.startsWith("-a") && p.length() > 2) {
+            bool ok; int v = p.mid(2).toInt(&ok);
+            if (ok) { hasA = true; subopt = v; break; }
+        }
+    }
+    block(chkAllOptimal,  true); chkAllOptimal->setChecked(hasA);  block(chkAllOptimal,  false);
+    block(spnSuboptimal,  true); spnSuboptimal->setValue(subopt);  block(spnSuboptimal,  false);
+
+    // -d<list>
+    QString dval = hasPrefix("-d");
+    block(chkDepths, true);
+    block(txtDepths, true);
+    chkDepths->setChecked(!dval.isEmpty());
+    txtDepths->setText(dval);
+    block(chkDepths, false);
+    block(txtDepths, false);
+
+    // -X -Y -Z
+    QString xv = hasPrefix("-X"), yv = hasPrefix("-Y"), zv = hasPrefix("-Z");
+    block(chkMaxX,    true); block(spnMaxX,    true);
+    block(chkMaxY,    true); block(spnMaxY,    true);
+    block(chkMaxTotal,true); block(spnMaxTotal,true);
+    chkMaxX->setChecked(!xv.isEmpty());
+    if (!xv.isEmpty()) { bool ok; int v = xv.toInt(&ok); if (ok) spnMaxX->setValue(v); }
+    chkMaxY->setChecked(!yv.isEmpty());
+    if (!yv.isEmpty()) { bool ok; int v = yv.toInt(&ok); if (ok) spnMaxY->setValue(v); }
+    chkMaxTotal->setChecked(!zv.isEmpty());
+    if (!zv.isEmpty()) { bool ok; int v = zv.toInt(&ok); if (ok) spnMaxTotal->setValue(v); }
+    block(chkMaxX,    false); block(spnMaxX,    false);
+    block(chkMaxY,    false); block(spnMaxY,    false);
+    block(chkMaxTotal,false); block(spnMaxTotal,false);
+
+    updateConstraints();
+}
+
 void MainWindow::updateCommand() {
     QString pos = cubeWidget->getPositionString();
     QStringList args = buildArgList();
@@ -1369,8 +1440,41 @@ void MainWindow::onApplyScramble() {
         return;
     }
 
-    int pos[24] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
+    // Read current cube state from widget
+    QString curPosStr = cubeWidget->getPositionString();
+    // Parse it back into pos[] and mid using the same logic as setPositionFromString
+    int pos[24] = {};
     int mid = 0;
+    {
+        std::string s = curPosStr.toStdString();
+        int j = 0;
+        int nextPartialCorner = -3;
+        int nextPartialEdge = 18;
+        for (int i = 0; i < 16 && j < 24; i++) {
+            int k = (unsigned char)s[i];
+            if (k >= 'a' && k <= 'z') k += ('A' - 'a');
+            if      (k >= 'A' && k <= 'H') k -= 'A';
+            else if (k >= '1' && k <= '8') k -= ('1' - 8);
+            else if (k == 'U') { k = nextPartialCorner; nextPartialCorner -= 3; }
+            else if (k == 'V') { k = nextPartialCorner; nextPartialCorner -= 3; }
+            else if (k == 'W') { k = nextPartialCorner; nextPartialCorner -= 3; }
+            else if (k == 'X') { k = nextPartialEdge;   nextPartialEdge += 3; }
+            else if (k == 'Y') { k = nextPartialEdge;   nextPartialEdge += 3; }
+            else if (k == 'Z') { k = nextPartialEdge;   nextPartialEdge += 3; }
+            pos[j++] = k;
+            if (k >= 0 && k < 8) pos[j++] = k; // corner occupies two slots
+        }
+        if (s.size() >= 17)
+            mid = (s[16] == '/') ? 1 : 0;
+        else if (s.size() == 16)
+            mid = (s.back() == '/') ? 1 : 0;
+        // for position strings without trailing char, mid stays 0
+        if (s.size() < 16) {
+            // fallback: check last char of the 15/16 char string
+            char last = s.back();
+            mid = (last == '/') ? 1 : 0;
+        }
+    }
 
     auto doTop = [&](int m) {
         m = ((m % 12) + 12) % 12;
@@ -1646,37 +1750,50 @@ void MainWindow::onCopy() {
 // onRankErgoToggled
 // -------------------------------------------------------
 void MainWindow::onRankErgoToggled(bool checked) {
-    txtOutput->clear();
     if (!checked) {
-        int solIdx = 0;
-        for (const QString& line : m_rawLines) {
-            bool isSol = line.contains('[') && line.contains(']');
-            if (isSol) {
-                const char* bg = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
-                txtOutput->append(QString(
-                    "<div style='background:%1;color:#7abfe8;font-weight:bold;"
-                    "padding:1px 4px;margin:0;'>%2</div>")
-                    .arg(bg).arg(line.toHtmlEscaped()));
-                solIdx++;
-            } else {
-                txtOutput->append("<span style='color:#888;'>" + line.toHtmlEscaped() + "</span>");
-            }
-        }
+        rebuildTerminalView();
         lblStatus->setText("Done.");
-        txtOutput->verticalScrollBar()->setValue(0);
         if (m_tableVisible) rebuildTable();
         return;
     }
     if (m_solutionLines.isEmpty()) return;
     lblStatus->setText("Rating algorithms…");
+
+    // Build a ranked version of m_rawLines: replace solution lines with ranked ones
     auto rated = rateAndSort(m_solutionLines, m_posHex, chkKarnotation->isChecked());
-    for (int i = 0; i < (int)rated.size(); i++) {
-        const char* bg = (i % 2 == 0) ? "#0d1117" : "#131c28";
-        QString ranked = QString("%1  (%2)").arg(rated[i].first).arg(rated[i].second, 0, 'f', 2);
-        txtOutput->append(QString(
-            "<div style='background:%1;color:#7abfe8;font-weight:bold;"
-            "padding:1px 4px;margin:0;'>%2</div>")
-            .arg(bg).arg(ranked.toHtmlEscaped()));
+    // Map original solution text -> ranked display text
+    QMap<QString, QString> rankedMap;
+    for (auto& [line, score] : rated) {
+        int lb = line.lastIndexOf('[');
+        QString key = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+        rankedMap[key] = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
+    }
+
+    txtOutput->clear();
+    int solIdx = 0;
+    for (const QString& line : m_rawLines) {
+        bool isSol = line.contains('[') && line.contains(']');
+        if (isSol) {
+            int lb = line.lastIndexOf('[');
+            QString key = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+            QString display = rankedMap.value(key, line);
+            const char* bg = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
+            bool isAltRow = (solIdx % 2 == 1);
+            QString color = m_expanded
+                ? (isAltRow ? "#f0d060" : "#7abfe8")
+                : "#7abfe8";
+            QString fsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
+            QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
+            txtOutput->append(QString(
+                "<div style='background:%1;color:%2;font-weight:bold;"
+                "margin:0;%3%4'>%5</div>")
+                .arg(bg).arg(color).arg(fsStyle).arg(padding).arg(display.toHtmlEscaped()));
+            solIdx++;
+        } else {
+            QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
+            txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
+                .arg(fsStyle).arg(line.toHtmlEscaped()));
+        }
     }
     lblStatus->setText(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
     txtOutput->verticalScrollBar()->setValue(0);

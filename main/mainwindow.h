@@ -61,6 +61,7 @@ private:
     void buildStyles();
     QStringList buildArgList();
     void updateRankErgoState();     // enable/disable chkRankErgo and refresh its tooltip
+    void syncFlagsFromCommand(const QString& text);
 
     Sq1Widget*    cubeWidget;
     QCheckBox*    chkTwist;
