@@ -312,23 +312,34 @@ rateAndSort(const QStringList& solutionLines, const QString& posHex, bool useKar
                                   ? trimStr(algStr.substr(0, bracket))
                                   : trimStr(algStr);
         double score = W4;
+        AlgRating rating;
+        bool rated = false;
         try {
-            auto rating = rateAlg(algOnly, initial_top_A, W1, W2, W3, W4, W5);
+            // Always convert to numeric for rating
+            std::string numericAlg = algOnly;
+            bool isKarn = false;
+            for (char ch : algOnly) if (std::isalpha((unsigned char)ch)) { isKarn = true; break; }
+            if (isKarn) numericAlg = unkarnify(algOnly);
+
+            rating = rateAlg(numericAlg, initial_top_A, W1, W2, W3, W4, W5);
             score = rating.FINAL;
-            QString sliceStr = QString::fromStdString(rating.sliceStart);
-            if (!useKarnotation) {
-                int slash_pos = line.indexOf('/');
-                if (slash_pos >= 0)
-                    line.replace(slash_pos, 1, sliceStr);
-            } else if (line.startsWith('/')) {
-                if (sliceStr == "\\")
-                    line.replace(0, 1, QString("\\"));
-            } else {
-                int space_pos = line.indexOf(' ');
-                if (space_pos >= 0)
-                    line.replace(space_pos, 1, sliceStr);
-            }
+            rated = true;
         } catch (...) {}
+
+        // Inject slice start indicator into display line
+        if (rated) {
+            QString sliceStr = QString::fromStdString(rating.sliceStart);
+            if (sliceStr == "/" || sliceStr == "\\") {
+                // Find the first '/' in the alg part of the line
+                int algEnd = line.indexOf('[');
+                QString algPart = (algEnd >= 0) ? line.left(algEnd) : line;
+                QString rest    = (algEnd >= 0) ? line.mid(algEnd)  : QString();
+                int slashPos = algPart.indexOf('/');
+                if (slashPos >= 0)
+                    line = algPart.left(slashPos) + sliceStr + algPart.mid(slashPos + 1) + rest;
+            }
+        }
+
         results.push_back({line, score});
     }
     std::sort(results.begin(), results.end(),
@@ -1759,41 +1770,32 @@ void MainWindow::onRankErgoToggled(bool checked) {
     if (m_solutionLines.isEmpty()) return;
     lblStatus->setText("Rating algorithms…");
 
-    // Build a ranked version of m_rawLines: replace solution lines with ranked ones
-    auto rated = rateAndSort(m_solutionLines, m_posHex, chkKarnotation->isChecked());
-    // Map original solution text -> ranked display text
-    QMap<QString, QString> rankedMap;
-    for (auto& [line, score] : rated) {
-        int lb = line.lastIndexOf('[');
-        QString key = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-        rankedMap[key] = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
-    }
+    auto rated = rateAndSort(m_solutionLines, m_posHex, true); // always use karn for rating
 
     txtOutput->clear();
-    int solIdx = 0;
+    // First emit non-solution lines (status/info lines)
     for (const QString& line : m_rawLines) {
         bool isSol = line.contains('[') && line.contains(']');
-        if (isSol) {
-            int lb = line.lastIndexOf('[');
-            QString key = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-            QString display = rankedMap.value(key, line);
-            const char* bg = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
-            bool isAltRow = (solIdx % 2 == 1);
-            QString color = m_expanded
-                ? (isAltRow ? "#cdcdcd" : "#7abfe8")
-                : "#7abfe8";
-            QString fsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
-            QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
-            txtOutput->append(QString(
-                "<div style='background:%1;color:%2;font-weight:bold;"
-                "margin:0;%3%4'>%5</div>")
-                .arg(bg).arg(color).arg(fsStyle).arg(padding).arg(display.toHtmlEscaped()));
-            solIdx++;
-        } else {
+        if (!isSol) {
             QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
             txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
                 .arg(fsStyle).arg(line.toHtmlEscaped()));
         }
+    }
+
+    int solIdx = 0;
+    for (auto& [line, score] : rated) {
+        const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
+        bool isAltRow   = (solIdx % 2 == 1);
+        QString color   = m_expanded ? (isAltRow ? "#cdcdcd" : "#7abfe8") : "#7abfe8";
+        QString fsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
+        QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
+        QString display = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
+        txtOutput->append(QString(
+            "<div style='background:%1;color:%2;font-weight:bold;"
+            "margin:0;%3%4'>%5</div>")
+            .arg(bg).arg(color).arg(fsStyle).arg(padding).arg(display.toHtmlEscaped()));
+        solIdx++;
     }
     lblStatus->setText(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
     txtOutput->verticalScrollBar()->setValue(0);
