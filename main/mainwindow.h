@@ -8,6 +8,7 @@
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QKeyEvent>
+#include <QScrollArea>
 #include <atomic>
 
 class QProcess;
@@ -41,6 +42,7 @@ public:
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override; // global key routing + stop
     void keyPressEvent(QKeyEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private slots:
     void onSolveButtonClicked();    // dispatches to onSolve() or stopSolver()
@@ -86,6 +88,8 @@ private:
     QPushButton*  btnSolve;
     QPushButton*  btnCopy;
     QPushButton*  btnReset;
+    QPushButton*  btnUndo;
+    QPushButton*  btnRedo;
     QLineEdit*    txtScramble;
     QPushButton*  btnApplyScramble;
     QPushButton*  btnScrambleMode;  // toggles scramble / algorithm mode
@@ -95,6 +99,7 @@ private:
     QPushButton*  btnCopyTerminal;  // copy terminal contents
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
     QWidget*      m_leftPanel;      // cube widget column (hidden when expanded)
+    QScrollArea*  leftScroll;       // scroll area for left panel
     QTextEdit*    txtOutput;
     QWidget*      m_tableContainer;
     QTableWidget* m_solutionTable;
@@ -118,4 +123,9 @@ private:
     bool          m_expanded{false};// true when output terminal is in full-screen mode
     bool          m_scrambleIsAlg{false};    // true = input alg mode (inverts before applying)
     bool          m_cubeshapeWasActive{false}; // cubeshape state captured at solve time
+
+    struct CubeSnapshot { QString posStr; };
+    QVector<CubeSnapshot> m_undoStack;
+    QVector<CubeSnapshot> m_redoStack;
+    void pushUndoState();
 };

@@ -455,13 +455,20 @@ void MainWindow::buildUI() {
 
     // ---- LEFT: cube widget + move buttons ----
     QWidget* leftContainer = new QWidget();
-    leftContainer->setFixedWidth(300);
+    leftContainer->setMinimumWidth(316);
     QVBoxLayout* leftCol = new QVBoxLayout(leftContainer);
     leftCol->setContentsMargins(0, 0, 0, 0);
     leftCol->setSpacing(4);
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
-    leftCol->addWidget(cubeWidget);
+    {
+        QHBoxLayout* centerRow = new QHBoxLayout();
+        centerRow->setContentsMargins(0,0,0,0);
+        centerRow->addStretch();
+        centerRow->addWidget(cubeWidget);
+        centerRow->addStretch();
+        leftCol->addLayout(centerRow);
+    }
 
     QHBoxLayout* btnRow1 = new QHBoxLayout();
     QPushButton* btnUP = new QPushButton("U'");
@@ -519,24 +526,60 @@ void MainWindow::buildUI() {
     btnApplyScramble->setObjectName("btnApplyScramble");
     scrambleLay->addWidget(btnApplyScramble);
     leftCol->addWidget(grpScramble);
+
+    QHBoxLayout* undoRedoRow = new QHBoxLayout();
+    undoRedoRow->setSpacing(4);
+    btnUndo = new QPushButton("⟲ Undo  [Z]");
+    btnUndo->setObjectName("btnUndo");
+    btnUndo->setEnabled(false);
+    btnRedo = new QPushButton("⟳ Redo  [Y]");
+    btnRedo->setObjectName("btnRedo");
+    btnRedo->setEnabled(false);
+    undoRedoRow->addWidget(btnUndo);
+    undoRedoRow->addWidget(btnRedo);
+    leftCol->addLayout(undoRedoRow);
+
     leftCol->addStretch();
 
-    QScrollArea* leftScroll = new QScrollArea();
+    leftScroll = new QScrollArea();
     m_leftPanel = leftScroll;
     leftScroll->setWidget(leftContainer);
     leftScroll->setWidgetResizable(false);
     leftScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     leftScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     leftScroll->setFrameShape(QFrame::NoFrame);
-    leftScroll->setFixedWidth(320);
+    leftScroll->setMinimumWidth(320);
+    leftScroll->setMaximumWidth(380);
 
-    connect(btnU,     &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_J,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnUP,    &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_F,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_I,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnD,     &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnDP,    &QPushButton::clicked, cubeWidget, [this]{ cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnU,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_J,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnUP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_F,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_I,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnD,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnDP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnReset, &QPushButton::clicked, cubeWidget, &Sq1Widget::reset);
     connect(btnReset, &QPushButton::clicked, this, &MainWindow::onReset);
+    connect(btnUndo, &QPushButton::clicked, this, [this]{
+        if (m_undoStack.isEmpty()) return;
+        m_redoStack.append({cubeWidget->getPositionString()});
+        if (m_redoStack.size() > 64) m_redoStack.removeFirst();
+        btnRedo->setEnabled(true);
+        CubeSnapshot snap = m_undoStack.takeLast();
+        cubeWidget->setPositionFromString(snap.posStr);
+        updateCommand();
+        btnUndo->setEnabled(!m_undoStack.isEmpty());
+        lblStatus->setText("Undone.");
+    });
+    connect(btnRedo, &QPushButton::clicked, this, [this]{
+        if (m_redoStack.isEmpty()) return;
+        m_undoStack.append({cubeWidget->getPositionString()});
+        if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+        btnUndo->setEnabled(true);
+        CubeSnapshot snap = m_redoStack.takeLast();
+        cubeWidget->setPositionFromString(snap.posStr);
+        updateCommand();
+        btnRedo->setEnabled(!m_redoStack.isEmpty());
+        lblStatus->setText("Redone.");
+    });
     connect(btnApplyScramble, &QPushButton::clicked, this, &MainWindow::onApplyScramble);
     connect(txtScramble, &QLineEdit::returnPressed, this, &MainWindow::onApplyScramble);
     connect(txtScramble, &QLineEdit::textEdited, this, [this]{
@@ -968,6 +1011,8 @@ void MainWindow::toggleExpand() {
     // Rerender output/table with expanded styles
     if (m_tableVisible)
         rebuildTable();
+    else if (chkRankErgo->isChecked())
+        onRankErgoToggled(true);
     else
         rebuildTerminalView();
 }
@@ -1089,6 +1134,8 @@ void MainWindow::buildStyles() {
         QPushButton#btnSolve:hover { background: #227a47; }
         QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
         QPushButton#btnReset { background: #6b1a1a; border-color: #b52d2d; color: #fdd; }
+        QPushButton#btnUndo, QPushButton#btnRedo { background: #2a2a3e; border-color: #555; color: #aaa; }
+        QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled { background: #1e1e2a; border-color: #333; color: #444; }
         QPushButton#btnApplyScramble {
             background: #2a2a3e; border: 1px solid #555;
             border-radius: 4px; color: #ddd; padding: 4px 8px;
@@ -1415,6 +1462,17 @@ void MainWindow::onSolverDone(int code) {
 }
 
 // -------------------------------------------------------
+// pushUndoState
+// -------------------------------------------------------
+void MainWindow::pushUndoState() {
+    m_undoStack.append({cubeWidget->getPositionString()});
+    if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+    btnUndo->setEnabled(true);
+    m_redoStack.clear();
+    btnRedo->setEnabled(false);
+}
+
+// -------------------------------------------------------
 // onReset
 // -------------------------------------------------------
 void MainWindow::onReset() {
@@ -1425,6 +1483,10 @@ void MainWindow::onReset() {
     chkRankErgo->blockSignals(true);
     chkRankErgo->setChecked(false);
     chkRankErgo->blockSignals(false);
+    m_undoStack.clear();
+    m_redoStack.clear();
+    btnUndo->setEnabled(false);
+    btnRedo->setEnabled(false);
     lblStatus->setText("Ready.");
     // Hide the expand button and collapse if currently expanded.
     btnExpand->setVisible(false);
@@ -1451,6 +1513,7 @@ void MainWindow::onApplyScramble() {
         return;
     }
 
+    pushUndoState();
     // Read current cube state from widget
     QString curPosStr = cubeWidget->getPositionString();
     // Parse it back into pos[] and mid using the same logic as setPositionFromString
@@ -1745,6 +1808,16 @@ void MainWindow::rebuildTable() {
     }
 }
 
+void MainWindow::resizeEvent(QResizeEvent* event) {
+    QMainWindow::resizeEvent(event);
+    int w = event->size().width();
+    // Scale left panel: 320px base, grow a little above 1000px, cap at 400px
+    int leftW = qBound(320, 320 + (w - 860) / 6, 400);
+    leftScroll->setFixedWidth(leftW);
+    if (auto* lc = leftScroll->widget())
+        lc->setFixedWidth(leftW - 4);
+}
+
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     QMainWindow::keyPressEvent(event);
 }
@@ -1867,6 +1940,14 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (watched == cubeWidget)
         return QMainWindow::eventFilter(watched, event);
 
+    // ── Text inputs get all keys — never steal from them ─────────────────────
+    {
+        QWidget* fw = QApplication::focusWidget();
+        if (fw == txtCommand || fw == txtScramble || fw == txtDepths ||
+            watched == txtCommand || watched == txtScramble || watched == txtDepths)
+            return QMainWindow::eventFilter(watched, event);
+    }
+
     // ── (2) Route cube shortcuts from any other widget ────────────────────────
     if (ke->modifiers() == Qt::NoModifier) {
         auto sendCube = [this](Qt::Key k) {
@@ -1875,16 +1956,18 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
         };
         bool handled = true;
         switch (ke->key()) {
-        case Qt::Key_I: case Qt::Key_K: sendCube(static_cast<Qt::Key>(ke->key())); break;
-        case Qt::Key_J:                 sendCube(Qt::Key_J); break;
-        case Qt::Key_F:                 sendCube(Qt::Key_F); break;
-        case Qt::Key_S:                 sendCube(Qt::Key_S); break;
-        case Qt::Key_L:                 sendCube(Qt::Key_L); break;
-        case Qt::Key_Escape:            sendCube(Qt::Key_Escape); break;
-        case Qt::Key_H: sendCube(Qt::Key_J); sendCube(Qt::Key_J); break; // UU
-        case Qt::Key_G: sendCube(Qt::Key_F); sendCube(Qt::Key_F); break; // U'U'
-        case Qt::Key_O: sendCube(Qt::Key_L); sendCube(Qt::Key_L); break; // D'D'
-        case Qt::Key_W: sendCube(Qt::Key_S); sendCube(Qt::Key_S); break; // DD
+        case Qt::Key_I: case Qt::Key_K: pushUndoState(); sendCube(static_cast<Qt::Key>(ke->key())); break;
+        case Qt::Key_J:                 pushUndoState(); sendCube(Qt::Key_J); break;
+        case Qt::Key_F:                 pushUndoState(); sendCube(Qt::Key_F); break;
+        case Qt::Key_S:                 pushUndoState(); sendCube(Qt::Key_S); break;
+        case Qt::Key_L:                 pushUndoState(); sendCube(Qt::Key_L); break;
+        case Qt::Key_Escape:            m_undoStack.clear(); m_redoStack.clear(); btnUndo->setEnabled(false); btnRedo->setEnabled(false); sendCube(Qt::Key_Escape); break;
+        case Qt::Key_Z:                 if (!m_undoStack.isEmpty()) btnUndo->click(); break;
+        case Qt::Key_Y:                 if (!m_redoStack.isEmpty()) btnRedo->click(); break;
+        case Qt::Key_H: pushUndoState(); sendCube(Qt::Key_J); sendCube(Qt::Key_J); break; // UU
+        case Qt::Key_G: pushUndoState(); sendCube(Qt::Key_F); sendCube(Qt::Key_F); break; // U'U'
+        case Qt::Key_O: pushUndoState(); sendCube(Qt::Key_L); sendCube(Qt::Key_L); break; // D'D'
+        case Qt::Key_W: pushUndoState(); sendCube(Qt::Key_S); sendCube(Qt::Key_S); break; // DD
         default: handled = false; break;
         }
         if (handled) return true; // consume — letter goes to cube, not to any text field
