@@ -1702,16 +1702,8 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     // ── (0) Per-line tooltips for the output box ──────────────────────────────
     // QTextEdit delivers QHelpEvent to its internal viewport, not to itself.
     if (event->type() == QEvent::ToolTip && txtOutput
-            && watched == txtOutput->viewport()) {
-        auto* he = static_cast<QHelpEvent*>(event);
-        QTextCursor cur = txtOutput->cursorForPosition(he->pos());
-        QString text = cur.block().text().trimmed();
-        if (!text.isEmpty())
-            QToolTip::showText(he->globalPos(), text, txtOutput->viewport());
-        else
-            QToolTip::hideText();
+            && watched == txtOutput->viewport())
         return true;
-    }
 
     if (event->type() != QEvent::KeyPress)
         return QMainWindow::eventFilter(watched, event);
