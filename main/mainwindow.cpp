@@ -508,8 +508,7 @@ void MainWindow::buildUI() {
 
     txtScramble = new QLineEdit();
     txtScramble->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
-    txtScramble->setToolTip("Enter a move sequence in (x,y)/ format.\n"
-                            "Empty input resets to solved.");
+    txtScramble->setToolTip("Enter a move sequence in (x,y)/ format to be applied on the current cube");
     txtScramble->setObjectName("txtScramble");
 
     scrambleInputRow->addWidget(btnScrambleMode);
@@ -606,21 +605,17 @@ void MainWindow::buildUI() {
 
     // ── Widgets ──────────────────────────────────────────────────────────────
     chkTwist = new QCheckBox("Twist metric");
-    chkTwist->setToolTip("Count only slices (twists) as moves, not layer turns.\n"
-                         "Maps to the -w flag.");
+    chkTwist->setToolTip("If selected, only slices count as \"moves\", else layer turns count too.");
 
     chkAllOptimal = new QCheckBox("All optimal");
-    chkAllOptimal->setToolTip("Find every optimal solution, not just the first one.\n"
-                              "The spinner sets how many extra moves beyond optimal to also find.\n"
-                              "0 = optimal only.  Maps to -a or -a<n>.");
+    chkAllOptimal->setToolTip("Find all the optimal solutions, not just the first one.");
 
     spnSuboptimal = new QSpinBox();
     spnSuboptimal->setRange(0, 9);
     spnSuboptimal->setValue(0);
     spnSuboptimal->setFixedWidth(48);
     spnSuboptimal->setFixedHeight(26);
-    spnSuboptimal->setToolTip("Extra moves beyond optimal (0 = optimal only).\n"
-                              "Hidden when 'Specific depths' is active.");
+    spnSuboptimal->setToolTip("Extra moves beyond optimal to *also* find (0 = optimal only).");
 
     // Container for the All-optimal row
     QWidget* allOptRow = new QWidget();
@@ -636,10 +631,8 @@ void MainWindow::buildUI() {
     allOptLayout->addWidget(spnSuboptimal);
 
     chkDepths = new QCheckBox("Specific depths:");
-    chkDepths->setToolTip("Search only the listed twist/turn depths instead of iterating from 0.\n"
-                          "Comma-separated, e.g. 8,9.  Maps to -d<list>.\n"
-                          "When active, the suboptimal-count field is hidden and -a is used\n"
-                          "without a number.");
+    chkDepths->setToolTip("Search only the listed move depths instead of starting from 0 and going up.\n"
+                          "Comma-separated, e.g.\"8,9\"");
 
     txtDepths = new QLineEdit();
     txtDepths->setFixedWidth(80);
@@ -648,71 +641,68 @@ void MainWindow::buildUI() {
     // Only digits and commas allowed; letters are eaten by the global event filter anyway.
     txtDepths->setValidator(new QRegularExpressionValidator(
         QRegularExpression("[0-9,]*"), txtDepths));
-    txtDepths->setToolTip("Comma-separated list of depths to search.\n"
-                          "Click here to enable Specific depths automatically.");
+    txtDepths->setToolTip("Comma-separated list of depths to search, e.g. \"8,9\"");
 
     chkGenerator = new QCheckBox("Generator alg");
-    chkGenerator->setToolTip("Treat input as a generating sequence (forward) rather than a\n"
-                             "solution sequence (reverse).  Maps to -g.");
+    chkGenerator->setToolTip("If selected, generated algs will set up to the case from a solved cube,\n"
+                            "else the algs will solve the case.");
 
     chk2gen = new QCheckBox("2Gen  (top layer + slices only)");
-    chk2gen->setToolTip("Restrict to 2-generator moves: top-layer turns and slices only.\n"
-                        "Requires pieces G, 8, H to already be solved.\n"
-                        "Incompatible with 'Stay in cubeshape' and 'Pseudo 2Gen'.\n"
-                        "Maps to -2.");
+    chk2gen->setToolTip("Restrict to 2-gen moves: top-layer turns and slices only.\n"
+                        "Requires the bottom left pieces to already be solved.\n"
+                        "You cannot demand both 2-gen and stay-in-cubeshape.");
 
     chkPseudo2gen = new QCheckBox("Pseudo 2Gen  (bottom: ±1 only)");
-    chkPseudo2gen->setToolTip("Restrict bottom-layer turns to ±1 only (pseudo-2-generator).\n"
-                              "Incompatible with '2Gen'.\n"
-                              "Maps to -p.");
+    chkPseudo2gen->setToolTip("Restrict bottom-layer turns to ±1 only (2-gen with bottom 1 moves).\n");
 
     chkCubeshape = new QCheckBox("Stay in cubeshape");
-    chkCubeshape->setToolTip("Only generate algs that keep the puzzle in a square/square\n"
-                             "(cubeshape) throughout.  Incompatible with '2Gen'.\n"
-                             "Maps to -c.");
+    chkCubeshape->setToolTip("Only generate algs that keep the puzzle in cubeshape throughout.");
 
     chkIgnoreMid = new QCheckBox("Ignore middle layer");
-    chkIgnoreMid->setToolTip("Treat the middle layer orientation as irrelevant.\n"
-                             "Useful when you don't care whether the middle ends as square or kite.\n"
-                             "Maps to -m.");
+    chkIgnoreMid->setToolTip("Ignore bar states. Equivalent to clicking on the bar until it is gray.");
 
     chkKarnotation = new QCheckBox("Karnotation output");
-    chkKarnotation->setToolTip("Display solutions in Karnotation (named move notation)\n"
-                               "instead of raw (x,y)/ tuples.  Maps to -k.");
+    chkKarnotation->setToolTip("Display solutions in karnotation instead of WCA notation.");
 
     chkSpecificAngle = new QCheckBox("Generate alg from this specific angle");
     chkSpecificAngle->setObjectName("chkSpecificAngle");
+    chkSpecificAngle->setToolTip("Generate algs from this angle and this angle only.\n"
+                                "Essentially restricting the move before the first slice to 1 moves only.");
 
     chkMaxX = new QCheckBox("Max top turn:");
-    chkMaxX->setToolTip("Limit the maximum top-layer turn size (0–6 twelfths).\n"
-                        "Enabling this also disables the transformation equivalence (-x).\n"
-                        "Maps to -X<n>.");
+    chkMaxX->setToolTip("Limit the maximum top-layer turn in either direction (0–6).\n"
+                        "e.g. if you put \"4\", that means algs can do -4 to 4 on top.");
     spnMaxX = new QSpinBox();
     spnMaxX->setRange(0, 6);
     spnMaxX->setValue(3);
     spnMaxX->setFixedWidth(48);
     spnMaxX->setFixedHeight(26);
-    spnMaxX->setToolTip("Maximum top-layer turn in twelfths of a full rotation (0–6).");
+    spnMaxX->setToolTip("Maximum top-layer turn in either direction (0–6).\n"
+                        "e.g. if you put \"4\", that means algs can do -4 to 4 on top.");
 
     chkMaxY = new QCheckBox("Max bottom turn:");
-    chkMaxY->setToolTip("Limit the maximum bottom-layer turn size (0–6 twelfths).\n"
-                        "Maps to -Y<n>.");
+    chkMaxY->setToolTip("Limit the maximum bottom-layer turn in either direction (0–6).\n"
+                        "e.g. if you put \"3\", that means algs can do -3 to 3 on bottom.");
     spnMaxY = new QSpinBox();
     spnMaxY->setRange(0, 6);
     spnMaxY->setValue(3);
     spnMaxY->setFixedWidth(48);
     spnMaxY->setFixedHeight(26);
-    spnMaxY->setToolTip("Maximum bottom-layer turn in twelfths of a full rotation (0–6).");
+    spnMaxY->setToolTip("Maximum bottom-layer turn in either direction (0–6).\n"
+                        "e.g. if you put \"3\", that means algs can do -3 to 3 on bottom.");
 
     chkMaxTotal = new QCheckBox("Max total turn:");
-    chkMaxTotal->setToolTip("Limit the combined |top|+|bottom| turn per move pair (1–12).\n"
-                            "Maps to -Z<n>.");
+    chkMaxTotal->setToolTip("Limit the maximum combined |top|+|bottom| turn per move pair (1–12).\n"
+                            "e.g. if you put \"6\", (3,-3) is allowed in algs (3+3<=6),\n"
+                            "but (-5,-2) is not (5+2>6).");
     spnMaxTotal = new QSpinBox();
     spnMaxTotal->setRange(1, 12);
     spnMaxTotal->setValue(6);
     spnMaxTotal->setFixedWidth(48);
     spnMaxTotal->setFixedHeight(26);
-    spnMaxTotal->setToolTip("Maximum combined turn amount per move pair (1–12).");
+    spnMaxTotal->setToolTip("Maximum combined |top|+|bottom| turn per move pair (1–12).\n"
+                            "e.g. if you put \"6\", (3,-3) is allowed in algs (3+3<=6),\n"
+                            "but (-5,-2) is not (5+2>6).");
 
     chkTwist->setChecked(true);
     chkKarnotation->setChecked(true);
