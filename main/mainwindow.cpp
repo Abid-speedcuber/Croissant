@@ -1996,12 +1996,15 @@ const bool canRank         = cubeshapeActive && hasSolutions && !solving;
 //   3. txtDepths digit → auto-enable "Specific depths" checkbox.
 // -------------------------------------------------------
 void MainWindow::showAboutModal() {
-    QDialog* dlg = new QDialog(this, Qt::FramelessWindowHint | Qt::Dialog);
-    dlg->setAttribute(Qt::WA_TranslucentBackground);
-    dlg->setModal(true);
-    dlg->resize(this->size());
+    QWidget* central = this->centralWidget();
 
-    QWidget* card = new QWidget(dlg);
+    QWidget* overlay = new QWidget(central);
+    overlay->setGeometry(central->rect());
+    overlay->setStyleSheet("background:rgba(0,0,0,160);");
+    overlay->show();
+    overlay->raise();
+
+    QWidget* card = new QWidget(overlay);
     card->setObjectName("aboutCard");
     card->setFixedWidth(480);
     card->setStyleSheet(
@@ -2051,38 +2054,43 @@ void MainWindow::showAboutModal() {
     lay->addWidget(title);
     lay->addWidget(body);
 
-    // Center card in dialog
+    card->show();
     card->adjustSize();
-    int cx = (dlg->width()  - card->width())  / 2;
-    int cy = (dlg->height() - card->sizeHint().height()) / 2;
-    card->move(cx, cy);
 
-    // Dim background
-    QWidget* overlay = new QWidget(dlg);
-    overlay->setGeometry(dlg->rect());
-    overlay->setStyleSheet("background:rgba(0,0,0,160);");
-    overlay->lower();
+    auto centerCard = [overlay, card]() {
+        overlay->setGeometry(overlay->parentWidget()->rect());
+        int cx = (overlay->width()  - card->width())  / 2;
+        int cy = (overlay->height() - card->height()) / 2;
+        card->move(cx, cy);
+    };
+    centerCard();
     card->raise();
 
-    // Close on click outside card
+    // Watch the centralWidget for resize events
     struct Filter : public QObject {
-        QDialog* dlg; QWidget* card;
-        Filter(QDialog* d, QWidget* c) : QObject(d), dlg(d), card(c) {}
-        bool eventFilter(QObject*, QEvent* e) override {
-            if (e->type() == QEvent::MouseButtonPress) {
+        QWidget* overlay; QWidget* card;
+        std::function<void()> center;
+        Filter(QWidget* o, QWidget* c, std::function<void()> fn)
+            : QObject(o), overlay(o), card(c), center(fn) {}
+        bool eventFilter(QObject* watched, QEvent* e) override {
+            if (e->type() == QEvent::Resize && watched == overlay->parentWidget()) {
+                center();
+                return false;
+            }
+            if (e->type() == QEvent::MouseButtonPress && watched == overlay) {
                 QMouseEvent* me = static_cast<QMouseEvent*>(e);
                 if (!card->geometry().contains(me->pos())) {
-                    dlg->accept();
+                    overlay->deleteLater();
                     return true;
                 }
             }
             return false;
         }
     };
-    dlg->installEventFilter(new Filter(dlg, card));
-    connect(new QShortcut(Qt::Key_Escape, dlg), &QShortcut::activated, dlg, &QDialog::accept);
 
-    dlg->exec();
+    Filter* f = new Filter(overlay, card, centerCard);
+    central->installEventFilter(f);   // watches parent for resize
+    overlay->installEventFilter(f);   // watches overlay for click-outside
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
