@@ -811,37 +811,39 @@ void MainWindow::buildUI() {
 
     rightCol->addWidget(m_topSection);
 
-    // ── Results header: "Results:" label left, expand/shrink button right ─────
-    QWidget* resultsHeader = new QWidget();
-    QHBoxLayout* rhLay = new QHBoxLayout(resultsHeader);
-    rhLay->setContentsMargins(0, 2, 0, 2);
-    QLabel* lblOut = new QLabel("Results:");
-    btnExpand = new QPushButton("⤢");
-    btnExpand->setObjectName("btnExpand");
-    btnExpand->setFixedSize(22, 22);
-    btnExpand->setToolTip("Expand terminal");
-    btnCopyTerminal = new QPushButton("⎘");
-    btnCopyTerminal->setObjectName("btnCopyTerminal");
-    btnCopyTerminal->setFixedSize(22, 22);
-    btnCopyTerminal->setToolTip("Copy terminal contents");
-    btnTableMode = new QPushButton("⊞");
-    btnTableMode->setObjectName("btnTableMode");
-    btnTableMode->setFixedSize(22, 22);
-    btnTableMode->setToolTip("Switch to table view");
-    rhLay->addWidget(lblOut);
-    rhLay->addStretch();
-    rhLay->addWidget(btnCopyTerminal);
-    rhLay->addWidget(btnTableMode);
-    rhLay->addWidget(btnExpand);
-    btnExpand->setVisible(false);
-    btnCopyTerminal->setVisible(false);
-    btnTableMode->setVisible(false);
-    rightCol->addWidget(resultsHeader);
+    // Output stack wrapper with floating buttons
+    QWidget* outputWrapper = new QWidget();
+    outputWrapper->setMinimumHeight(120);
+    QVBoxLayout* outputWrapperLay = new QVBoxLayout(outputWrapper);
+    outputWrapperLay->setContentsMargins(0,0,0,0);
+    outputWrapperLay->setSpacing(0);
 
-    txtOutput = new QTextEdit();
+    txtOutput = new QTextEdit(outputWrapper);
     txtOutput->setReadOnly(true);
     txtOutput->setObjectName("txtOutput");
     txtOutput->setMinimumHeight(120);
+
+    // Floating buttons — parented to outputWrapper so they overlay the terminal
+    btnExpand = new QPushButton("⤢", outputWrapper);
+    btnExpand->setObjectName("btnExpand");
+    btnExpand->setFixedSize(22, 22);
+    btnExpand->setToolTip("Expand terminal");
+
+    btnCopyTerminal = new QPushButton("⎘", outputWrapper);
+    btnCopyTerminal->setObjectName("btnCopyTerminal");
+    btnCopyTerminal->setFixedSize(22, 22);
+    btnCopyTerminal->setToolTip("Copy terminal contents");
+
+    btnTableMode = new QPushButton("⊞", outputWrapper);
+    btnTableMode->setObjectName("btnTableMode");
+    btnTableMode->setFixedSize(22, 22);
+    btnTableMode->setToolTip("Switch to table view");
+
+    btnExpand->setVisible(false);
+    btnCopyTerminal->setVisible(false);
+    btnTableMode->setVisible(false);
+
+    outputWrapperLay->addWidget(txtOutput);
 
     // Table view
     m_tableContainer = new QWidget();
@@ -892,14 +894,11 @@ void MainWindow::buildUI() {
     });
     tableLay->addWidget(m_solutionTable, 1);
 
-    // Stack terminal and table in a stacked-like layout using a container
-    QWidget* outputStack = new QWidget();
-    QVBoxLayout* stackLay = new QVBoxLayout(outputStack);
-    stackLay->setContentsMargins(0,0,0,0);
-    stackLay->setSpacing(0);
-    stackLay->addWidget(txtOutput);
-    stackLay->addWidget(m_tableContainer);
-    rightCol->addWidget(outputStack, 1);
+    outputWrapperLay->addWidget(m_tableContainer);
+    outputWrapperLay->addWidget(m_tableContainer);
+    m_outputWrapper = outputWrapper;
+    outputWrapper->installEventFilter(this);
+    rightCol->addWidget(outputWrapper, 1);
 
     // Always visible; enabled only when eligible (cubeshape + solutions present).
     chkRankErgo = new QCheckBox("Roughly rank algs based on relative ergonomics");
@@ -986,6 +985,16 @@ void MainWindow::buildUI() {
         }
         clearCmdError();
         syncFlagsFromCommand(text);
+    });
+
+    // Initial floating button positions (will be corrected on first resize)
+    QTimer::singleShot(0, this, [this]{
+        int w = m_outputWrapper->width();
+        int margin = 6; int bw = 22;
+        btnExpand->move(w - margin - bw, margin);
+        btnTableMode->move(w - margin - bw*2 - 4, margin);
+        btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
+        btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise();
     });
 
     updateConstraints();
@@ -1342,7 +1351,7 @@ void MainWindow::onSolve() {
     btnSolve->setText("■  Stop");
     btnSolve->setStyleSheet(
         "QPushButton#btnSolve {"
-        "  background: #3d1616; border: 1px solid #7a2e2e;"
+        "  background: #3d1616; border: 1px solid #7a2e2e; padding-top: 0px; padding-bottom: 0px;"
         "  color: #c89898; font-size: 12px; font-weight: bold; }"
         "QPushButton#btnSolve:hover { background: #4d1e1e; }");
 
@@ -1917,6 +1926,16 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::ToolTip && txtOutput
             && watched == txtOutput->viewport())
         return true;
+
+    if (event->type() == QEvent::Resize && watched == m_outputWrapper) {
+        int w = m_outputWrapper->width();
+        int margin = 6;
+        int bw = 22;
+        btnExpand->move(w - margin - bw, margin);
+        btnTableMode->move(w - margin - bw*2 - 4, margin);
+        btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
+        return false;
+    }
 
     if (event->type() != QEvent::KeyPress)
         return QMainWindow::eventFilter(watched, event);

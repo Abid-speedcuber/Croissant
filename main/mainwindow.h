@@ -100,6 +100,7 @@ private:
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
     QWidget*      m_leftPanel;      // cube widget column (hidden when expanded)
     QScrollArea*  leftScroll;       // scroll area for left panel
+    QWidget*      m_outputWrapper;  // wrapper that holds terminal + floating btns
     QTextEdit*    txtOutput;
     QWidget*      m_tableContainer;
     QTableWidget* m_solutionTable;
