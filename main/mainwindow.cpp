@@ -446,6 +446,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     buildUI();
     buildStyles();
     updateCommand();
+
+    m_sliceTimer = new QTimer(this);
+    m_sliceTimer->setSingleShot(true);
+    connect(m_sliceTimer, &QTimer::timeout, this, [this]{
+        int saves = (m_sliceCount % 2 == 0) ? 2 : 1;
+        m_undoStack.append(m_slicePending.first());
+        if (saves == 2 && m_slicePending.size() >= 2)
+            m_undoStack.append(m_slicePending.last());
+        while (m_undoStack.size() > 64) m_undoStack.removeFirst();
+        btnUndo->setEnabled(true);
+        m_redoStack.clear();
+        btnRedo->setEnabled(false);
+        m_sliceCount = 0;
+        m_slicePending.clear();
+    });
 }
 
 void MainWindow::buildUI() {
@@ -545,8 +560,8 @@ void MainWindow::buildUI() {
     btnRedo->setEnabled(false);
     btnRedo->setToolTip("Redo  [Y]");
     undoResetRedoRow->addWidget(btnUndo, 1);
-    undoResetRedoRow->addWidget(btnReset, 2);
     undoResetRedoRow->addWidget(btnRedo, 1);
+    undoResetRedoRow->addWidget(btnReset, 1);
     leftCol->addLayout(undoResetRedoRow);
 
     QGroupBox* grpScramble = new QGroupBox("Scramble / Alg input");
@@ -599,7 +614,16 @@ void MainWindow::buildUI() {
 
     connect(btnU,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_J,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnUP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_F,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_I,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]{
+        cubeWidget->setFocus();
+        m_sliceCount++;
+
+        // Capture snapshot before this slice
+        m_slicePending.append({cubeWidget->getPositionString()});
+        QKeyEvent e(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier);
+        QApplication::sendEvent(cubeWidget, &e);
+        m_sliceTimer->start(600);
+    });
     connect(btnD,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnDP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnReset, &QPushButton::clicked, this, [this]{
@@ -2152,7 +2176,13 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
         };
         bool handled = true;
         switch (ke->key()) {
-        case Qt::Key_I: case Qt::Key_K: pushUndoState(); sendCube(static_cast<Qt::Key>(ke->key())); break;
+        case Qt::Key_I: case Qt::Key_K: {
+            m_sliceCount++;
+            m_slicePending.append({cubeWidget->getPositionString()});
+            sendCube(static_cast<Qt::Key>(ke->key()));      
+            m_sliceTimer->start(600);
+            break;
+        }
         case Qt::Key_J:                 pushUndoState(); sendCube(Qt::Key_J); break;
         case Qt::Key_F:                 pushUndoState(); sendCube(Qt::Key_F); break;
         case Qt::Key_S:                 pushUndoState(); sendCube(Qt::Key_S); break;

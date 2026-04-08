@@ -123,12 +123,15 @@ private:
     bool          m_hadFirstSolution{false};
     qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
-    bool          m_scrambleIsAlg{false};    // true = input alg mode (inverts before applying)
+    bool          m_scrambleIsAlg{false};
+    int           m_sliceCount{0};
+    QTimer*       m_sliceTimer{nullptr};    // true = input alg mode (inverts before applying)
     bool          m_cubeshapeWasActive{false}; // cubeshape state captured at solve time
 
     struct CubeSnapshot { QString posStr; };
     QVector<CubeSnapshot> m_undoStack;
     QVector<CubeSnapshot> m_redoStack;
+    QVector<CubeSnapshot> m_slicePending;
     void pushUndoState();
     void showAboutModal();
 };
