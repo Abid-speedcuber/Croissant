@@ -37,6 +37,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <set>
 
 // ============================================================
 // Ergonomics Rating — pure C++ translation of alg_rater.html
@@ -143,55 +144,227 @@ static std::string addCommasToMove(const std::string& move) {
     }
 }
 
-static std::string unkarnify(const std::string& algIn) {
-    bool startsWithSlice = (!algIn.empty() && algIn[0] == '/');
-    const std::string& algWork = startsWithSlice ? algIn.substr(1) : algIn;
+// ---------------------------------------------------------------------------
+// dictReplace — repeatedly apply key→value map to str until stable
+// ---------------------------------------------------------------------------
+static std::string dictReplace(std::string str, const std::map<std::string,std::string>& dict) {
+    std::string prev;
+    do {
+        prev = str;
+        for (const auto& [k, v] : dict)
+            str = replaceAll(str, k, v);
+    } while (str != prev);
+    return str;
+}
 
-    std::vector<std::string> tokens;
-    {
-        std::istringstream iss(algWork);
-        std::string t;
-        while (iss >> t) tokens.push_back(t);
+// ---------------------------------------------------------------------------
+// getAlignment — returns "00","10","0-1","1-1" suffix for shorthand lookup
+// ---------------------------------------------------------------------------
+static std::string getAlignment(bool topA, bool bottomA) {
+    return (topA ? "1" : "0") + std::string(bottomA ? "-1" : "0");
+}
+
+// ---------------------------------------------------------------------------
+// unkarnifyHelp — apply KARN_TO_WCA dict, collapse consecutive slashes
+// ---------------------------------------------------------------------------
+static std::string unkarnifyHelp(const std::string& scramble) {
+    std::string s = dictReplace(" " + scramble + " ", KARN_TO_WCA);
+    // trim
+    size_t a = s.find_first_not_of(" \t\r\n");
+    if (a == std::string::npos) return "";
+    size_t b = s.find_last_not_of(" \t\r\n");
+    s = s.substr(a, b - a + 1);
+    // collapse consecutive slashes and spaces-around-slashes
+    // replace runs of "/ /" or " /" etc. → single "/"
+    // simple approach: replace multiple-slash runs
+    std::string out;
+    for (size_t i = 0; i < s.size(); ) {
+        bool isSlashOrSpace = (s[i] == '/' || s[i] == ' ');
+        if (isSlashOrSpace) {
+            // scan ahead for the whole run
+            size_t j = i;
+            bool sawSlash = false;
+            while (j < s.size() && (s[j] == '/' || s[j] == ' ')) {
+                if (s[j] == '/') sawSlash = true;
+                j++;
+            }
+            if (sawSlash) out += '/';
+            else out += ' ';
+            i = j;
+        } else {
+            out += s[i++];
+        }
     }
+    // replace remaining spaces with '/'
+    for (char& c : out) if (c == ' ') c = '/';
+    // collapse double slashes
+    while (out.find("//") != std::string::npos)
+        out = replaceAll(out, "//", "/");
+    return out;
+}
 
-    std::vector<std::string> numericParts;
-    for (const auto& tok : tokens) {
-        bool found = false;
-        for (int k = KARNOTATION_LEN - 1; k >= 0; k--) {
-            const std::string& kname = KARNOTATION[k][0];
-            const std::string& kval  = KARNOTATION[k][1];
-            if (kname.empty()) continue;
-            if (tok == trimStr(kname)) {
-                numericParts.push_back(kval);
-                found = true;
-                break;
+// ---------------------------------------------------------------------------
+// replaceShorthands — resolve shorthand names (bjj, fv, kk, …) tracking
+// alignment state to pick the correct alignment-suffixed key.
+// ---------------------------------------------------------------------------
+static std::string replaceShorthands(const std::string& scrambleIn) {
+    // Fast path: if no alpha chars outside of numeric/slash context, skip
+    bool hasAlpha = false;
+    for (char c : scrambleIn)
+        if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
+    if (!hasAlpha) return unkarnifyHelp(scrambleIn);
+
+    std::vector<std::string> moves = splitStr(scrambleIn, '/');
+
+    bool topA = false, bottomA = false;
+    std::string result = scrambleIn;
+
+    for (const auto& move : moves) {
+        std::string m = trimStr(move);
+        if (m.empty()) continue;
+
+        if (m.find(',') != std::string::npos) {
+            // Numeric turn — update alignment
+            auto c = m.find(',');
+            int t = 0;
+            try { t = std::stoi(m.substr(0, c)); } catch (...) {}
+            int d = 0;
+            try { d = std::stoi(m.substr(c+1)); } catch (...) {}
+            if (t % 3 != 0) topA    = !topA;
+            if (d % 3 != 0) bottomA = !bottomA;
+        } else {
+            // Shorthand token
+            std::string mLow = m;
+            for (char& ch : mLow) ch = std::tolower((unsigned char)ch);
+
+            std::string key;
+            if (SHORTHAND_ALIGN_INDEPENDENT.count(mLow))
+                key = mLow;
+            else
+                key = mLow + getAlignment(topA, bottomA);
+
+            auto it = SHORTHAND_TO_KARN.find(key);
+            if (it == SHORTHAND_TO_KARN.end()) {
+                // Unknown shorthand — return as-is (runtime-safe)
+                return scrambleIn;
+            }
+            std::string repl = it->second;
+            result = replaceAll(result, m, repl);
+
+            // Update alignment based on replacement expansion
+            std::string expanded = repl;
+            if (!expanded.empty() && expanded.front() == '/') expanded = expanded.substr(1);
+            if (!expanded.empty() && expanded.back()  == '/') expanded.pop_back();
+            for (const auto& sub : splitStr(unkarnifyHelp(expanded), '/')) {
+                if (sub.empty()) continue;
+                auto c2 = sub.find(',');
+                if (c2 == std::string::npos) continue;
+                int t = 0, d = 0;
+                try { t = std::stoi(sub.substr(0, c2)); } catch (...) {}
+                try { d = std::stoi(sub.substr(c2+1));  } catch (...) {}
+                if (t % 3 != 0) topA    = !topA;
+                if (d % 3 != 0) bottomA = !bottomA;
             }
         }
-        if (!found) numericParts.push_back(tok);
     }
 
-    std::string result;
-    for (auto part : numericParts) {
-        while (!part.empty() && part.back() == '/') part.pop_back();
-        if (!result.empty()) result += "/";
-        result += part;
+    // Collapse double-slashes introduced by replacements
+    result = replaceAll(result, " / ", "/");
+    result = replaceAll(result, "  ", "/");
+    while (result.find("//") != std::string::npos)
+        result = replaceAll(result, "//", "/");
+    return unkarnifyHelp(result);
+}
+
+// ---------------------------------------------------------------------------
+// unkarnify — master Karnotation → numeric WCA conversion
+// Matches karn.js unkarnify() pipeline.
+// ---------------------------------------------------------------------------
+static std::string unkarnify(const std::string& algIn) {
+    std::string s = algIn;
+
+    // Easter egg passthrough
+    if (s.find("meow") != std::string::npos) return s;
+
+    // Legacy single-char substitutions (compact notation)
+    s = replaceAll(s, "&", "-1");
+    s = replaceAll(s, "^", "-2");
+    s = replaceAll(s, "9", "-3");
+    s = replaceAll(s, "8", "-4");
+    s = replaceAll(s, "7", "-5");
+
+    // Detect leading/trailing slice
+    bool firstSlice = (!s.empty() && (s[0] == '/' || s[0] == '\\'));
+    if (!firstSlice) {
+        // Check if first token is a karn name that maps to something starting with /
+        std::istringstream iss(s);
+        std::string tok;
+        if (iss >> tok) {
+            auto it = KARN_TO_WCA.find(" " + tok + " ");
+            if (it != KARN_TO_WCA.end()) firstSlice = true;
+        }
+    }
+    bool lastSlice = false;
+    {
+        std::istringstream iss(s);
+        std::string last, tok;
+        while (iss >> tok) last = tok;
+        if (!last.empty()) {
+            auto it = KARN_TO_WCA.find(" " + last + " ");
+            if (it != KARN_TO_WCA.end()) lastSlice = true;
+        }
     }
 
-    result = replaceAll(result, "&", "-1");
-    result = replaceAll(result, "^", "-2");
-    result = replaceAll(result, "9", "-3");
-    result = replaceAll(result, "8", "-4");
-    result = replaceAll(result, "7", "-5");
+    // Normalise separators
+    for (char& c : s) if (c == '\\' || c == '/') c = ' ';
+    // collapse parens
+    s = replaceAll(s, "(", "");
+    s = replaceAll(s, ")", "");
+    // collapse multiple spaces
+    {
+        std::string tmp;
+        bool sp = false;
+        for (char c : s) {
+            if (c == ' ') { if (!sp) { tmp += ' '; sp = true; } }
+            else { tmp += c; sp = false; }
+        }
+        s = trimStr(tmp);
+    }
 
-    auto parts = splitStr(result, '/');
-    result.clear();
+    // addCommas to each space-separated token
+    {
+        std::vector<std::string> tokens;
+        std::istringstream iss(s);
+        std::string tok;
+        while (iss >> tok) tokens.push_back(tok);
+        s.clear();
+        for (size_t i = 0; i < tokens.size(); i++) {
+            if (i) s += ' ';
+            s += addCommasToMove(tokens[i]);
+        }
+    }
+
+    // replaceShorthands then full dict-replace
+    std::string final_ = replaceShorthands(unkarnifyHelp(s));
+
+    // Re-attach leading/trailing slices
+    if (firstSlice && (final_.empty() || final_[0] != '/'))
+        final_ = "/" + final_;
+    if (lastSlice && (final_.empty() || final_.back() != '/'))
+        final_ = final_ + "/";
+    // collapse double slashes
+    while (final_.find("//") != std::string::npos)
+        final_ = replaceAll(final_, "//", "/");
+
+    // addCommas pass on each slash-segment
+    auto parts = splitStr(final_, '/');
+    final_.clear();
     for (const auto& part : parts) {
-        if (!result.empty()) result += "/";
-        result += addCommasToMove(part);
+        if (!final_.empty()) final_ += "/";
+        final_ += addCommasToMove(part);
     }
 
-    if (startsWithSlice) result = "/" + result;
-    return result;
+    return final_;
 }
 
 static std::pair<int,int> getOverwork(const std::vector<std::string>& moves) {
@@ -297,6 +470,7 @@ static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
 
 static std::vector<std::pair<QString, double>>
 rateAndSort(const QStringList& solutionLines, const QString& posHex, bool useKarnotation) {
+    Q_UNUSED(useKarnotation);
     bool initial_top_A = false;
     if (!posHex.isEmpty()) {
         QChar first = posHex[0];
@@ -307,7 +481,8 @@ rateAndSort(const QStringList& solutionLines, const QString& posHex, bool useKar
     const double W1=34, W2=100, W3=38, W4=500, W5=10;
     std::vector<std::pair<QString, double>> results;
 
-    for (QString line : solutionLines) {
+    for (const QString& lineIn : solutionLines) {
+        QString line = lineIn;
         std::string algStr = line.toStdString();
         auto bracket = algStr.find('[');
         std::string algOnly = bracket != std::string::npos
@@ -630,8 +805,13 @@ void MainWindow::buildUI() {
         QString before = cubeWidget->getPositionString();
         cubeWidget->reset();
         QString after = cubeWidget->getPositionString();
-        if (before != after)
-            pushUndoState();
+        if (before != after) {
+            m_undoStack.append({before});
+            if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+            btnUndo->setEnabled(true);
+            m_redoStack.clear();
+            btnRedo->setEnabled(false);
+        }
         onReset();
     });
     connect(btnUndo, &QPushButton::clicked, this, [this]{
@@ -1614,8 +1794,13 @@ void MainWindow::onApplyScramble() {
         QString before = cubeWidget->getPositionString();
         cubeWidget->reset();
         QString after = cubeWidget->getPositionString();
-        if (before != after)
-            pushUndoState();
+        if (before != after) {
+            m_undoStack.append({before});
+            if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+            btnUndo->setEnabled(true);
+            m_redoStack.clear();
+            btnRedo->setEnabled(false);
+        }
         onReset();
         return;
     }
@@ -1868,12 +2053,12 @@ void MainWindow::rebuildTable() {
             });
     }
 
-    const QColor rowA("#0d1117");
-    const QColor rowB("#131c28");
-    const QColor textCol("#7abfe8");
-    const QColor textColAlt = m_expanded ? QColor("#cbcbcb") : textCol;
-    const QColor metaCol("#9aacbe");
-    const QColor metaColAlt = m_expanded ? QColor("#969696ee") : metaCol;
+    const QColor rowA(13, 17, 23);
+    const QColor rowB(19, 28, 40);
+    const QColor textCol(122, 191, 232);
+    const QColor textColAlt = m_expanded ? QColor(203, 203, 203) : textCol;
+    const QColor metaCol(154, 172, 190);
+    const QColor metaColAlt = m_expanded ? QColor(150, 150, 150, 238) : metaCol;
     const int rowH = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
