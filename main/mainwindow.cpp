@@ -1555,7 +1555,7 @@ void MainWindow::syncFlagsFromCommand(const QString& text) {
     for (const QString& p : std::as_const(parts)) {
         if (p == "-a") { hasA = true; subopt = 0; break; }
         if (p.startsWith("-a") && p.length() > 2) {
-            bool ok; int v = p.mid(2).toInt(&ok);
+            bool ok; int v = p.sliced(2).toInt(&ok);
             if (ok) { hasA = true; subopt = v; break; }
         }
     }
@@ -1957,7 +1957,7 @@ void MainWindow::onApplyScramble() {
     }
 
     // ── Apply moves ───────────────────────────────────────────────────────────
-    for (const Move& mv : moves) {
+    for (const Move& mv : std::as_const(moves)) {
         if (mv.isSlice) doSlice();
         else { doTop(mv.x); doBot(mv.y); }
     }
@@ -2036,7 +2036,7 @@ void MainWindow::rebuildTable() {
     for (auto& [line, score] : rated)
         ergoMap[stripBracket(line)] = score;
 
-    for (const QString& line : m_solutionLines) {
+    for (const QString& line : std::as_const(m_solutionLines)) {
         int mv, sl;
         parseCounts(line, mv, sl);
         QString alg = stripBracket(line);
@@ -2146,7 +2146,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
 
     txtOutput->clear();
     // First emit non-solution lines (status/info lines)
-    for (const QString& line : m_rawLines) {
+    for (const QString& line : std::as_const(m_rawLines)) {
         bool isSol = line.contains('[') && line.contains(']');
         if (!isSol) {
             QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
