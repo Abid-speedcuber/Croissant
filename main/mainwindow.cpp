@@ -426,7 +426,7 @@ void SolverWorker::run() {
 // MainWindow
 // -------------------------------------------------------
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("Square-1 Optimizer");
+    setWindowTitle("Solve-A-Squan");
     setMinimumSize(720, 560);
     resize(860, 700);
 
@@ -555,8 +555,10 @@ void MainWindow::buildUI() {
     connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_I,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnD,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnDP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnReset, &QPushButton::clicked, cubeWidget, &Sq1Widget::reset);
-    connect(btnReset, &QPushButton::clicked, this, &MainWindow::onReset);
+    connect(btnReset, &QPushButton::clicked, this, [this]{
+    cubeWidget->reset();
+        onReset();
+    });
     connect(btnUndo, &QPushButton::clicked, this, [this]{
         if (m_undoStack.isEmpty()) return;
         m_redoStack.append({cubeWidget->getPositionString()});
@@ -1466,6 +1468,7 @@ void MainWindow::pushUndoState() {
 // onReset
 // -------------------------------------------------------
 void MainWindow::onReset() {
+    pushUndoState();
     txtOutput->clear();
     m_rawLines.clear();
     m_solutionLines.clear();
@@ -1473,12 +1476,7 @@ void MainWindow::onReset() {
     chkRankErgo->blockSignals(true);
     chkRankErgo->setChecked(false);
     chkRankErgo->blockSignals(false);
-    m_undoStack.clear();
-    m_redoStack.clear();
-    btnUndo->setEnabled(false);
-    btnRedo->setEnabled(false);
-    lblStatus->setText("Ready.");
-    // Hide the expand button and collapse if currently expanded.
+    lblStatus->setText("");
     btnExpand->setVisible(false);
     btnCopyTerminal->setVisible(false);
     btnTableMode->setVisible(false);
@@ -1487,6 +1485,7 @@ void MainWindow::onReset() {
     m_tableContainer->setVisible(false);
     if (m_expanded) toggleExpand();
     updateRankErgoState();
+    updateCommand();
 }
 
 // -------------------------------------------------------

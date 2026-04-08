@@ -1,8 +1,10 @@
 QT += core gui widgets
 
 CONFIG += c++17
+win32: RC_ICONS = icon.ico
+RESOURCES += resources.qrc
 
-TARGET   = sq1gui
+TARGET   = solve-a-squan
 TEMPLATE = app
 
 win32: CONFIG += windows
