@@ -292,7 +292,7 @@ void Sq1Widget::swapSelected(int piece) {
     selected = -1;
 }
 
-bool Sq1Widget::isTwistable() {
+bool Sq1Widget::isSliceable() {
     return position[0]!=position[11] && position[5]!=position[6] &&
            position[12]!=position[23] && position[17]!=position[18];
 }
@@ -303,7 +303,7 @@ void Sq1Widget::doU() {
         int c=position[11]; int d=partiality[11];
         for(int i=11;i>0;i--) { position[i]=position[i-1]; partiality[i]=partiality[i-1]; }
         position[0]=c; partiality[0]=d;
-        if(isTwistable()) break;
+        if(isSliceable()) break;
     }
     update(); emit positionChanged();
 }
@@ -314,7 +314,7 @@ void Sq1Widget::doUPrime() {
         int c=position[0]; int d=partiality[0];
         for(int i=0;i<11;i++) { position[i]=position[i+1]; partiality[i]=partiality[i+1]; }
         position[11]=c; partiality[11]=d;
-        if(isTwistable()) break;
+        if(isSliceable()) break;
     }
     update(); emit positionChanged();
 }
@@ -325,7 +325,7 @@ void Sq1Widget::doD() {
         int c=position[23]; int d=partiality[23];
         for(int i=23;i>12;i--) { position[i]=position[i-1]; partiality[i]=partiality[i-1]; }
         position[12]=c; partiality[12]=d;
-        if(isTwistable()) break;
+        if(isSliceable()) break;
     }
     update(); emit positionChanged();
 }
@@ -336,14 +336,14 @@ void Sq1Widget::doDPrime() {
         int c=position[12]; int d=partiality[12];
         for(int i=12;i<23;i++) { position[i]=position[i+1]; partiality[i]=partiality[i+1]; }
         position[23]=c; partiality[23]=d;
-        if(isTwistable()) break;
+        if(isSliceable()) break;
     }
     update(); emit positionChanged();
 }
 
 void Sq1Widget::doSlice() {
     selected = -1;
-    if(!isTwistable()) return;
+    if(!isSliceable()) return;
     for(int i=6;i<12;i++) {
         std::swap(position[i],   position[i+6]);
         std::swap(partiality[i], partiality[i+6]);

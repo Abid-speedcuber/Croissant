@@ -26,7 +26,7 @@
 #define FILEP2A  "sq1p2a.dat"
 
 #define TURN_METRIC 0
-#define TWIST_METRIC 1
+#define SLICE_METRIC 1
 #define ANGLE_METRIC 2
 
 const char* errors[]={
@@ -41,11 +41,11 @@ const char* errors[]={
 	"Position should be 16 or 17 characters.",//9
 	"Expected A-H or 1-8.",//10
 	"Expected - or /.",//11
-	"Twist is blocked by corner.",//12
+	"Slice is blocked by corner.",//12
 	"Can't parse input as position string or movelist.",//13
 	"Unexpected bracket (.",//14
 	"Number expected.",//15
-	"Twist / expected.",//16
+	"Slice / expected.",//16
 	"Position string has too many copies of a piece.",//17
 	"Can't stay in cube shape and also use 2gen.",//18
 	"Position can't be solved with these constraints",//19
@@ -497,7 +497,7 @@ public:
 				}
 				pos[23] = tmp[0];
 			}
-			// test twistable
+			// test sliceable
 		}while( pos[5]==pos[6] || pos[11]==pos[12] || pos[17]==pos[18] || pos[12]==pos[23]);
 	}
 	void set(int p[],int m){
@@ -524,8 +524,8 @@ public:
 			m--;
 		}
 	}
-	bool doTwist(){
-		if( !isTwistable() ) return false;
+	bool doSlice(){
+		if( !isSliceable() ) return false;
 		for(int i=6;i<12;i++){
 			int c=pos[i];
 			pos[i]=pos[i+6];
@@ -534,7 +534,7 @@ public:
 		middle=-middle;
 		return true;
 	}
-	bool isTwistable(){
+	bool isSliceable(){
 		return( pos[0]!=pos[11] && pos[5]!=pos[6] && pos[12]!=pos[23] && pos[17]!=pos[18] );
 	}
 	int getShape(){
@@ -662,7 +662,7 @@ public:
 					else md = 2;
 				}else if( md==1 ){
 					if(inp[i--]!='/') return 16;
-					if(!doTwist()) return 12;
+					if(!doSlice()) return 12;
 					lu++;lw++;
 					md=2;
 				}else if( md==2 ){
@@ -684,7 +684,7 @@ public:
 					md--;
 				}
 			}
-			if( !isTwistable() ) return 12;
+			if( !isSliceable() ) return 12;
 			if( verbosity>=2) std::cout<<"Input:"<<inp<<" ["<<lw<<"|"<<lu<<"]"<<std::endl;
 		}else if( f==1 ){
 			// generating move sequence. start parsing from beginning
@@ -697,7 +697,7 @@ public:
 					else md = 2;
 				}else if( md==1 ){
 					if(inp[i++]!='/') return 16;
-					if(!doTwist()) return 12;
+					if(!doSlice()) return 12;
 					lu++;lw++;
 					md=2;
 				}else if( md==2 ){
@@ -719,7 +719,7 @@ public:
 					md--;
 				}
 			}
-			if( !isTwistable() ) return 12;
+			if( !isSliceable() ) return 12;
 			if( verbosity>=2) std::cout<<"Input:"<<inp<<" ["<<lw<<"|"<<lu<<"]"<<std::endl;
 		}else{
 			// position
@@ -961,7 +961,7 @@ public:
 					for( int i1=0; i1<70; i1++){
 					for( int i2=0; i2<70; i2++){
 						if( table[i0][i1][i2]==l ){
-							// do twist
+							// do slice
 							int j0=stt.tranTable[i0][2];
 							int j1=scte.tranTable[i0][i1][2];
 							int j2=sctc.tranTable[i0][i2][2];
@@ -1101,9 +1101,9 @@ class PositionSolver {
 		// run the solve
 		moveLen=0;
 		unsigned long nodes=0;
-		// only even lengths if twist metric and middle is square
+		// only even lengths if slice metric and middle is square
 		int l=-1;
-		if (metric == TWIST_METRIC && middle==1) l=-2;
+		if (metric == SLICE_METRIC && middle==1) l=-2;
 		// do ida
 		int optimalMoves = -1;
 		std::cout<<specificAngle<<std::endl;
@@ -1124,18 +1124,22 @@ class PositionSolver {
 				moveLen=0;
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
 				for(int i=0;i<6;i++) lastTurns[i]=0;
+				if (metric == SLICE_METRIC && ((depth % 2 == 1 && middle == 1) || (depth % 2 == 0 && middle == -1))) {
+					std::cout << "depth "<<depth<<" does not match the barflip state" << std::endl<<std::flush;
+					continue;
+				}
 				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngle);
 			}
 		} else {
 		while(true){
 			l++;
-			if (metric == TWIST_METRIC && middle!=0) l++;
+			if (metric == SLICE_METRIC && middle!=0) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
 			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngle);
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
-				if (l >= optimalMoves + extraMoves || (metric == TWIST_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
+				if (l >= optimalMoves + extraMoves || (metric == SLICE_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
 			}
 		};
 		}
@@ -1188,7 +1192,7 @@ class PositionSolver {
 				printsol();
 				if(verbosity>=6) std::cout<<"Nodes="<<*nodes<<std::endl<<std::flush;
 				return 1;
-			}else if( metric != TWIST_METRIC ) return 0;
+			}else if( metric != SLICE_METRIC ) return 0;
 		}
 
 		// prune
@@ -1236,9 +1240,9 @@ class PositionSolver {
 			}while( i<12);
 			lastTurns[5]=0;
 		}
-		// try twist move
+		// try slice move
 		if( lm!=2 && l>0){
-			// Block pure (6,0) or (0,6) pairs before this twist
+			// Block pure (6,0) or (0,6) pairs before this slice
 			bool block60 = (lastTurns[4]==6 && lastTurns[5]==0) || (lastTurns[4]==0 && lastTurns[5]==6);
 			if (!block60) {
 			int lt0=lastTurns[0], lt1=lastTurns[1];
@@ -1251,7 +1255,7 @@ class PositionSolver {
 			doMove(2);
 			if (!keepCubeShape || ((shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163))) {
 				moveList[moveLen++]=0;
-				// note that if angle metric is defined to count twists as 0, it will sometimes miss the optimal solution because the current pruning tables count how many twists a position is away from solved
+				// note that if angle metric is defined to count slices as 0, it will sometimes miss the optimal solution because the current pruning tables count how many slices a position is away from solved
 				r+=search(l-1, 2, nodes, twoGen, keepCubeShape, false);
 				moveLen--;
 				if(r!=0 && !findAll) return(r);
@@ -1390,7 +1394,7 @@ public:
 			fp.doBot(-r);
 		}else{
 			middle=-middle;
-			fp.doTwist();
+			fp.doSlice();
 		}
 		// only update c0/c1/e0/e1/c2/e2 if they are not -1
 		if (c0>-1) c0 = sctc.tranTable[shp][c0][m];
@@ -1435,9 +1439,9 @@ public:
 		// run the solve
 		moveLen=0;
 		unsigned long nodes=0;
-		// only even lengths if twist metric and middle is square
+		// only even lengths if slice metric and middle is square
 		int l=-1;
-		if( metric==TWIST_METRIC && middle==1 ) l=-2;
+		if( metric==SLICE_METRIC && middle==1 ) l=-2;
 		// do ida
 		int optimalMoves = -1;
 		if (!specificDepths.empty()) {
@@ -1459,18 +1463,22 @@ public:
 				moveLen=0;
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
 				for(int i=0;i<6;i++) lastTurns[i]=0;
+				if (metric == SLICE_METRIC && ((depth % 2 == 1 && middle == 1) || (depth % 2 == 0 && middle == -1))) {
+					std::cout << "depth "<<depth<<" does not match the barflip state" << std::endl<<std::flush;
+					continue;
+				}
 				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngle);
 			}
 		} else {
 		while(true){
 			l++;
-			if( metric==TWIST_METRIC && middle!=0 ) l++;
+			if( metric==SLICE_METRIC && middle!=0 ) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
 			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngle);
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
-				if (l >= optimalMoves + extraMoves || (metric==TWIST_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
+				if (l >= optimalMoves + extraMoves || (metric==SLICE_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
 			}
 		};
 		}
@@ -1536,7 +1544,7 @@ void help(){
 	std::cout<<"   bottom layers are turned by x and y twelths of a full circle. Positive"<<std::endl;
 	std::cout<<"   numbers are clockwise turns, negative anti-clockwise."<<std::endl;
 	std::cout<<"<switches> are one of more of the following command line switches:"<<std::endl;
-	std::cout<<"   -w     Use only the number of twists to measure length, not layer turns."<<std::endl;
+	std::cout<<"   -w     Use only the number of slices to measure length, not layer turns."<<std::endl;
 	std::cout<<"   -a<n>  Generate all optimal sequences, not just the first one found."<<std::endl;
 	std::cout<<"          If n is given, also find solutions with up to n extra moves."<<std::endl;
 	std::cout<<"   -x     Ignore the equivalence a,b/c,d/e,f = 6+a,6+b/d,c/6+e,6+f"<<std::endl;
@@ -1557,7 +1565,7 @@ void help(){
 }
 
 
-// -w|u=twist/turn metric  -a=all  -m=ignore middle
+// -w|u=slice/turn metric  -a=all  -m=ignore middle
 int main(int argc, char* argv[]){
 	bool ignoreMid=false;
 	bool ignoreTrans=false;
@@ -1575,7 +1583,7 @@ int main(int argc, char* argv[]){
 			switch( argv[i][1] ){
 				case 'w':
 				case 'W':
-					metric=TWIST_METRIC; break;
+					metric=SLICE_METRIC; break;
 				case 'l':
 				case 'L':
 					metric=ANGLE_METRIC; break;
@@ -1710,7 +1718,7 @@ int main(int argc, char* argv[]){
 	PartialPositionSolver pps( st, scte, sctc, pr1, pr2 );
 
 	if(verbosity>=2){
-		std::cout<<"Flags: "<<(metric==TURN_METRIC? "Turn":"Twist")<<" Metric, ";
+		std::cout<<"Flags: "<<(metric==TURN_METRIC? "Turn":"Slice")<<" Metric, ";
 		std::cout<<"Find "<< (findAll? "every ":"first ");
 		std::cout<< (generator? "generator":"solution");
 		if (twoGen == 1) {

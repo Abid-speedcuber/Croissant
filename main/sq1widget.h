@@ -65,7 +65,7 @@ private:
 
     void drawLayer(QPainter& p, int start, int end, QPointF center, double startAngle);
 
-    bool isTwistable();
+    bool isSliceable();
     void doU();
     void doUPrime();
     void doD();

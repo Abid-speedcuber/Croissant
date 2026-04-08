@@ -66,7 +66,7 @@ private:
     void syncFlagsFromCommand(const QString& text);
 
     Sq1Widget*    cubeWidget;
-    QCheckBox*    chkTwist;
+    QCheckBox*    chkSlice;
     QCheckBox*    chkAllOptimal;
     QSpinBox*     spnSuboptimal;    // extra moves beyond optimal (0 = optimal only); hidden with -d
     QCheckBox*    chkDepths;

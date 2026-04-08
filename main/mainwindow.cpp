@@ -834,8 +834,8 @@ void MainWindow::buildUI() {
     grid->setVerticalSpacing(2);
 
     // ── Widgets ──────────────────────────────────────────────────────────────
-    chkTwist = new QCheckBox("Twist metric");
-    chkTwist->setToolTip("If selected, only slices count as \"moves\", else layer turns count too.");
+    chkSlice = new QCheckBox("Slice metric");
+    chkSlice->setToolTip("If selected, only slices count as \"moves\", else layer turns count too.");
 
     chkAllOptimal = new QCheckBox("All optimal");
     chkAllOptimal->setToolTip("Find all the optimal solutions, not just the first one.");
@@ -934,12 +934,12 @@ void MainWindow::buildUI() {
                             "e.g. if you put \"6\", (3,-3) is allowed in algs (3+3<=6),\n"
                             "but (-5,-2) is not (5+2>6).");
 
-    chkTwist->setChecked(true);
+    chkSlice->setChecked(true);
     chkKarnotation->setChecked(true);
 
     // ── Grid layout ──────────────────────────────────────────────────────────
     int row = 0;
-    grid->addWidget(chkTwist,      row++, 0, 1, 2);
+    grid->addWidget(chkSlice,      row++, 0, 1, 2);
     grid->addWidget(allOptRow,     row++, 0, 1, 2);
     grid->addWidget(chkDepths,     row,   0);
     grid->addWidget(txtDepths,     row++, 1);
@@ -971,7 +971,7 @@ void MainWindow::buildUI() {
     // ── Connections ──────────────────────────────────────────────────────────
     auto upd = [this]{ updateConstraints(); updateCommand(); };
 
-    connect(chkTwist,      &QCheckBox::toggled, this, upd);
+    connect(chkSlice,      &QCheckBox::toggled, this, upd);
     connect(chkAllOptimal, &QCheckBox::toggled, this, upd);
     connect(spnSuboptimal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkDepths,     &QCheckBox::toggled, this, upd);
@@ -1466,7 +1466,7 @@ void MainWindow::buildStyles() {
 QStringList MainWindow::buildArgList() {
     QStringList args;
 
-    if (chkTwist->isChecked()) args << "-w";
+    if (chkSlice->isChecked()) args << "-w";
 
     if (chkAllOptimal->isChecked()) {
         const bool useNumber = !chkDepths->isChecked() && spnSuboptimal->value() > 0;
@@ -1512,7 +1512,7 @@ void MainWindow::syncFlagsFromCommand(const QString& text) {
     // Block all signals while we sync so updateCommand isn't re-triggered
     auto block = [](QObject* o, bool b){ o->blockSignals(b); };
 
-    block(chkTwist,        true); chkTwist->setChecked(has("-w"));        block(chkTwist,        false);
+    block(chkSlice,        true); chkSlice->setChecked(has("-w"));        block(chkSlice,        false);
     block(chkGenerator,    true); chkGenerator->setChecked(has("-g"));    block(chkGenerator,    false);
     block(chk2gen,         true); chk2gen->setChecked(has("-2"));         block(chk2gen,         false);
     block(chkPseudo2gen,   true); chkPseudo2gen->setChecked(has("-p"));   block(chkPseudo2gen,   false);
@@ -1831,12 +1831,12 @@ void MainWindow::onApplyScramble() {
             pos[12] = c;
         }
     };
-    auto isTwistable = [&]() {
+    auto isSliceable = [&]() {
         return pos[0]!=pos[11] && pos[5]!=pos[6] &&
                pos[12]!=pos[23] && pos[17]!=pos[18];
     };
     auto doSlice = [&]() {
-        if (!isTwistable()) return;
+        if (!isSliceable()) return;
         for (int i = 6; i < 12; i++) std::swap(pos[i], pos[i+6]);
         mid = 1 - mid;
     };
