@@ -1281,7 +1281,7 @@ void MainWindow::toggleExpand() {
 void MainWindow::rebuildTerminalView() {
     txtOutput->clear();
     int solIdx = 0;
-    for (const QString& line : m_rawLines) {
+    for (const QString& line : qAsConst(m_rawLines)) {
         bool isSol = line.contains('[') && line.contains(']');
         if (isSol) {
             const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
@@ -1295,7 +1295,8 @@ void MainWindow::rebuildTerminalView() {
             txtOutput->append(QString(
                 "<div style='background:%1;color:%2;font-weight:bold;"
                 "margin:0;%3%4'>%5</div>")
-                .arg(bg).arg(color).arg(fsStyle).arg(padding).arg(line.toHtmlEscaped()));
+                .arg(bg, color, fsStyle, padding)
+                .arg(line.toHtmlEscaped()));
             solIdx++;
         } else {
             QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
@@ -1530,7 +1531,7 @@ void MainWindow::syncFlagsFromCommand(const QString& text) {
         return parts.contains(flag);
     };
     auto hasPrefix = [&](const QString& prefix) -> QString {
-        for (const QString& p : parts)
+        for (const QString& p : qAsConst(parts))
             if (p.startsWith(prefix) && p.length() > prefix.length())
                 return p.mid(prefix.length());
         return QString();
@@ -1551,7 +1552,7 @@ void MainWindow::syncFlagsFromCommand(const QString& text) {
     // -a / -a<n>
     bool hasA = false;
     int subopt = 0;
-    for (const QString& p : parts) {
+    for (const QString& p : qAsConst(parts)) {
         if (p == "-a") { hasA = true; subopt = 0; break; }
         if (p.startsWith("-a") && p.length() > 2) {
             bool ok; int v = p.mid(2).toInt(&ok);
@@ -1694,7 +1695,8 @@ void MainWindow::onSolverLine(QString line) {
         txtOutput->append(QString(
             "<div style='background:%1;color:%2;font-weight:bold;"
             "margin:0;%3%4'>%5</div>")
-            .arg(bg).arg(solColor).arg(solFsStyle).arg(solPadding).arg(line.toHtmlEscaped()));
+            .arg(bg, solColor, solFsStyle, solPadding)
+            .arg(line.toHtmlEscaped()));
         // Enable rank button as soon as the first solution arrives — even mid-solve —
         // so stopping early still allows ranking whatever was found.
         updateRankErgoState();
@@ -2164,7 +2166,8 @@ void MainWindow::onRankErgoToggled(bool checked) {
         txtOutput->append(QString(
             "<div style='background:%1;color:%2;font-weight:bold;"
             "margin:0;%3%4'>%5</div>")
-            .arg(bg).arg(color).arg(fsStyle).arg(padding).arg(display.toHtmlEscaped()));
+            .arg(bg, color, fsStyle, padding)
+            .arg(display.toHtmlEscaped()));
         solIdx++;
     }
     appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
