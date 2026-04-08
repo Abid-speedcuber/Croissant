@@ -1295,13 +1295,12 @@ void MainWindow::rebuildTerminalView() {
             txtOutput->append(QString(
                 "<div style='background:%1;color:%2;font-weight:bold;"
                 "margin:0;%3%4'>%5</div>")
-                .arg(bg, color, fsStyle, padding)
-                .arg(line.toHtmlEscaped()));
+                .arg(bg, color, fsStyle, padding, line.toHtmlEscaped()));
             solIdx++;
         } else {
             QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
             txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
-                .arg(fsStyle).arg(line.toHtmlEscaped()));
+                .arg(fsStyle, line.toHtmlEscaped()));
         }
     }
     txtOutput->verticalScrollBar()->setValue(0);
@@ -1695,15 +1694,14 @@ void MainWindow::onSolverLine(QString line) {
         txtOutput->append(QString(
             "<div style='background:%1;color:%2;font-weight:bold;"
             "margin:0;%3%4'>%5</div>")
-            .arg(bg, solColor, solFsStyle, solPadding)
-            .arg(line.toHtmlEscaped()));
+            .arg(bg, solColor, solFsStyle, solPadding, line.toHtmlEscaped()));
         // Enable rank button as soon as the first solution arrives — even mid-solve —
         // so stopping early still allows ranking whatever was found.
         updateRankErgoState();
     } else {
         QString nonsolFs = m_expanded ? "font-size:13px;line-height:1.6;" : "";
         txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
-            .arg(nonsolFs).arg(line.toHtmlEscaped()));
+            .arg(nonsolFs, line.toHtmlEscaped()));
     }
 }
 
@@ -2151,7 +2149,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
         if (!isSol) {
             QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
             txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
-                .arg(fsStyle).arg(line.toHtmlEscaped()));
+                .arg(fsStyle, line.toHtmlEscaped()));
         }
     }
 
@@ -2166,8 +2164,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
         txtOutput->append(QString(
             "<div style='background:%1;color:%2;font-weight:bold;"
             "margin:0;%3%4'>%5</div>")
-            .arg(bg, color, fsStyle, padding)
-            .arg(display.toHtmlEscaped()));
+            .arg(bg, color, fsStyle, padding, display.toHtmlEscaped()));
         solIdx++;
     }
     appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
