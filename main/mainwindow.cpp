@@ -772,31 +772,36 @@ void MainWindow::buildUI() {
     topLay->setSpacing(6);
     topLay->addWidget(grpOptions);
 
-    QLabel* lblCmd = new QLabel("Command:");
-    topLay->addWidget(lblCmd);
+    QWidget* cmdSolveRow = new QWidget();
+    QHBoxLayout* cmdSolveLayout = new QHBoxLayout(cmdSolveRow);
+    cmdSolveLayout->setContentsMargins(0, 0, 0, 0);
+    cmdSolveLayout->setSpacing(0);
 
-    QWidget* cmdRowWidget = new QWidget();
-    QHBoxLayout* cmdRow = new QHBoxLayout(cmdRowWidget);
-    cmdRow->setContentsMargins(0, 0, 0, 0);
     txtCommand = new QLineEdit();
     txtCommand->setReadOnly(false);
     txtCommand->setObjectName("txtCommand");
-    btnCopy = new QPushButton("Copy");
-    btnCopy->setFixedWidth(60);
-    cmdRow->addWidget(txtCommand);
-    cmdRow->addWidget(btnCopy);
-    topLay->addWidget(cmdRowWidget);
+
+    btnCopy = new QPushButton("⎘");
+    btnCopy->setObjectName("btnCopy");
+    btnCopy->setFixedWidth(32);
+    btnCopy->setFixedHeight(24);
+    btnCopy->setToolTip("Copy command");
+
+    btnSolve = new QPushButton("▶ Solve");
+    btnSolve->setObjectName("btnSolve");
+    btnSolve->setFixedHeight(24);
+    btnSolve->setFixedWidth(90);
+
+    cmdSolveLayout->addWidget(txtCommand, 1);
+    cmdSolveLayout->addWidget(btnCopy);
+    cmdSolveLayout->addWidget(btnSolve);
+    topLay->addWidget(cmdSolveRow);
 
     lblCommandError = new QLabel("");
     lblCommandError->setObjectName("lblCommandError");
     lblCommandError->setWordWrap(true);
     lblCommandError->setVisible(false);
     topLay->addWidget(lblCommandError);
-
-    btnSolve = new QPushButton("▶  Solve");
-    btnSolve->setObjectName("btnSolve");
-    btnSolve->setFixedHeight(38);
-    topLay->addWidget(btnSolve);
 
     progressBar = new QProgressBar();
     progressBar->setRange(0, 0);
@@ -932,12 +937,12 @@ void MainWindow::buildUI() {
             lblCommandError->setText(msg);
             lblCommandError->setVisible(true);
             txtCommand->setStyleSheet(
-                "QLineEdit#txtCommand { font-family: monospace; color: #ff5555; font-size: 12px; border-color: #ff5555; }");
+                "QLineEdit#txtCommand { font-family: monospace; color: #ff5555; font-size: 12px; border-color: #ff5555; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
         };
         auto clearCmdError = [this]() {
             lblCommandError->setVisible(false);
             txtCommand->setStyleSheet(
-                "QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; }");
+                "QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
         };
 
         QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
@@ -1111,7 +1116,7 @@ void MainWindow::buildStyles() {
         QCheckBox::indicator:disabled { border-color: #3a3a4e; background: #1e1e30; }
         QLineEdit { background: #2a2a3e; border: 1px solid #555; border-radius: 4px; padding: 3px 6px; color: #fff; }
         QLineEdit:disabled { color: #555; background: #1e1e30; border-color: #3a3a4e; }
-        QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; }
+        QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; border-right: none; }
         QSpinBox { background: #2a2a3e; border: 1px solid #555; border-radius: 4px;
                    padding: 2px 8px 2px 4px; color: #fff; }
         QSpinBox:disabled { color: #555; background: #1e1e30; border-color: #3a3a4e; }
@@ -1122,9 +1127,11 @@ void MainWindow::buildStyles() {
         QPushButton { background: #2a2a3e; border: 1px solid #555; border-radius: 5px; padding: 5px 12px; color: #ddd; }
         QPushButton:hover { background: #3a3a5e; border-color: #777; }
         QPushButton:pressed { background: #1a1a2e; }
-        QPushButton#btnSolve { background: #1a6b3c; border-color: #2db570; color: #fff; font-size: 15px; font-weight: bold; }
+        QPushButton#btnSolve { background: #1a6b3c; border-color: #2db570; color: #fff; font-size: 13px; font-weight: bold; }
         QPushButton#btnSolve:hover { background: #227a47; }
         QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
+        QPushButton#btnCopy { background: #2a2a3e; border: 1px solid #555; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: #aaa; font-size: 14px; padding: 0; margin-right: 5px;}
+        QPushButton#btnCopy:hover { background: #3a3a5e; color: #ddd; }
         QPushButton#btnReset { background: #6b1a1a; border-color: #b52d2d; color: #fdd; }
         QPushButton#btnUndo, QPushButton#btnRedo { background: #2a2a3e; border-color: #555; color: #aaa; }
         QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled { background: #1e1e2a; border-color: #333; color: #444; }
@@ -1294,7 +1301,7 @@ void MainWindow::updateCommand() {
     QStringList args = buildArgList();
     txtCommand->setText("sq1opt " + args.join(" ") + " " + pos);
     lblCommandError->setVisible(false);
-    txtCommand->setStyleSheet("QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; }");
+    txtCommand->setStyleSheet("QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
 }
 
 // -------------------------------------------------------
