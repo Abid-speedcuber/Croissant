@@ -1281,7 +1281,7 @@ void MainWindow::toggleExpand() {
 void MainWindow::rebuildTerminalView() {
     txtOutput->clear();
     int solIdx = 0;
-    for (const QString& line : qAsConst(m_rawLines)) {
+    for (const QString& line : std::as_const(m_rawLines)) {
         bool isSol = line.contains('[') && line.contains(']');
         if (isSol) {
             const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
@@ -1531,7 +1531,7 @@ void MainWindow::syncFlagsFromCommand(const QString& text) {
         return parts.contains(flag);
     };
     auto hasPrefix = [&](const QString& prefix) -> QString {
-        for (const QString& p : qAsConst(parts))
+        for (const QString& p : std::as_const(parts))
             if (p.startsWith(prefix) && p.length() > prefix.length())
                 return p.mid(prefix.length());
         return QString();
@@ -1552,7 +1552,7 @@ void MainWindow::syncFlagsFromCommand(const QString& text) {
     // -a / -a<n>
     bool hasA = false;
     int subopt = 0;
-    for (const QString& p : qAsConst(parts)) {
+    for (const QString& p : std::as_const(parts)) {
         if (p == "-a") { hasA = true; subopt = 0; break; }
         if (p.startsWith("-a") && p.length() > 2) {
             bool ok; int v = p.mid(2).toInt(&ok);
