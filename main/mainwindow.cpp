@@ -603,7 +603,11 @@ void MainWindow::buildUI() {
     connect(btnD,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnDP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnReset, &QPushButton::clicked, this, [this]{
-    cubeWidget->reset();
+        QString before = cubeWidget->getPositionString();
+        cubeWidget->reset();
+        QString after = cubeWidget->getPositionString();
+        if (before != after)
+            pushUndoState();
         onReset();
     });
     connect(btnUndo, &QPushButton::clicked, this, [this]{
@@ -1555,7 +1559,6 @@ void MainWindow::pushUndoState() {
 // onReset
 // -------------------------------------------------------
 void MainWindow::onReset() {
-    pushUndoState();
     txtOutput->clear();
     m_rawLines.clear();
     m_solutionLines.clear();
@@ -1584,7 +1587,11 @@ void MainWindow::onApplyScramble() {
 
     // Empty input = reset to solved
     if (raw.isEmpty()) {
+        QString before = cubeWidget->getPositionString();
         cubeWidget->reset();
+        QString after = cubeWidget->getPositionString();
+        if (before != after)
+            pushUndoState();
         onReset();
         return;
     }
