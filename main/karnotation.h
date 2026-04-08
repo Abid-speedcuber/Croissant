@@ -283,3 +283,32 @@ static const std::set<std::string> SHORTHAND_ALIGN_INDEPENDENT = {
     "-jn",
     "-nj",
 };
+
+inline std::string trimStr(const std::string& s) {
+    size_t a = s.find_first_not_of(" \t\r\n");
+    if (a == std::string::npos) return "";
+    size_t b = s.find_last_not_of(" \t\r\n");
+    return s.substr(a, b - a + 1);
+}
+
+inline std::string replaceAll(std::string str, const std::string& from, const std::string& to) {
+    size_t pos = 0;
+    while ((pos = str.find(from, pos)) != std::string::npos) {
+        str.replace(pos, from.size(), to);
+        pos += to.size();
+    }
+    return str;
+}
+
+// ---------------------------------------------------------------------------
+// dictReplace — repeatedly apply key→value map to str until stable
+// ---------------------------------------------------------------------------
+inline std::string dictReplace(std::string str, const std::map<std::string,std::string>& dict) {
+    std::string prev;
+    do {
+        prev = str;
+        for (const auto& [k, v] : dict)
+            str = replaceAll(str, k, v);
+    } while (str != prev);
+    return str;
+}

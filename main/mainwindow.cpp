@@ -113,22 +113,6 @@ static std::vector<std::string> splitStr(const std::string& s, char delim) {
     return out;
 }
 
-static std::string trimStr(const std::string& s) {
-    size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos) return "";
-    size_t b = s.find_last_not_of(" \t\r\n");
-    return s.substr(a, b - a + 1);
-}
-
-static std::string replaceAll(std::string str, const std::string& from, const std::string& to) {
-    size_t pos = 0;
-    while ((pos = str.find(from, pos)) != std::string::npos) {
-        str.replace(pos, from.size(), to);
-        pos += to.size();
-    }
-    return str;
-}
-
 static std::string addCommasToMove(const std::string& move) {
     if (move.empty()) return move;
     for (char c : move)
@@ -142,19 +126,6 @@ static std::string addCommasToMove(const std::string& move) {
         case 4: return move.substr(0,2) + "," + move.substr(2);
         default: return move;
     }
-}
-
-// ---------------------------------------------------------------------------
-// dictReplace — repeatedly apply key→value map to str until stable
-// ---------------------------------------------------------------------------
-static std::string dictReplace(std::string str, const std::map<std::string,std::string>& dict) {
-    std::string prev;
-    do {
-        prev = str;
-        for (const auto& [k, v] : dict)
-            str = replaceAll(str, k, v);
-    } while (str != prev);
-    return str;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +425,7 @@ static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
     }
     double PHASE1 = W1 * std::max(ergo_up, ergo_down) / sliceCount;
     std::string sliceStart;
-    if ((std::abs(ergo_up - ergo_down) / sliceCount) > 5) {
+    if ((std::abs(ergo_up - ergo_down) / sliceCount) > 2) {
         sliceStart = (ergo_up > ergo_down) ? "/" : "\\";
     } else sliceStart = " ";
 
@@ -507,13 +478,15 @@ rateAndSort(const QStringList& solutionLines, const QString& posHex, bool useKar
         if (rated) {
             QString sliceStr = QString::fromStdString(rating.sliceStart);
             if (sliceStr == "/" || sliceStr == "\\") {
-                // Find the first '/' in the alg part of the line
-                int algEnd = line.indexOf('[');
-                QString algPart = (algEnd >= 0) ? line.left(algEnd) : line;
-                QString rest    = (algEnd >= 0) ? line.mid(algEnd)  : QString();
-                int slashPos = algPart.indexOf('/');
+                // Find the first '/' in the line (can only be in the alg part)
+                int slashPos = line.indexOf('/');
                 if (slashPos >= 0)
-                    line = algPart.left(slashPos) + sliceStr + algPart.mid(slashPos + 1) + rest;
+                    line = line.left(slashPos) + sliceStr + line.mid(slashPos + 1);
+                else {
+                    int spacePos = line.indexOf(' ');
+                    if (spacePos >= 0)
+                        line = line.left(spacePos) + sliceStr + line.mid(spacePos + 1);
+                }
             }
         }
 
@@ -2364,7 +2337,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
         case Qt::Key_I: case Qt::Key_K: {
             m_sliceCount++;
             m_slicePending.append({cubeWidget->getPositionString()});
-            sendCube(static_cast<Qt::Key>(ke->key()));      
+            sendCube(static_cast<Qt::Key>(ke->key()));
             m_sliceTimer->start(600);
             break;
         }

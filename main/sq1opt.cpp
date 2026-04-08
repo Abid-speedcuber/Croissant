@@ -1283,7 +1283,7 @@ class PositionSolver {
 		if( mu!=0 || md!=0 ) {
 			if( usebrackets && !karnotation ) out += "(";
 			out += std::to_string(mu);
-			if (!karnotation) out += ",";
+			out += ",";
 			out += std::to_string(md);
 			if( usebrackets && !karnotation ) out += ")";
 		}
@@ -1340,23 +1340,25 @@ class PositionSolver {
 		}
 		out += printmove(mu, md, !generator);
 		if (karnotation) {
-			out = replaceAll(out, std::string(" "), std::string(""));
+			bool startSlice = !out.empty() && (out.front() == '/' || out.front() == '\\');
+			// Replace "/" and "\" with spaces
+			out = replaceAll(out, "/", " ");
+			out = replaceAll(out, "\\", " ");
 
-			// do the karnotation replacements
-			for (int i = KARNOTATION_LEN-1; i>=0; i--)
-			{
-				if (KARNOTATION[i][1].empty()) continue; // skip padding entries — empty from causes infinite loop
-				out = replaceAll(out, KARNOTATION[i][1], KARNOTATION[i][0]);
-			}
+			// Add padding spaces and apply wcaToKarn replacements iteratively
+			out = dictReplace(" " + trimStr(out) + " ", WCA_TO_KARN);
+			out = trimStr(out);
 
-			out = replaceAll(out, std::string("/"), std::string(" "));
-			out = replaceAll(out, std::string("\\"), std::string("/")); // handle slashes for E/, e/
-			out = replaceAll(out, std::string(","), std::string(""));
-			// If the solution began with a slice, the leading "/" became a space
-			// during karnotation processing; restore it so the GUI can detect it.
-			if (!out.empty() && out[0] == ' ') {
-				out[0] = '/';
-			}
+			// Collapse multiple spaces iteratively
+			std::string prev;
+			do {
+				prev = out;
+				out = replaceAll(out, "  ", " ");
+			} while (out != prev);
+
+			// Remove commas
+			out = replaceAll(out, ",", "");
+			if (startSlice) out = "/" + out;
 		}
 		std::cout << out;
 		std::cout <<"  ["<<tw<<"|"<<tu;
@@ -1490,6 +1492,13 @@ public:
 			if( pr2.table[shp2][e2][c2]>l+1 && pr2.table[shpx2][e2][c2]>l+1) return true;
 		}
 		return false;
+	}
+	inline std::string trim(const std::string& str) {
+		const std::string whitespace = " \t\n\r\f\v";
+		const auto first = str.find_first_not_of(whitespace);
+		if (first == std::string::npos) return ""; // String is all whitespace
+		const auto last = str.find_last_not_of(whitespace);
+		return str.substr(first, (last - first + 1));
 	}
 };
 
