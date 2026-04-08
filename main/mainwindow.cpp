@@ -568,7 +568,7 @@ void MainWindow::buildUI() {
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
         btnUndo->setEnabled(!m_undoStack.isEmpty());
-        lblStatus->setText("Undone.");
+        appendStatusLine("Undone.");
     });
     connect(btnRedo, &QPushButton::clicked, this, [this]{
         if (m_redoStack.isEmpty()) return;
@@ -579,7 +579,7 @@ void MainWindow::buildUI() {
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
         btnRedo->setEnabled(!m_redoStack.isEmpty());
-        lblStatus->setText("Redone.");
+        appendStatusLine("Redone.");
     });
     connect(btnApplyScramble, &QPushButton::clicked, this, &MainWindow::onApplyScramble);
     connect(txtScramble, &QLineEdit::returnPressed, this, &MainWindow::onApplyScramble);
@@ -881,12 +881,12 @@ void MainWindow::buildUI() {
                 if (it) parts << it->text();
             }
             QApplication::clipboard()->setText(parts.join("\t"));
-            lblStatus->setText("Row copied to clipboard.");
+            appendStatusLine("Row copied to clipboard.");
         } else if (chosen == copyAlg) {
             QTableWidgetItem* it = m_solutionTable->item(row, 1);
             if (it) {
                 QApplication::clipboard()->setText(it->text());
-                lblStatus->setText("Algorithm copied to clipboard.");
+                appendStatusLine("Algorithm copied to clipboard.");
             }
         }
     });
@@ -907,9 +907,9 @@ void MainWindow::buildUI() {
     chkRankErgo->setObjectName("chkRankErgo");
     rightCol->addWidget(chkRankErgo);
 
-    lblStatus = new QLabel("Ready.");
+    lblStatus = new QLabel("");
     lblStatus->setObjectName("lblStatus");
-    rightCol->addWidget(lblStatus);
+    lblStatus->setVisible(false);
 
     root->addLayout(rightCol, 1);
 
@@ -919,7 +919,7 @@ void MainWindow::buildUI() {
     connect(btnExpand,       &QPushButton::clicked,  this, &MainWindow::toggleExpand);
     connect(btnCopyTerminal, &QPushButton::clicked,  this, [this]{
         QApplication::clipboard()->setText(txtOutput->toPlainText());
-        lblStatus->setText("Terminal copied to clipboard!");
+        appendStatusLine("Terminal copied to clipboard!");
     });
     connect(btnTableMode, &QPushButton::clicked, this, [this]{
         m_tableVisible = !m_tableVisible;
@@ -1336,14 +1336,14 @@ void MainWindow::onSolve() {
     chkRankErgo->blockSignals(false);
     updateRankErgoState();
 
-    lblStatus->setText("Solving…");
+    appendStatusLine("Solving…");
 
     // Swap Solve → Stop appearance (muted dark red, not alarming).
     btnSolve->setText("■  Stop");
     btnSolve->setStyleSheet(
         "QPushButton#btnSolve {"
         "  background: #3d1616; border: 1px solid #7a2e2e;"
-        "  color: #c89898; font-size: 15px; font-weight: bold; }"
+        "  color: #c89898; font-size: 12px; font-weight: bold; }"
         "QPushButton#btnSolve:hover { background: #4d1e1e; }");
 
     progressBar->setVisible(true);
@@ -1430,17 +1430,13 @@ void MainWindow::onSolverDone(int code) {
     if (m_stopped) {
         QString summary = QString("Stopped — %1 solution%2 found in %3s.")
                               .arg(n).arg(n == 1 ? "" : "s").arg(secsStr);
-        lblStatus->setText(summary);
-        txtOutput->append(QString("<div style='color:#888;padding:1px 4px;margin:4px 0 0 0;"
-                                  "border-top:1px solid #2a2a3e;'>%1</div>").arg(summary.toHtmlEscaped()));
+        appendStatusLine(summary);
     } else if (code == 0) {
         QString summary = QString("Done — %1 solution%2 found in %3s.")
                               .arg(n).arg(n == 1 ? "" : "s").arg(secsStr);
-        lblStatus->setText(summary);
-        txtOutput->append(QString("<div style='color:#888;padding:1px 4px;margin:4px 0 0 0;"
-                                  "border-top:1px solid #2a2a3e;'>%1</div>").arg(summary.toHtmlEscaped()));
+        appendStatusLine(summary);
     } else {
-        lblStatus->setText("Error (code " + QString::number(code) + ")");
+        appendStatusLine("Error (code " + QString::number(code) + ")");
     }
 
     updateRankErgoState();
@@ -1483,7 +1479,7 @@ void MainWindow::onReset() {
     chkRankErgo->blockSignals(true);
     chkRankErgo->setChecked(false);
     chkRankErgo->blockSignals(false);
-    lblStatus->setText("");
+    appendStatusLine("Reset.");
     btnExpand->setVisible(false);
     btnCopyTerminal->setVisible(false);
     btnTableMode->setVisible(false);
@@ -1684,7 +1680,12 @@ void MainWindow::onApplyScramble() {
     lblScrambleError->setVisible(false);
     txtScramble->setStyleSheet("");
     updateCommand();
-    lblStatus->setText(m_scrambleIsAlg ? "Algorithm applied (inverted)." : "Scramble applied.");
+    appendStatusLine(m_scrambleIsAlg ? "Algorithm applied (inverted)." : "Scramble applied.");
+}
+
+void MainWindow::appendStatusLine(const QString& msg) {
+    txtOutput->append(QString("<div style='color:#6a9ab8;font-size:11px;padding:1px 4px;font-style:italic;'>%1</div>")
+        .arg(msg.toHtmlEscaped()));
 }
 
 void MainWindow::rebuildTable() {
@@ -1823,7 +1824,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
 // -------------------------------------------------------
 void MainWindow::onCopy() {
     QApplication::clipboard()->setText(txtCommand->text());
-    lblStatus->setText("Copied to clipboard!");
+    appendStatusLine("Copied to clipboard!");
 }
 
 // -------------------------------------------------------
@@ -1832,7 +1833,7 @@ void MainWindow::onCopy() {
 void MainWindow::onRankErgoToggled(bool checked) {
     if (!checked) {
         rebuildTerminalView();
-        lblStatus->setText("Done.");
+        appendStatusLine("Done.");
         if (m_tableVisible) rebuildTable();
         return;
     }
@@ -1866,7 +1867,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
             .arg(bg).arg(color).arg(fsStyle).arg(padding).arg(display.toHtmlEscaped()));
         solIdx++;
     }
-    lblStatus->setText(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
+    appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
     txtOutput->verticalScrollBar()->setValue(0);
     if (m_tableVisible) rebuildTable();
 }

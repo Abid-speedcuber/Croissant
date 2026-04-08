@@ -110,6 +110,7 @@ private:
     bool          m_tableVisible{false};
     void          rebuildTerminalView();
     void          rebuildTable();
+    void          appendStatusLine(const QString& msg);
 
     QPointer<SolverWorker> worker;
     QStringList   m_rawLines;
