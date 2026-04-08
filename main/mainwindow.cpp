@@ -25,6 +25,8 @@
 #include <QScrollBar>
 #include <QMenu>
 #include <QTimer>
+#include <QDialog>
+#include <QShortcut>
 #include <QDateTime>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
@@ -449,7 +451,40 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 void MainWindow::buildUI() {
     QWidget* central = new QWidget(this);
     setCentralWidget(central);
-    QHBoxLayout* root = new QHBoxLayout(central);
+
+    QWidget* outerWidget = new QWidget(this);
+    QVBoxLayout* outerLayout = new QVBoxLayout(outerWidget);
+    outerLayout->setContentsMargins(0,0,0,0);
+    outerLayout->setSpacing(0);
+    setCentralWidget(outerWidget);
+
+    // ── Top bar ───────────────────────────────────────────────────────────────
+    QWidget* topBar = new QWidget();
+    topBar->setObjectName("topBar");
+    topBar->setFixedHeight(52);
+    QHBoxLayout* topBarLayout = new QHBoxLayout(topBar);
+    topBarLayout->setContentsMargins(16, 0, 16, 0);
+
+    QLabel* logoLabel = new QLabel();
+    logoLabel->setText("<span style='font-size:17px;font-weight:bold;color:#e0e0e0;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
+                       "<br><span style='font-size:10px;color:#888;'>by Abid and Matt</span>");
+    logoLabel->setObjectName("logoLabel");
+
+    QPushButton* btnAbout = new QPushButton("?");
+    btnAbout->setObjectName("btnAbout");
+    btnAbout->setFixedSize(30, 30);
+    btnAbout->setToolTip("About");
+    connect(btnAbout, &QPushButton::clicked, this, &MainWindow::showAboutModal);
+
+    topBarLayout->addWidget(logoLabel);
+    topBarLayout->addStretch();
+    topBarLayout->addWidget(btnAbout);
+    outerLayout->addWidget(topBar);
+
+    QWidget* contentWidget = new QWidget();
+    outerLayout->addWidget(contentWidget, 1);
+
+    QHBoxLayout* root = new QHBoxLayout(contentWidget);
     root->setSpacing(12);
     root->setContentsMargins(12,12,12,12);
 
@@ -1192,6 +1227,34 @@ void MainWindow::buildStyles() {
             color: #7a7aaa; font-size: 13px; padding: 0;
         }
         QPushButton#btnTableMode:hover { background: #2a2a4a; border-color: #5a5a8a; color: #b0b0dd; }
+        QWidget#topBar {
+            background: #0e0e1c;
+            border-bottom: 2px solid #2a2a4a;
+            min-height: 52px;
+            max-height: 52px;
+        }
+        QLabel#logoLabel {
+            background: transparent;
+            padding: 0;
+        }
+        QPushButton#btnAbout {
+            background: #2a2a3e;
+            border: 1px solid #4a4a6a;
+            border-radius: 15px;
+            color: #9090bb;
+            font-size: 15px;
+            font-weight: bold;
+            padding: 0;
+            min-width: 30px;
+            max-width: 30px;
+            min-height: 30px;
+            max-height: 30px;
+        }
+        QPushButton#btnAbout:hover {
+            background: #3a3a5e;
+            border-color: #7a7aaa;
+            color: #e0e0ff;
+        }
         QToolTip {
             background: #252540;
             color: #d8d8f0;
@@ -1920,6 +1983,96 @@ const bool canRank         = cubeshapeActive && hasSolutions && !solving;
 //   2. Cube letter shortcuts → route to cubeWidget from any focus.
 //   3. txtDepths digit → auto-enable "Specific depths" checkbox.
 // -------------------------------------------------------
+void MainWindow::showAboutModal() {
+    QDialog* dlg = new QDialog(this, Qt::FramelessWindowHint | Qt::Dialog);
+    dlg->setAttribute(Qt::WA_TranslucentBackground);
+    dlg->setModal(true);
+    dlg->resize(this->size());
+
+    QWidget* card = new QWidget(dlg);
+    card->setObjectName("aboutCard");
+    card->setFixedWidth(480);
+    card->setStyleSheet(
+        "QWidget#aboutCard {"
+        "  background:#1e1e34;"
+        "  border:1px solid #3a3a5e;"
+        "  border-radius:10px;"
+        "}"
+    );
+
+    QVBoxLayout* lay = new QVBoxLayout(card);
+    lay->setContentsMargins(28, 24, 28, 24);
+    lay->setSpacing(10);
+
+    QLabel* title = new QLabel("About Solve-A-Squan");
+    title->setStyleSheet("font-size:16px;font-weight:bold;color:#e0e0e0;background:transparent;");
+
+    QLabel* body = new QLabel();
+    body->setWordWrap(true);
+    body->setOpenExternalLinks(true);
+    body->setTextFormat(Qt::RichText);
+    body->setStyleSheet("background:transparent;");
+    body->setText(
+        "<span style='color:#b0b0c8;font-size:12px;line-height:1.7;'>"
+        "This program stemmed from the optimal Square-1 solver by "
+        "<a href='https://www.jaapsch.net/puzzles/' style='color:#7abfe8;'>Jaap Scherphuis</a>."
+        "<br><br>"
+        "v2 was created by Michael Gottlieb "
+        "(<a href='https://github.com/qqwref' style='color:#7abfe8;'>GitHub</a>, "
+        "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:#7abfe8;'>WCA</a>), "
+        "who rewrote the solver with significant improvements and optimisations."
+        "<br><br>"
+        "This is the official <b style='color:#e0e0e0;'>v3</b>. New in v3:"
+        "<ul style='margin:4px 0 4px 16px;padding:0;color:#b0b0c8;'>"
+        "<li>Actual graphical UI</li>"
+        "<li>Ability to generate a solution from a specific angle</li>"
+        "<li>Improved karnotation support</li>"
+        "<li>Algorithm ergonomics rater</li>"
+        "</ul>"
+        "v3 is created by "
+        "<a href='https://www.worldcubeassociation.org/persons/2024ASHR02' style='color:#7abfe8;'>Abid Ibn Ashraf</a>"
+        " and "
+        "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:#7abfe8;'>Matt Mao</a>."
+        "</span>"
+    );
+
+    lay->addWidget(title);
+    lay->addWidget(body);
+
+    // Center card in dialog
+    card->adjustSize();
+    int cx = (dlg->width()  - card->width())  / 2;
+    int cy = (dlg->height() - card->sizeHint().height()) / 2;
+    card->move(cx, cy);
+
+    // Dim background
+    QWidget* overlay = new QWidget(dlg);
+    overlay->setGeometry(dlg->rect());
+    overlay->setStyleSheet("background:rgba(0,0,0,160);");
+    overlay->lower();
+    card->raise();
+
+    // Close on click outside card
+    struct Filter : public QObject {
+        QDialog* dlg; QWidget* card;
+        Filter(QDialog* d, QWidget* c) : QObject(d), dlg(d), card(c) {}
+        bool eventFilter(QObject*, QEvent* e) override {
+            if (e->type() == QEvent::MouseButtonPress) {
+                QMouseEvent* me = static_cast<QMouseEvent*>(e);
+                if (!card->geometry().contains(me->pos())) {
+                    dlg->accept();
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+    dlg->installEventFilter(new Filter(dlg, card));
+    connect(new QShortcut(Qt::Key_Escape, dlg), &QShortcut::activated, dlg, &QDialog::accept);
+
+    dlg->exec();
+}
+
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     // ── (0) Per-line tooltips for the output box ──────────────────────────────
     // QTextEdit delivers QHelpEvent to its internal viewport, not to itself.

@@ -130,4 +130,5 @@ private:
     QVector<CubeSnapshot> m_undoStack;
     QVector<CubeSnapshot> m_redoStack;
     void pushUndoState();
+    void showAboutModal();
 };
