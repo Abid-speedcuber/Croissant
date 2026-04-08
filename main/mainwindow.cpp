@@ -505,24 +505,49 @@ void MainWindow::buildUI() {
         leftCol->addLayout(centerRow);
     }
 
-    QHBoxLayout* btnRow1 = new QHBoxLayout();
-    QPushButton* btnUP = new QPushButton("U'");
-    QPushButton* btnU  = new QPushButton("U");
-    btnRow1->addWidget(btnUP); btnRow1->addWidget(btnU);
-    leftCol->addLayout(btnRow1);
+    // Grid: U' | Slice (rowspan 2) | U
+    //        D |                   | D'
+    QGridLayout* moveGrid = new QGridLayout();
+    moveGrid->setSpacing(4);
 
-    QPushButton* btnSlice = new QPushButton("Slice  [I/K]");
-    leftCol->addWidget(btnSlice);
+    QPushButton* btnUP    = new QPushButton("U'");
+    QPushButton* btnU     = new QPushButton("U");
+    QPushButton* btnD     = new QPushButton("D");
+    QPushButton* btnDP    = new QPushButton("D'");
+    QPushButton* btnSlice = new QPushButton();
+    btnSlice->setText("Slice\n[I/K]");
+    btnSlice->setFixedWidth(70);
+    btnSlice->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
 
-    QHBoxLayout* btnRow2 = new QHBoxLayout();
-    QPushButton* btnD  = new QPushButton("D");
-    QPushButton* btnDP = new QPushButton("D'");
-    btnRow2->addWidget(btnD); btnRow2->addWidget(btnDP);
-    leftCol->addLayout(btnRow2);
+    moveGrid->addWidget(btnUP,    0, 0);
+    moveGrid->addWidget(btnSlice, 0, 1, 2, 1); // rowspan=2
+    moveGrid->addWidget(btnU,     0, 2);
+    moveGrid->addWidget(btnD,     1, 0);
+    moveGrid->addWidget(btnDP,    1, 2);
 
+    moveGrid->setColumnStretch(0, 1);
+    moveGrid->setColumnStretch(1, 0);
+    moveGrid->setColumnStretch(2, 1);
+
+    leftCol->addLayout(moveGrid);
+
+    // Row 3: Undo | Reset | Redo  (all on same line)
+    QHBoxLayout* undoResetRedoRow = new QHBoxLayout();
+    undoResetRedoRow->setSpacing(4);
+    btnUndo = new QPushButton("⟲");
+    btnUndo->setObjectName("btnUndo");
+    btnUndo->setEnabled(false);
+    btnUndo->setToolTip("Undo  [Z]");
     btnReset = new QPushButton("Reset  [Esc]");
     btnReset->setObjectName("btnReset");
-    leftCol->addWidget(btnReset);
+    btnRedo = new QPushButton("⟳");
+    btnRedo->setObjectName("btnRedo");
+    btnRedo->setEnabled(false);
+    btnRedo->setToolTip("Redo  [Y]");
+    undoResetRedoRow->addWidget(btnUndo, 1);
+    undoResetRedoRow->addWidget(btnReset, 2);
+    undoResetRedoRow->addWidget(btnRedo, 1);
+    leftCol->addLayout(undoResetRedoRow);
 
     QGroupBox* grpScramble = new QGroupBox("Scramble / Alg input");
     QVBoxLayout* scrambleLay = new QVBoxLayout(grpScramble);
@@ -560,19 +585,6 @@ void MainWindow::buildUI() {
     btnApplyScramble->setObjectName("btnApplyScramble");
     scrambleLay->addWidget(btnApplyScramble);
     leftCol->addWidget(grpScramble);
-
-    QHBoxLayout* undoRedoRow = new QHBoxLayout();
-    undoRedoRow->setSpacing(4);
-    btnUndo = new QPushButton("⟲ Undo  [Z]");
-    btnUndo->setObjectName("btnUndo");
-    btnUndo->setEnabled(false);
-    btnRedo = new QPushButton("⟳ Redo  [Y]");
-    btnRedo->setObjectName("btnRedo");
-    btnRedo->setEnabled(false);
-    undoRedoRow->addWidget(btnUndo);
-    undoRedoRow->addWidget(btnRedo);
-    leftCol->addLayout(undoRedoRow);
-
     leftCol->addStretch();
 
     leftScroll = new QScrollArea();
