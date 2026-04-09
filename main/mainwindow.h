@@ -134,4 +134,15 @@ private:
     QVector<CubeSnapshot> m_slicePending;
     void pushUndoState();
     void showAboutModal();
+    bool          m_lightTheme{false};
+    QWidget*      m_sidebar{nullptr};
+    QWidget*      m_sidebarOverlay{nullptr};
+    bool          m_sidebarOpen{false};
+    QPushButton*  btnHamburger{nullptr};
+    void showSettingsModal();
+    void showHowToUseModal();
+    void openSidebar();
+    void closeSidebar();
+    void applyTheme();
+    QString buildStyleSheet();
 };

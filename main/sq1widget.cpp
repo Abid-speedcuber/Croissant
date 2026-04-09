@@ -8,6 +8,7 @@
 Sq1Widget::Sq1Widget(QWidget* parent) : QWidget(parent) {
     setFixedSize(W, H);
     setFocusPolicy(Qt::StrongFocus);
+    setAttribute(Qt::WA_StyledBackground, true);
     reset();
 }
 
@@ -154,7 +155,9 @@ void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, doubl
 void Sq1Widget::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    p.fillRect(rect(), Theme::color(Theme::CANVAS_BG));
+    QColor bg = palette().color(QPalette::Window);
+    if (!bg.isValid() || bg == Qt::black) bg = Theme::color(Theme::CANVAS_BG);
+    p.fillRect(rect(), bg);
 
     drawLayer(p, 0,  12, {TOP_CX, TOP_CY}, -105);  // top layer, starts at -105 deg
     drawLayer(p, 12, 24, {BOT_CX, BOT_CY},  105);  // bot layer, starts at 105 deg

@@ -55,9 +55,9 @@ namespace Theme {
     static constexpr const char* BUTTON_SOLVE_HOVER   = "#227a47";  // Solve button hover
 
     // Reset Button (red - alarming)
-    static constexpr const char* BUTTON_RESET_BG      = "#6b1a1a";  // Reset button background (dark red)
-    static constexpr const char* BUTTON_RESET_BORDER  = "#b52d2d";  // Reset button border (lighter red)
-    static constexpr const char* BUTTON_RESET_HOVER   = "#7a2020";  // Reset button hover
+    static constexpr const char* BUTTON_RESET_BG      = "#2a2a3e";  // Reset button background
+    static constexpr const char* BUTTON_RESET_BORDER  = "#555";     // Reset button border
+    static constexpr const char* BUTTON_RESET_HOVER   = "#3a3a5e";  // Reset button hover
 
     // Stop Button (muted red)
     static constexpr const char* BUTTON_STOP_BG       = "#3d1616";  // Stop button background
@@ -120,7 +120,61 @@ namespace Theme {
     static constexpr const char* CUBE_PARTIAL         = "#888888";  // Partial/incomplete piece
     static constexpr const char* CUBE_BORDER          = "#000000";  // Piece border (black)
     static constexpr const char* CUBE_SELECTION       = "#ffff00";  // Selection highlight (yellow)
-    static constexpr const char* CANVAS_BG            = "#000000";  // Canvas/widget background (black)
+    static constexpr const char* CANVAS_BG            = "#1a1a2e";  // Canvas/widget background
+
+    // ========== SIDEBAR / MODAL COLORS ==========
+    static constexpr const char* SIDEBAR_BG           = "#13132a";  // Sidebar background
+    static constexpr const char* SIDEBAR_BORDER       = "#2a2a4a";  // Sidebar border
+    static constexpr const char* MODAL_BG             = "#1e1e34";  // Modal card background
+    static constexpr const char* MODAL_BORDER         = "#3a3a5e";  // Modal border
+    static constexpr const char* MODAL_OVERLAY        = "rgba(0,0,0,170)"; // Modal overlay
+
+    // ========== LIGHT THEME COLORS ==========
+    static constexpr const char* LIGHT_PRIMARY_BG     = "#f0f0f8";
+    static constexpr const char* LIGHT_SECONDARY_BG   = "#e0e0f0";
+    static constexpr const char* LIGHT_TERTIARY_BG    = "#d8d8ee";
+    static constexpr const char* LIGHT_DARK_BG        = "#c8c8e0";
+    static constexpr const char* LIGHT_DISABLED_BG    = "#e8e8f4";
+    static constexpr const char* LIGHT_HOVER_BG       = "#d0d0e8";
+    static constexpr const char* LIGHT_PRESSED_BG     = "#c0c0d8";
+    static constexpr const char* LIGHT_TEXT_PRIMARY   = "#1a1a3e";
+    static constexpr const char* LIGHT_TEXT_SECONDARY = "#444466";
+    static constexpr const char* LIGHT_TEXT_MUTED     = "#888";
+    static constexpr const char* LIGHT_TEXT_DISABLED  = "#aaa";
+    static constexpr const char* LIGHT_TEXT_ERROR     = "#cc2222";
+    static constexpr const char* LIGHT_TEXT_CYAN      = "#1a5fa8";
+    static constexpr const char* LIGHT_TEXT_TERMINAL  = "#1a5080";
+    static constexpr const char* LIGHT_TEXT_SOLUTION  = "#1a5fa8";
+    static constexpr const char* LIGHT_BORDER_LIGHT   = "#aaa";
+    static constexpr const char* LIGHT_BORDER_DARK    = "#c8c8de";
+    static constexpr const char* LIGHT_BORDER_GROUP   = "#aaa";
+    static constexpr const char* LIGHT_BORDER_BOTTOM  = "#c0c0da";
+    static constexpr const char* LIGHT_CHECKBOX_BG    = "#d8d8ee";
+    static constexpr const char* LIGHT_BUTTON_BG      = "#d8d8ee";
+    static constexpr const char* LIGHT_BUTTON_BORDER  = "#aaa";
+    static constexpr const char* LIGHT_BUTTON_TEXT    = "#1a1a3e";
+    static constexpr const char* LIGHT_SCROLLBAR_BG   = "#dcdcec";
+    static constexpr const char* LIGHT_SCROLLBAR_HANDLE = "#a0a0c0";
+    static constexpr const char* LIGHT_SCROLLBAR_HOVER = "#7878a8";
+    static constexpr const char* LIGHT_TABLE_BG       = "#e8e8f8";
+    static constexpr const char* LIGHT_TABLE_HEADER_BG= "#d8d8ee";
+    static constexpr const char* LIGHT_TABLE_BORDER   = "#bbb";
+    static constexpr const char* LIGHT_TABLE_SELECTED_BG  = "#4a80c4";
+    static constexpr const char* LIGHT_TABLE_SELECTED_TEXT= "#ffffff";
+    static constexpr const char* LIGHT_TABLE_HEADER_TEXT  = "#3a5a8a";
+    static constexpr const char* LIGHT_ROW_ALT_DARK   = "#e0e8f8";
+    static constexpr const char* LIGHT_ROW_ALT_LIGHT  = "#eceef8";
+    static constexpr const char* LIGHT_TOOLTIP_BG     = "#2a2a50";
+    static constexpr const char* LIGHT_TOOLTIP_TEXT   = "#e8e8ff";
+    static constexpr const char* LIGHT_TOOLTIP_BORDER = "#5a5a8a";
+    static constexpr const char* LIGHT_SOLVE_BG       = "#1a6b3c";
+    static constexpr const char* LIGHT_SOLVE_BORDER   = "#2db570";
+    static constexpr const char* LIGHT_SOLVE_HOVER    = "#227a47";
+    static constexpr const char* LIGHT_PROGRESS_BG    = "#c8c8e0";
+    static constexpr const char* LIGHT_PROGRESS_FILL  = "#4a80c4";
+    static constexpr const char* LIGHT_SIDEBAR_BG     = "#e8e8f8";
+    static constexpr const char* LIGHT_SIDEBAR_BORDER = "#c0c0da";
+    static constexpr const char* LIGHT_CANVAS_BG      = "#f0f0f8";
 
     // ========== UTILITY FUNCTION ==========
     // Returns a QColor from any theme constant

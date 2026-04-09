@@ -26,6 +26,7 @@
 #include <QScrollBar>
 #include <QMenu>
 #include <QTimer>
+#include <QPropertyAnimation>
 #include <QDialog>
 #include <QShortcut>
 #include <QDateTime>
@@ -635,15 +636,16 @@ void MainWindow::buildUI() {
         .arg(Theme::TEXT_PRIMARY, Theme::TEXT_MUTED));
     logoLabel->setObjectName("logoLabel");
 
-    QPushButton* btnAbout = new QPushButton("?");
-    btnAbout->setObjectName("btnAbout");
-    btnAbout->setFixedSize(30, 30);
-    btnAbout->setToolTip("About");
-    connect(btnAbout, &QPushButton::clicked, this, &MainWindow::showAboutModal);
+    btnHamburger = new QPushButton("☰");
+    btnHamburger->setObjectName("btnHamburger");
+    btnHamburger->setFixedSize(30, 30);
+    btnHamburger->setToolTip("Menu");
+    connect(btnHamburger, &QPushButton::clicked, this, &MainWindow::openSidebar);
 
+    topBarLayout->addWidget(btnHamburger);
+    topBarLayout->addSpacing(10);
     topBarLayout->addWidget(logoLabel);
     topBarLayout->addStretch();
-    topBarLayout->addWidget(btnAbout);
     outerLayout->addWidget(topBar);
 
     QWidget* contentWidget = new QWidget();
@@ -1353,7 +1355,77 @@ void MainWindow::updateConstraints() {
 // buildStyles
 // -------------------------------------------------------
 void MainWindow::buildStyles() {
-    setStyleSheet(QString(R"(
+    setStyleSheet(buildStyleSheet());
+}
+
+QString MainWindow::buildStyleSheet() {
+    bool L = m_lightTheme;
+    auto b = [&](const char* dark, const char* light) -> QString {
+        return L ? QString(light) : QString(dark);
+    };
+
+    QString PRIMARY_BG      = b(Theme::PRIMARY_BG,       Theme::LIGHT_PRIMARY_BG);
+    QString SECONDARY_BG    = b(Theme::SECONDARY_BG,     Theme::LIGHT_TABLE_BG);
+    QString TERTIARY_BG     = b(Theme::TERTIARY_BG,      Theme::LIGHT_TERTIARY_BG);
+    QString DARK_BG         = b(Theme::DARK_BG,          Theme::LIGHT_DARK_BG);
+    QString DISABLED_BG     = b(Theme::DISABLED_BG,      Theme::LIGHT_DISABLED_BG);
+    QString HOVER_BG        = b(Theme::HOVER_BG,          Theme::LIGHT_HOVER_BG);
+    QString PRESSED_BG      = b(Theme::PRESSED_BG,        Theme::LIGHT_PRESSED_BG);
+    QString TEXT_PRIMARY    = b(Theme::TEXT_PRIMARY,      Theme::LIGHT_TEXT_PRIMARY);
+    QString TEXT_SECONDARY  = b(Theme::TEXT_SECONDARY,    Theme::LIGHT_TEXT_SECONDARY);
+    QString TEXT_MUTED      = b(Theme::TEXT_MUTED,        Theme::LIGHT_TEXT_MUTED);
+    QString TEXT_DISABLED   = b(Theme::TEXT_DISABLED,     Theme::LIGHT_TEXT_DISABLED);
+    QString TEXT_ERROR      = b(Theme::TEXT_ERROR,        Theme::LIGHT_TEXT_ERROR);
+    QString TEXT_CYAN       = b(Theme::TEXT_CYAN,         Theme::LIGHT_TEXT_CYAN);
+    QString TEXT_TERMINAL   = b(Theme::TEXT_TERMINAL,     Theme::LIGHT_TEXT_TERMINAL);
+    QString TEXT_SOLUTION   = b(Theme::TEXT_SOLUTION,     Theme::LIGHT_TEXT_SOLUTION);
+    QString BORDER_LIGHT    = b(Theme::BORDER_LIGHT,      Theme::LIGHT_BORDER_LIGHT);
+    QString BORDER_DARK     = b(Theme::BORDER_DARK,       Theme::LIGHT_BORDER_DARK);
+    QString BORDER_GROUP    = b(Theme::BORDER_GROUP,      Theme::LIGHT_BORDER_GROUP);
+    QString BORDER_BOTTOM   = b(Theme::BORDER_BOTTOM,     Theme::LIGHT_BORDER_BOTTOM);
+    QString CHECKBOX_BG     = b(Theme::CHECKBOX_BG,       Theme::LIGHT_CHECKBOX_BG);
+    QString CHECKBOX_BORDER = b(Theme::CHECKBOX_BORDER,   Theme::LIGHT_BORDER_LIGHT);
+    QString BUTTON_BG       = b(Theme::BUTTON_BG,         Theme::LIGHT_BUTTON_BG);
+    QString BUTTON_BORDER   = b(Theme::BUTTON_BORDER,     Theme::LIGHT_BUTTON_BORDER);
+    QString BUTTON_TEXT     = b(Theme::BUTTON_TEXT,       Theme::LIGHT_BUTTON_TEXT);
+    QString BUTTON_SEC_TEXT = b(Theme::BUTTON_SECONDARY_TEXT, Theme::LIGHT_TEXT_SECONDARY);
+    QString SCROLLBAR_BG    = b(Theme::SCROLLBAR_BG,      Theme::LIGHT_SCROLLBAR_BG);
+    QString SCROLLBAR_HANDLE= b(Theme::SCROLLBAR_HANDLE,  Theme::LIGHT_SCROLLBAR_HANDLE);
+    QString SCROLLBAR_HOVER = b(Theme::SCROLLBAR_HOVER,   Theme::LIGHT_SCROLLBAR_HOVER);
+    QString TABLE_BG        = b(Theme::TABLE_BG,          Theme::LIGHT_TABLE_BG);
+    QString TABLE_BORDER    = b(Theme::TABLE_BORDER,      Theme::LIGHT_TABLE_BORDER);
+    QString TABLE_HEADER_BG = b(Theme::TABLE_HEADER_BG,   Theme::LIGHT_TABLE_HEADER_BG);
+    QString TABLE_HEADER_TEXT= b(Theme::TABLE_HEADER_TEXT, Theme::LIGHT_TABLE_HEADER_TEXT);
+    QString TABLE_SEL_BG    = b(Theme::TABLE_SELECTED_BG, Theme::LIGHT_TABLE_SELECTED_BG);
+    QString TABLE_SEL_TEXT  = b(Theme::TABLE_SELECTED_TEXT, Theme::LIGHT_TABLE_SELECTED_TEXT);
+    QString TOOLTIP_BG      = b(Theme::TOOLTIP_BG,        Theme::LIGHT_TOOLTIP_BG);
+    QString TOOLTIP_TEXT    = b(Theme::TOOLTIP_TEXT,      Theme::LIGHT_TOOLTIP_TEXT);
+    QString TOOLTIP_BORDER  = b(Theme::TOOLTIP_BORDER,    Theme::LIGHT_TOOLTIP_BORDER);
+    QString PROGRESS_BG     = b(Theme::PROGRESS_BG,       Theme::LIGHT_PROGRESS_BG);
+    QString PROGRESS_FILL   = b(Theme::PROGRESS_FILL,     Theme::LIGHT_PROGRESS_FILL);
+    QString UTIL_BG         = b(Theme::BUTTON_UTIL_BG,    Theme::LIGHT_BUTTON_BG);
+    QString UTIL_BORDER     = b(Theme::BUTTON_UTIL_BORDER, Theme::LIGHT_BUTTON_BORDER);
+    QString UTIL_TEXT       = b(Theme::BUTTON_UTIL_TEXT,  Theme::LIGHT_TEXT_SECONDARY);
+    QString UTIL_HOVER_BG   = b(Theme::BUTTON_UTIL_HOVER_BG, Theme::LIGHT_HOVER_BG);
+    QString UTIL_HOVER_BORDER= b(Theme::BUTTON_UTIL_HOVER_BORDER, Theme::LIGHT_BORDER_LIGHT);
+    QString UTIL_HOVER_TEXT = b(Theme::BUTTON_UTIL_HOVER_TEXT, Theme::LIGHT_TEXT_PRIMARY);
+    QString ABOUT_BG        = b(Theme::BUTTON_ABOUT_BG,   Theme::LIGHT_BUTTON_BG);
+    QString ABOUT_BORDER    = b(Theme::BUTTON_ABOUT_BORDER, Theme::LIGHT_BUTTON_BORDER);
+    QString ABOUT_TEXT      = b(Theme::BUTTON_ABOUT_TEXT, Theme::LIGHT_TEXT_SECONDARY);
+    QString ABOUT_HOVER_BG  = b(Theme::BUTTON_ABOUT_HOVER_BG, Theme::LIGHT_HOVER_BG);
+    QString ABOUT_HOVER_BORDER = b(Theme::BUTTON_ABOUT_HOVER_BORDER, Theme::LIGHT_BORDER_LIGHT);
+    QString ABOUT_HOVER_TEXT= b(Theme::BUTTON_ABOUT_HOVER_TEXT, Theme::LIGHT_TEXT_PRIMARY);
+    QString RESET_BG        = b(Theme::BUTTON_RESET_BG,   Theme::LIGHT_BUTTON_BG);
+    QString RESET_BORDER    = b(Theme::BUTTON_RESET_BORDER, Theme::LIGHT_BUTTON_BORDER);
+    QString RESET_HOVER     = b(Theme::BUTTON_RESET_HOVER, Theme::LIGHT_HOVER_BG);
+    QString UNDO_REDO_DISABLED_BG = b("#1e1e2a", Theme::LIGHT_DISABLED_BG);
+    QString UNDO_REDO_DISABLED_BORDER = b("#333", Theme::LIGHT_BORDER_DARK);
+    QString UNDO_REDO_DISABLED_TEXT   = b("#444", Theme::LIGHT_TEXT_DISABLED);
+    QString SPINBOX_ARROW_BG  = b("#3a3a5a", Theme::LIGHT_HOVER_BG);
+    QString SPINBOX_ARROW_HOVER = b("#5a5a8a", Theme::LIGHT_BORDER_LIGHT);
+    QString INPUT_TEXT = b("#fff", Theme::LIGHT_TEXT_PRIMARY);
+
+    return QString(R"(
         QMainWindow, QWidget { background: %1; color: %2; font-family: 'Segoe UI', Arial; font-size: 13px; }
         QGroupBox { border: 1px solid %3; border-radius: 6px; margin-top: 8px; padding-top: 8px; color: %4; }
         QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
@@ -1363,82 +1435,120 @@ void MainWindow::buildStyles() {
         QCheckBox#chkRankErgo::indicator:checked { background: %8; border-color: %8; }
         QCheckBox:disabled { color: #4a4a5a; }
         QCheckBox::indicator:disabled { border-color: %9; background: %10; }
-        QLineEdit { background: %11; border: 1px solid %12; border-radius: 4px; padding: 3px 6px; color: #fff; }
+        QLineEdit { background: %11; border: 1px solid %12; border-radius: 4px; padding: 3px 6px; color: %60; }
         QLineEdit:disabled { color: %13; background: %14; border-color: %15; }
         QLineEdit#txtCommand { font-family: monospace; color: %16; font-size: 12px; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; border-right: none; }
-        QSpinBox { background: %17; border: 1px solid %18; border-radius: 4px;
-                   padding: 2px 8px 2px 4px; color: #fff; }
-        QSpinBox:disabled { color: %19; background: %20; border-color: %21; }
-        QSpinBox::up-button, QSpinBox::down-button { width: 0; height: 0; border: 0; }
-        QSpinBox::up-arrow,  QSpinBox::down-arrow  { width: 0; height: 0; image: none; }
-        QTextEdit#txtOutput { background: %22; border: 1px solid %23; border-radius: 4px;
-                              font-family: monospace; font-size: 12px; color: %24; }
-        QPushButton { background: %25; border: 1px solid %26; border-radius: 5px; padding: 5px 12px; color: %27; }
-        QPushButton:hover { background: %28; border-color: %29; }
-        QPushButton:pressed { background: %30; }
-        QPushButton#btnSolve { background: %31; border-color: %32; color: #fff; font-size: 13px; font-weight: bold; }
-        QPushButton#btnSolve:hover { background: %33; }
+        QSpinBox {
+            background: %11; border: 1px solid %12; border-radius: 4px;
+            padding: 2px 20px 2px 6px; color: %60;
+            min-width: 48px;
+        }
+        QSpinBox:disabled { color: %13; background: %14; border-color: %15; }
+        QSpinBox::up-button {
+            subcontrol-origin: border; subcontrol-position: top right;
+            width: 18px; border-left: 1px solid %12;
+            border-top-right-radius: 4px;
+            background: %61;
+        }
+        QSpinBox::down-button {
+            subcontrol-origin: border; subcontrol-position: bottom right;
+            width: 18px; border-left: 1px solid %12; border-top: 1px solid %12;
+            border-bottom-right-radius: 4px;
+            background: %61;
+        }
+        QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: %62; }
+        QSpinBox::up-arrow   { width: 7px; height: 7px; image: none;
+                               border-left: 4px solid transparent;
+                               border-right: 4px solid transparent;
+                               border-bottom: 5px solid %2; }
+        QSpinBox::down-arrow { width: 7px; height: 7px; image: none;
+                               border-left: 4px solid transparent;
+                               border-right: 4px solid transparent;
+                               border-top: 5px solid %2; }
+        QTextEdit#txtOutput { background: %17; border: 1px solid %3; border-radius: 4px;
+                              font-family: monospace; font-size: 12px; color: %18; }
+        QPushButton { background: %19; border: 1px solid %20; border-radius: 5px; padding: 5px 12px; color: %21; }
+        QPushButton:hover { background: %22; border-color: %20; }
+        QPushButton:pressed { background: %23; }
+        QPushButton#btnSolve { background: %24; border-color: %25; color: #fff; font-size: 13px; font-weight: bold; }
+        QPushButton#btnSolve:hover { background: %26; }
         QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
-        QPushButton#btnCopy { background: %34; border: 1px solid %35; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: %36; font-size: 14px; padding: 0; margin-right: 5px;}
-        QPushButton#btnCopy:hover { background: %37; color: %38; }
+        QPushButton#btnCopy { background: %11; border: 1px solid %12; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: %4; font-size: 14px; padding: 0; margin-right: 5px;}
+        QPushButton#btnCopy:hover { background: %22; color: %21; }
         QPushButton#btnReset {
-            background: %39; border: 1px solid %40; border-radius: 17px;
-            color: #bbb; font-size: 18px; padding: 0;
+            background: %27; border: 1px solid %28; border-radius: 17px;
+            color: %4; font-size: 18px; padding: 0;
         }
-        QPushButton#btnReset:hover { background: %41; border-color: #888; color: #fff; }
-        QPushButton#btnUndo, QPushButton#btnRedo { background: %42; border-color: %43; color: %44; }
-        QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled { background: #1e1e2a; border-color: #333; color: #444; }
+        QPushButton#btnReset:hover { background: %29; border-color: %20; color: %21; }
+        QPushButton#btnUndo, QPushButton#btnRedo {
+            background: %19; border-color: %20; color: %21;
+        }
+        QPushButton#btnUndo:hover, QPushButton#btnRedo:hover {
+            background: %22; border-color: %20;
+        }
+        QPushButton#btnUndo:pressed, QPushButton#btnRedo:pressed {
+            background: %23;
+        }
+        QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled {
+            background: %63; border-color: %64; color: %65;
+        }
         QPushButton#btnApplyScramble {
-            background: %45; border: 1px solid %46;
-            border-radius: 4px; color: %47; padding: 4px 8px;
+            background: %11; border: 1px solid %12;
+            border-radius: 4px; color: %4; padding: 4px 8px;
         }
-        QPushButton#btnApplyScramble:hover { background: %48; border-color: %49; }
+        QPushButton#btnApplyScramble:hover { background: %22; border-color: %20; }
         QPushButton#btnScrambleMode {
-            background: %50; border: 1px solid %51;
+            background: %11; border: 1px solid %12;
             border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
-            border-right: none; color: %52; padding: 0 6px; font-size: 11px;
+            border-right: none; color: %4; padding: 0 6px; font-size: 11px;
         }
         QPushButton#btnScrambleMode:checked { color: #fff; background: #333350; }
-        QPushButton#btnScrambleMode:hover { background: %53; }
+        QPushButton#btnScrambleMode:hover { background: %22; }
         QLineEdit#txtScramble {
             border-top-left-radius: 0; border-bottom-left-radius: 0;
         }
-        QPushButton#btnExpand, QPushButton#btnCopyTerminal {
-            background: %54; border: 1px solid %55; border-radius: 4px;
-            color: %56; font-size: 13px; padding: 0;
+        QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
+            background: %30; border: 1px solid %31; border-radius: 4px;
+            color: %32; font-size: 13px; padding: 0;
         }
-        QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover { background: %57; border-color: %58; color: %59; }
-        QProgressBar { border: none; background: %60; border-radius: 3px; }
-        QProgressBar::chunk { background: %61; border-radius: 3px; }
-        QLabel#lblStatus { color: %62; font-size: 11px; }
-        QLabel#lblScrambleError { color: %63; font-size: 11px; padding: 2px 2px; }
-        QLabel#lblCommandError  { color: %64; font-size: 11px; padding: 2px 2px; }
-        QScrollBar:vertical { background: %65; width: 12px; border-radius: 6px; margin: 0; }
-        QScrollBar::handle:vertical { background: %66; border-radius: 6px; min-height: 24px; }
-        QScrollBar::handle:vertical:hover { background: %67; }
+        QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover, QPushButton#btnTableMode:hover {
+            background: %33; border-color: %34; color: %35;
+        }
+        QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#btnTableMode:pressed {
+            background: %23;
+        }
+        QProgressBar { border: none; background: %36; border-radius: 3px; }
+        QProgressBar::chunk { background: %37; border-radius: 3px; }
+        QLabel#lblStatus { color: %38; font-size: 11px; }
+        QLabel#lblScrambleError { color: %39; font-size: 11px; padding: 2px 2px; }
+        QLabel#lblCommandError  { color: %39; font-size: 11px; padding: 2px 2px; }
+        QScrollBar:vertical { background: %40; width: 8px; border-radius: 4px; margin: 0; }
+        QScrollBar::handle:vertical { background: %41; border-radius: 4px; min-height: 24px; }
+        QScrollBar::handle:vertical:hover { background: %42; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; border: 0; }
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
+        QScrollBar:horizontal { background: %40; height: 8px; border-radius: 4px; margin: 0; }
+        QScrollBar::handle:horizontal { background: %41; border-radius: 4px; min-width: 24px; }
+        QScrollBar::handle:horizontal:hover { background: %42; }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; border: 0; }
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
         QTableWidget#m_solutionTable {
-            background: %68; border: 1px solid %69;
-            border-radius: 4px; gridline-color: %70;
-            font-family: monospace; font-size: 12px;
+            background: %43; border: 1px solid %44;
+            border-radius: 4px; gridline-color: %45;
+            font-family: monospace; font-size: 12px; color: %2;
         }
         QTableWidget#m_solutionTable QHeaderView::section {
-            background: %71; color: %72; border: none;
-            border-bottom: 1px solid %73; padding: 4px;
+            background: %46; color: %47; border: none;
+            border-bottom: 1px solid %44; padding: 4px;
             font-size: 11px; font-weight: bold;
         }
+        QTableWidget#m_solutionTable::item { background: %43; color: %2; }
         QTableWidget#m_solutionTable::item:selected {
-            background: %74; color: %75;
+            background: %48; color: %49;
         }
-        QPushButton#btnTableMode {
-            background: %76; border: 1px solid %77; border-radius: 4px;
-            color: %78; font-size: 13px; padding: 0;
-        }
-        QPushButton#btnTableMode:hover { background: %79; border-color: %80; color: %81; }
         QWidget#topBar {
-            background: %82;
-            border-bottom: 2px solid %83;
+            background: %50;
+            border-bottom: 2px solid %51;
             min-height: 52px;
             max-height: 52px;
         }
@@ -1446,11 +1556,11 @@ void MainWindow::buildStyles() {
             background: transparent;
             padding: 0;
         }
-        QPushButton#btnAbout {
-            background: %84;
-            border: 1px solid %85;
+        QPushButton#btnAbout, QPushButton#btnHamburger {
+            background: %52;
+            border: 1px solid %53;
             border-radius: 15px;
-            color: %86;
+            color: %54;
             font-size: 15px;
             font-weight: bold;
             padding: 0;
@@ -1459,112 +1569,86 @@ void MainWindow::buildStyles() {
             min-height: 30px;
             max-height: 30px;
         }
-        QPushButton#btnAbout:hover {
-            background: %87;
-            border-color: %88;
-            color: %89;
+        QPushButton#btnAbout:hover, QPushButton#btnHamburger:hover {
+            background: %55;
+            border-color: %56;
+            color: %57;
         }
         QToolTip {
-            background: %90;
-            color: %91;
-            border: 1px solid %92;
+            background: %58;
+            color: %59;
+            border: 1px solid %58;
             border-radius: 5px;
             padding: 6px 10px;
             font-size: 12px;
             opacity: 230;
         }
     )")
-        .arg(Theme::PRIMARY_BG)
-        .arg(Theme::TEXT_PRIMARY)
-        .arg(Theme::BORDER_GROUP)
-        .arg(Theme::TEXT_SECONDARY)
-        .arg(Theme::CHECKBOX_BORDER)
-        .arg(Theme::CHECKBOX_BG)
-        .arg(Theme::CHECKBOX_CHECK_BLUE)
-        .arg(Theme::CHECKBOX_CHECK_ORANGE)
-        .arg(Theme::BORDER_DARK)
-        .arg(Theme::DISABLED_BG)
-        .arg(Theme::TERTIARY_BG)
-        .arg(Theme::BORDER_LIGHT)
-        .arg(Theme::TEXT_DISABLED)
-        .arg(Theme::DISABLED_BG)
-        .arg(Theme::BORDER_DARK)
-        .arg(Theme::TEXT_CYAN)
-        .arg(Theme::TERTIARY_BG)
-        .arg(Theme::BORDER_LIGHT)
-        .arg(Theme::TEXT_DISABLED)
-        .arg(Theme::DISABLED_BG)
-        .arg(Theme::BORDER_DARK)
-        .arg(Theme::SECONDARY_BG)
-        .arg(Theme::BORDER_GROUP)
-        .arg(Theme::TEXT_TERMINAL)
-        .arg(Theme::BUTTON_BG)
-        .arg(Theme::BUTTON_BORDER)
-        .arg(Theme::BUTTON_TEXT)
-        .arg(Theme::HOVER_BG)
-        .arg(Theme::BUTTON_BORDER)
-        .arg(Theme::PRESSED_BG)
-        .arg(Theme::BUTTON_SOLVE_BG)
-        .arg(Theme::BUTTON_SOLVE_BORDER)
-        .arg(Theme::BUTTON_SOLVE_HOVER)
-        .arg(Theme::BUTTON_BG)
-        .arg(Theme::BUTTON_BORDER)
-        .arg(Theme::BUTTON_SECONDARY_TEXT)
-        .arg(Theme::HOVER_BG)
-        .arg(Theme::BUTTON_TEXT)
-        .arg(Theme::BUTTON_RESET_BG)
-        .arg(Theme::BUTTON_RESET_BORDER)
-        .arg(Theme::BUTTON_RESET_HOVER)
-        .arg(Theme::BUTTON_BG)
-        .arg(Theme::BUTTON_BORDER)
-        .arg(Theme::BUTTON_SECONDARY_TEXT)
-        .arg(Theme::HOVER_BG)
-        .arg(Theme::BUTTON_BORDER)
-        .arg(Theme::BUTTON_TEXT)
-        .arg(Theme::BUTTON_BG)
-        .arg(Theme::BUTTON_BORDER)
-        .arg(Theme::BUTTON_TEXT)
-        .arg(Theme::HOVER_BG)
-        .arg(Theme::BUTTON_SECONDARY_TEXT)
-        .arg(Theme::BUTTON_UTIL_BG)
-        .arg(Theme::BUTTON_UTIL_BORDER)
-        .arg(Theme::BUTTON_UTIL_TEXT)
-        .arg(Theme::BUTTON_UTIL_HOVER_BG)
-        .arg(Theme::BUTTON_UTIL_HOVER_BORDER)
-        .arg(Theme::BUTTON_UTIL_HOVER_TEXT)
-        .arg(Theme::PROGRESS_BG)
-        .arg(Theme::PROGRESS_FILL)
-        .arg(Theme::STATUS_TEXT)
-        .arg(Theme::TEXT_ERROR)
-        .arg(Theme::TEXT_ERROR)
-        .arg(Theme::SCROLLBAR_BG)
-        .arg(Theme::SCROLLBAR_HANDLE)
-        .arg(Theme::SCROLLBAR_HOVER)
-        .arg(Theme::TABLE_BG)
-        .arg(Theme::TABLE_BORDER)
-        .arg(Theme::TABLE_BG)
-        .arg(Theme::TABLE_HEADER_BG)
-        .arg(Theme::TABLE_HEADER_TEXT)
-        .arg(Theme::TABLE_BORDER)
-        .arg(Theme::TABLE_SELECTED_BG)
-        .arg(Theme::TABLE_SELECTED_TEXT)
-        .arg(Theme::BUTTON_UTIL_BG)
-        .arg(Theme::BUTTON_UTIL_BORDER)
-        .arg(Theme::BUTTON_UTIL_TEXT)
-        .arg(Theme::BUTTON_UTIL_HOVER_BG)
-        .arg(Theme::BUTTON_UTIL_HOVER_BORDER)
-        .arg(Theme::BUTTON_UTIL_HOVER_TEXT)
-        .arg(Theme::DARK_BG)
-        .arg(Theme::BORDER_BOTTOM)
-        .arg(Theme::BUTTON_ABOUT_BG)
-        .arg(Theme::BUTTON_ABOUT_BORDER)
-        .arg(Theme::BUTTON_ABOUT_TEXT)
-        .arg(Theme::BUTTON_ABOUT_HOVER_BG)
-        .arg(Theme::BUTTON_ABOUT_HOVER_BORDER)
-        .arg(Theme::BUTTON_ABOUT_HOVER_TEXT)
-        .arg(Theme::TOOLTIP_BG)
-        .arg(Theme::TOOLTIP_TEXT)
-        .arg(Theme::TOOLTIP_BORDER));
+        .arg(PRIMARY_BG)          // %1  main bg
+        .arg(TEXT_PRIMARY)        // %2  main text
+        .arg(BORDER_GROUP)        // %3  group border
+        .arg(TEXT_SECONDARY)      // %4  secondary text
+        .arg(CHECKBOX_BORDER)     // %5
+        .arg(CHECKBOX_BG)         // %6
+        .arg(Theme::CHECKBOX_CHECK_BLUE)  // %7
+        .arg(Theme::CHECKBOX_CHECK_ORANGE)// %8
+        .arg(BORDER_DARK)         // %9
+        .arg(DISABLED_BG)         // %10
+        .arg(TERTIARY_BG)         // %11 input/button bg
+        .arg(BORDER_LIGHT)        // %12 input border
+        .arg(TEXT_DISABLED)       // %13
+        .arg(DISABLED_BG)         // %14
+        .arg(BORDER_DARK)         // %15
+        .arg(TEXT_CYAN)           // %16 command line text
+        .arg(SECONDARY_BG)        // %17 terminal bg
+        .arg(TEXT_TERMINAL)       // %18
+        .arg(BUTTON_BG)           // %19
+        .arg(BUTTON_BORDER)       // %20
+        .arg(BUTTON_TEXT)         // %21
+        .arg(HOVER_BG)            // %22
+        .arg(PRESSED_BG)          // %23
+        .arg(Theme::BUTTON_SOLVE_BG)     // %24
+        .arg(Theme::BUTTON_SOLVE_BORDER) // %25
+        .arg(Theme::BUTTON_SOLVE_HOVER)  // %26
+        .arg(RESET_BG)            // %27
+        .arg(RESET_BORDER)        // %28
+        .arg(RESET_HOVER)         // %29
+        .arg(UTIL_BG)             // %30 floating btns bg
+        .arg(UTIL_BORDER)         // %31
+        .arg(UTIL_TEXT)           // %32
+        .arg(UTIL_HOVER_BG)       // %33
+        .arg(UTIL_HOVER_BORDER)   // %34
+        .arg(UTIL_HOVER_TEXT)     // %35
+        .arg(PROGRESS_BG)         // %36
+        .arg(PROGRESS_FILL)       // %37
+        .arg(TEXT_MUTED)          // %38 status text
+        .arg(TEXT_ERROR)          // %39
+        .arg(SCROLLBAR_BG)        // %40
+        .arg(SCROLLBAR_HANDLE)    // %41
+        .arg(SCROLLBAR_HOVER)     // %42
+        .arg(TABLE_BG)            // %43
+        .arg(TABLE_BORDER)        // %44
+        .arg(TABLE_BORDER)        // %45 gridline
+        .arg(TABLE_HEADER_BG)     // %46
+        .arg(TABLE_HEADER_TEXT)   // %47
+        .arg(TABLE_SEL_BG)        // %48
+        .arg(TABLE_SEL_TEXT)      // %49
+        .arg(DARK_BG)             // %50 topbar bg
+        .arg(BORDER_BOTTOM)       // %51
+        .arg(ABOUT_BG)            // %52
+        .arg(ABOUT_BORDER)        // %53
+        .arg(ABOUT_TEXT)          // %54
+        .arg(ABOUT_HOVER_BG)      // %55
+        .arg(ABOUT_HOVER_BORDER)  // %56
+        .arg(ABOUT_HOVER_TEXT)    // %57
+        .arg(TOOLTIP_BG)          // %58
+        .arg(TOOLTIP_TEXT)        // %59
+        .arg(INPUT_TEXT)          // %60 input text color
+        .arg(SPINBOX_ARROW_BG)    // %61 spinbox button bg
+        .arg(SPINBOX_ARROW_HOVER) // %62 spinbox button hover
+        .arg(UNDO_REDO_DISABLED_BG)    // %63
+        .arg(UNDO_REDO_DISABLED_BORDER)// %64
+        .arg(UNDO_REDO_DISABLED_TEXT); // %65
 }
 
 // -------------------------------------------------------
@@ -1673,7 +1757,8 @@ void MainWindow::updateCommand() {
     QStringList args = buildArgList();
     txtCommand->setText("sq1opt " + args.join(" ") + " " + pos);
     lblCommandError->setVisible(false);
-    txtCommand->setStyleSheet(QString("QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }").arg(Theme::TEXT_CYAN));
+    QString cyan = m_lightTheme ? Theme::LIGHT_TEXT_CYAN : Theme::TEXT_CYAN;
+    txtCommand->setStyleSheet(QString("QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }").arg(cyan));
 }
 
 // -------------------------------------------------------
@@ -2297,31 +2382,33 @@ void MainWindow::showAboutModal() {
     overlay->show();
     overlay->raise();
 
+    bool L = m_lightTheme;
+    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG  : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
     QWidget* card = new QWidget(overlay);
     card->setObjectName("aboutCard");
     card->setFixedWidth(480);
-    card->setStyleSheet(
-        "QWidget#aboutCard {"
-        "  background:#1e1e34;"
-        "  border:1px solid #3a3a5e;"
-        "  border-radius:10px;"
-        "}"
-    );
+    card->setStyleSheet(QString(
+        "QWidget#aboutCard { background:%1; border:1px solid %2; border-radius:10px; }"
+    ).arg(modalBg, modalBorder));
 
     QVBoxLayout* lay = new QVBoxLayout(card);
     lay->setContentsMargins(28, 24, 28, 24);
     lay->setSpacing(10);
 
+    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY   : "#e0e0e0";
+    QString textBody    = L ? Theme::LIGHT_TEXT_SECONDARY : "#b0b0c8";
     QLabel* title = new QLabel("About Solve-A-Squan");
-    title->setStyleSheet("font-size:16px;font-weight:bold;color:#e0e0e0;background:transparent;");
+    title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
 
     QLabel* body = new QLabel();
     body->setWordWrap(true);
     body->setOpenExternalLinks(true);
     body->setTextFormat(Qt::RichText);
     body->setStyleSheet("background:transparent;");
-    body->setText(
-        "<span style='color:#b0b0c8;font-size:12px;line-height:1.7;'>"
+    body->setText(QString(
+        "<span style='color:%1;font-size:12px;line-height:1.7;'>").arg(textBody) +
+        QString(
         "This program stemmed from the optimal Square-1 solver by "
         "<a href='https://www.jaapsch.net/puzzles/' style='color:#7abfe8;'>Jaap Scherphuis</a>."
         "<br><br>"
@@ -2342,7 +2429,7 @@ void MainWindow::showAboutModal() {
         " and "
         "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:#7abfe8;'>Matt Mao</a>."
         "</span>"
-    );
+    ));
 
     lay->addWidget(title);
     lay->addWidget(body);
@@ -2384,6 +2471,343 @@ void MainWindow::showAboutModal() {
     Filter* f = new Filter(overlay, card, centerCard);
     central->installEventFilter(f);   // watches parent for resize
     overlay->installEventFilter(f);   // watches overlay for click-outside
+}
+
+void MainWindow::applyTheme() {
+    setStyleSheet(buildStyleSheet());
+    // Repaint the cube widget with the right canvas bg
+    QString canvasBg = m_lightTheme ? Theme::LIGHT_CANVAS_BG : Theme::PRIMARY_BG;
+    cubeWidget->setStyleSheet(QString("background: %1;").arg(canvasBg));
+    // Update command line color
+    QString cyan = m_lightTheme ? Theme::LIGHT_TEXT_CYAN : Theme::TEXT_CYAN;
+    txtCommand->setStyleSheet(QString(
+        "QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px;"
+        " border-right: none; border-radius: 0; border-top-left-radius: 4px;"
+        " border-bottom-left-radius: 4px; }").arg(cyan));
+}
+
+void MainWindow::openSidebar() {
+    if (m_sidebarOpen) return;
+    m_sidebarOpen = true;
+
+    QWidget* central = this->centralWidget();
+
+    m_sidebarOverlay = new QWidget(central);
+    m_sidebarOverlay->setGeometry(central->rect());
+    m_sidebarOverlay->setStyleSheet("background: rgba(0,0,0,120);");
+    m_sidebarOverlay->show();
+    m_sidebarOverlay->raise();
+
+    bool L = m_lightTheme;
+    QString sidebarBg     = L ? Theme::LIGHT_SIDEBAR_BG     : Theme::SIDEBAR_BG;
+    QString sidebarBorder = L ? Theme::LIGHT_SIDEBAR_BORDER  : Theme::SIDEBAR_BORDER;
+    QString textPrimary   = L ? Theme::LIGHT_TEXT_PRIMARY    : Theme::TEXT_PRIMARY;
+    QString textMuted     = L ? Theme::LIGHT_TEXT_MUTED      : Theme::TEXT_MUTED;
+    QString hoverBg       = L ? Theme::LIGHT_HOVER_BG        : Theme::HOVER_BG;
+    QString btnBg         = L ? Theme::LIGHT_BUTTON_BG       : Theme::BUTTON_BG;
+    QString btnBorder     = L ? Theme::LIGHT_BUTTON_BORDER   : Theme::BUTTON_BORDER;
+
+    m_sidebar = new QWidget(m_sidebarOverlay);
+    m_sidebar->setFixedWidth(220);
+    m_sidebar->setStyleSheet(QString(
+        "QWidget { background: %1; border-right: 2px solid %2; }"
+    ).arg(sidebarBg, sidebarBorder));
+    m_sidebar->setGeometry(-220, 0, 220, central->height());
+
+    QVBoxLayout* slay = new QVBoxLayout(m_sidebar);
+    slay->setContentsMargins(0, 0, 0, 0);
+    slay->setSpacing(0);
+
+    // Header
+    QWidget* sHeader = new QWidget();
+    sHeader->setFixedHeight(52);
+    sHeader->setStyleSheet(QString("QWidget { background: %1; border-bottom: 1px solid %2; border-right: none; }").arg(
+        L ? Theme::LIGHT_DARK_BG : Theme::DARK_BG, sidebarBorder));
+    QHBoxLayout* shLay = new QHBoxLayout(sHeader);
+    shLay->setContentsMargins(16, 0, 12, 0);
+    QLabel* sTitle = new QLabel("Menu");
+    sTitle->setStyleSheet(QString("font-size:15px;font-weight:bold;color:%1;background:transparent;border:none;").arg(textPrimary));
+    QPushButton* closeBtn = new QPushButton("✕");
+    closeBtn->setFixedSize(26, 26);
+    closeBtn->setStyleSheet(QString(
+        "QPushButton { background:%1; border:1px solid %2; border-radius:13px; color:%3; font-size:12px; padding:0; }"
+        "QPushButton:hover { background:%4; }").arg(btnBg, btnBorder, textMuted, hoverBg));
+    connect(closeBtn, &QPushButton::clicked, this, &MainWindow::closeSidebar);
+    shLay->addWidget(sTitle);
+    shLay->addStretch();
+    shLay->addWidget(closeBtn);
+    slay->addWidget(sHeader);
+
+    // Menu items
+    auto makeItem = [&](const QString& icon, const QString& label) -> QPushButton* {
+        QPushButton* btn = new QPushButton(QString("  %1  %2").arg(icon, label));
+        btn->setFixedHeight(48);
+        btn->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: none; border-bottom: 1px solid %1;"
+            " color: %2; font-size: 13px; text-align: left; padding-left: 8px; border-radius: 0; }"
+            "QPushButton:hover { background: %3; }"
+            "QPushButton:pressed { background: %4; }"
+        ).arg(sidebarBorder, textPrimary, hoverBg, btnBg));
+        return btn;
+    };
+
+    QPushButton* itemSettings   = makeItem("⚙", "Settings");
+    QPushButton* itemHowToUse   = makeItem("?", "How to Use");
+    QPushButton* itemAbout      = makeItem("ℹ", "About");
+
+    connect(itemSettings, &QPushButton::clicked, this, [this]{ closeSidebar(); showSettingsModal(); });
+    connect(itemHowToUse, &QPushButton::clicked, this, [this]{ closeSidebar(); showHowToUseModal(); });
+    connect(itemAbout,    &QPushButton::clicked, this, [this]{ closeSidebar(); showAboutModal(); });
+
+    slay->addWidget(itemSettings);
+    slay->addWidget(itemHowToUse);
+    slay->addWidget(itemAbout);
+    slay->addStretch();
+
+    m_sidebar->show();
+    m_sidebar->raise();
+
+    // Animate slide-in
+    QPropertyAnimation* anim = new QPropertyAnimation(m_sidebar, "geometry");
+    anim->setDuration(180);
+    anim->setStartValue(QRect(-220, 0, 220, central->height()));
+    anim->setEndValue(QRect(0, 0, 220, central->height()));
+    anim->setEasingCurve(QEasingCurve::OutCubic);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+
+    // Close on overlay click
+    struct SidebarFilter : public QObject {
+        MainWindow* mw; QWidget* overlay; QWidget* sidebar;
+        SidebarFilter(MainWindow* m, QWidget* o, QWidget* s)
+            : QObject(o), mw(m), overlay(o), sidebar(s) {}
+        bool eventFilter(QObject* watched, QEvent* e) override {
+            if (e->type() == QEvent::MouseButtonPress && watched == overlay) {
+                QMouseEvent* me = static_cast<QMouseEvent*>(e);
+                if (!sidebar->geometry().contains(me->pos()))
+                    mw->closeSidebar();
+                return true;
+            }
+            if (e->type() == QEvent::Resize && watched == overlay->parentWidget()) {
+                overlay->setGeometry(overlay->parentWidget()->rect());
+                sidebar->setFixedHeight(overlay->height());
+                return false;
+            }
+            return false;
+        }
+    };
+    SidebarFilter* sf = new SidebarFilter(this, m_sidebarOverlay, m_sidebar);
+    central->installEventFilter(sf);
+    m_sidebarOverlay->installEventFilter(sf);
+}
+
+void MainWindow::closeSidebar() {
+    if (!m_sidebarOpen || !m_sidebar) return;
+    QWidget* sb = m_sidebar;
+    QWidget* ov = m_sidebarOverlay;
+    QPropertyAnimation* anim = new QPropertyAnimation(sb, "geometry");
+    anim->setDuration(150);
+    anim->setStartValue(sb->geometry());
+    anim->setEndValue(QRect(-220, 0, 220, sb->height()));
+    anim->setEasingCurve(QEasingCurve::InCubic);
+    connect(anim, &QPropertyAnimation::finished, this, [ov, this]{
+        if (ov) ov->deleteLater();
+        m_sidebar = nullptr;
+        m_sidebarOverlay = nullptr;
+        m_sidebarOpen = false;
+    });
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void MainWindow::showSettingsModal() {
+    QWidget* central = this->centralWidget();
+    bool L = m_lightTheme;
+    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
+    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY  : Theme::TEXT_PRIMARY;
+    QString textMuted   = L ? Theme::LIGHT_TEXT_MUTED    : Theme::TEXT_MUTED;
+
+    QWidget* overlay = new QWidget(central);
+    overlay->setGeometry(central->rect());
+    overlay->setStyleSheet("background: rgba(0,0,0,160);");
+    overlay->show(); overlay->raise();
+
+    QWidget* card = new QWidget(overlay);
+    card->setObjectName("settingsCard");
+    card->setFixedWidth(380);
+    card->setStyleSheet(QString(
+        "QWidget#settingsCard { background:%1; border:1px solid %2; border-radius:10px; }"
+    ).arg(modalBg, modalBorder));
+
+    QVBoxLayout* lay = new QVBoxLayout(card);
+    lay->setContentsMargins(28, 24, 28, 24);
+    lay->setSpacing(14);
+
+    QLabel* title = new QLabel("Settings");
+    title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
+    lay->addWidget(title);
+
+    // Theme toggle
+    QCheckBox* chkLight = new QCheckBox("Light theme");
+    chkLight->setChecked(m_lightTheme);
+    chkLight->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
+    connect(chkLight, &QCheckBox::toggled, this, [this, overlay](bool checked){
+        m_lightTheme = checked;
+        applyTheme();
+        // Rebuild overlay style so it doesn't look stale
+        overlay->setStyleSheet("background: rgba(0,0,0,160);");
+    });
+    lay->addWidget(chkLight);
+
+    QLabel* hint = new QLabel("More settings coming soon.");
+    hint->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(textMuted));
+    lay->addWidget(hint);
+
+    card->show(); card->adjustSize();
+
+    auto center = [overlay, card](){
+        overlay->setGeometry(overlay->parentWidget()->rect());
+        card->move((overlay->width()-card->width())/2, (overlay->height()-card->height())/2);
+    };
+    center(); card->raise();
+
+    struct F : public QObject {
+        QWidget* overlay; QWidget* card; std::function<void()> fn;
+        F(QWidget* o, QWidget* c, std::function<void()> f): QObject(o),overlay(o),card(c),fn(f){}
+        bool eventFilter(QObject* w, QEvent* e) override {
+            if (e->type()==QEvent::Resize && w==overlay->parentWidget()){ fn(); return false; }
+            if (e->type()==QEvent::MouseButtonPress && w==overlay){
+                if (!card->geometry().contains(static_cast<QMouseEvent*>(e)->pos()))
+                    overlay->deleteLater();
+                return true;
+            }
+            return false;
+        }
+    };
+    F* f = new F(overlay, card, center);
+    central->installEventFilter(f);
+    overlay->installEventFilter(f);
+}
+
+void MainWindow::showHowToUseModal() {
+    QWidget* central = this->centralWidget();
+    bool L = m_lightTheme;
+    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
+    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY  : Theme::TEXT_PRIMARY;
+    QString textBody    = L ? Theme::LIGHT_TEXT_SECONDARY: "#b0b0c8";
+    QString textCyan    = L ? Theme::LIGHT_TEXT_CYAN     : "#7abfe8";
+    QString scrollBg    = L ? Theme::LIGHT_SCROLLBAR_BG  : Theme::SCROLLBAR_BG;
+    QString scrollHandle= L ? Theme::LIGHT_SCROLLBAR_HANDLE : Theme::SCROLLBAR_HANDLE;
+
+    QWidget* overlay = new QWidget(central);
+    overlay->setGeometry(central->rect());
+    overlay->setStyleSheet("background: rgba(0,0,0,160);");
+    overlay->show(); overlay->raise();
+
+    QWidget* card = new QWidget(overlay);
+    card->setObjectName("howToCard");
+    int cardW = qMin(560, central->width() - 60);
+    int cardH = qMin(520, central->height() - 80);
+    card->setFixedSize(cardW, cardH);
+    card->setStyleSheet(QString(
+        "QWidget#howToCard { background:%1; border:1px solid %2; border-radius:10px; }"
+    ).arg(modalBg, modalBorder));
+
+    QVBoxLayout* lay = new QVBoxLayout(card);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(0);
+
+    // Title bar
+    QWidget* titleBar = new QWidget();
+    titleBar->setFixedHeight(48);
+    titleBar->setStyleSheet(QString(
+        "QWidget { background: %1; border-bottom: 1px solid %2;"
+        " border-top-left-radius: 10px; border-top-right-radius: 10px; border-bottom-left-radius:0; border-bottom-right-radius:0; }"
+    ).arg(modalBg, modalBorder));
+    QHBoxLayout* tbLay = new QHBoxLayout(titleBar);
+    tbLay->setContentsMargins(20, 0, 16, 0);
+    QLabel* titleLbl = new QLabel("How to Use");
+    titleLbl->setStyleSheet(QString("font-size:15px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
+    tbLay->addWidget(titleLbl);
+    tbLay->addStretch();
+    lay->addWidget(titleBar);
+
+    // Scrollable content
+    QScrollArea* sa = new QScrollArea();
+    sa->setWidgetResizable(true);
+    sa->setFrameShape(QFrame::NoFrame);
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sa->setStyleSheet(QString(
+        "QScrollArea { background: transparent; }"
+        "QScrollBar:vertical { background: %1; width: 6px; border-radius: 3px; }"
+        "QScrollBar::handle:vertical { background: %2; border-radius: 3px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; border:0; }"
+    ).arg(scrollBg, scrollHandle));
+
+    QLabel* body = new QLabel();
+    body->setWordWrap(true);
+    body->setOpenExternalLinks(false);
+    body->setTextFormat(Qt::RichText);
+    body->setContentsMargins(20, 16, 20, 16);
+    body->setStyleSheet(QString("background: transparent; color: %1; font-size: 12px; line-height: 1.7;").arg(textBody));
+    body->setText(QString(
+        "<b style='color:%1;font-size:13px;'>Cube Controls</b><br>"
+        "<b style='color:%1;'>Keyboard shortcuts:</b><br>"
+        "• <b style='color:%2;'>J</b> = U (top clockwise) &nbsp; <b style='color:%2;'>F</b> = U' (top counter-clockwise)<br>"
+        "• <b style='color:%2;'>S</b> = D (bottom clockwise) &nbsp; <b style='color:%2;'>L</b> = D' (bottom counter-clockwise)<br>"
+        "• <b style='color:%2;'>I</b> or <b style='color:%2;'>K</b> = Slice<br>"
+        "• <b style='color:%2;'>H</b> = UU &nbsp; <b style='color:%2;'>G</b> = U'U' &nbsp; <b style='color:%2;'>W</b> = DD &nbsp; <b style='color:%2;'>O</b> = D'D'<br>"
+        "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset<br><br>"
+        "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
+        "Type a move sequence in <b style='color:%2;'>(x,y)/</b> format and click <b>Apply</b>.<br>"
+        "Toggle the mode button to switch between <b>Scram</b> (applies as-is) and <b>Alg</b> (inverts before applying).<br>"
+        "Karnotation names like <b style='color:%2;'>U</b>, <b style='color:%2;'>E</b>, <b style='color:%2;'>bjj</b> etc. are supported.<br><br>"
+        "<b style='color:%1;font-size:13px;'>Options</b><br>"
+        "• <b>Slice metric</b>: count only slices as moves (instead of layer turns).<br>"
+        "• <b>All optimal</b>: find all solutions at the optimal length, not just the first.<br>"
+        "• <b>+suboptimal</b>: also find solutions up to N moves longer than optimal.<br>"
+        "• <b>Specific depths</b>: search only these move counts (comma-separated).<br>"
+        "• <b>Generator alg</b>: output sets up the case; otherwise it solves it.<br>"
+        "• <b>Stay in cubeshape</b>: restricts to algs that stay in cubeshape throughout.<br>"
+        "• <b>Karnotation output</b>: display solutions using karnotation names.<br>"
+        "• <b>Max X / Y / Total</b>: limit how large layer turns can be.<br><br>"
+        "<b style='color:%1;font-size:13px;'>Output</b><br>"
+        "Solutions appear in the terminal. Use <b>⊞</b> to switch to table view.<br>"
+        "Use <b>⤢</b> to expand the terminal to full screen.<br>"
+        "Right-click a row in table view to copy the algorithm or the whole row.<br>"
+        "If <b>Stay in cubeshape</b> was active, you can enable <b>Roughly rank algs</b> to sort by ergonomics.<br>"
+    ).arg(textPrimary, textCyan));
+
+    sa->setWidget(body);
+    lay->addWidget(sa, 1);
+
+    card->show();
+
+    auto center = [overlay, card, central](){
+        overlay->setGeometry(overlay->parentWidget()->rect());
+        int cw = qMin(560, central->width()-60);
+        int ch = qMin(520, central->height()-80);
+        card->setFixedSize(cw, ch);
+        card->move((overlay->width()-card->width())/2, (overlay->height()-card->height())/2);
+    };
+    center(); card->raise();
+
+    struct F : public QObject {
+        QWidget* overlay; QWidget* card; std::function<void()> fn;
+        F(QWidget* o, QWidget* c, std::function<void()> f): QObject(o),overlay(o),card(c),fn(f){}
+        bool eventFilter(QObject* w, QEvent* e) override {
+            if (e->type()==QEvent::Resize && w==overlay->parentWidget()){ fn(); return false; }
+            if (e->type()==QEvent::MouseButtonPress && w==overlay){
+                if (!card->geometry().contains(static_cast<QMouseEvent*>(e)->pos()))
+                    overlay->deleteLater();
+                return true;
+            }
+            return false;
+        }
+    };
+    F* f = new F(overlay, card, center);
+    central->installEventFilter(f);
+    overlay->installEventFilter(f);
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
