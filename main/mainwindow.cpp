@@ -2002,17 +2002,27 @@ void MainWindow::rebuildTable() {
 
     bool useKarn = chkKarnotation->isChecked(); // showErgo already declared above
     auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
-    // Build a map from stripped alg -> ergo score
+    // Build a map from stripped original alg -> (ergo score, display alg with slice indicator)
     QMap<QString, double> ergoMap;
-    for (auto& [line, score] : rated)
-        ergoMap[stripBracket(line)] = score;
+    QMap<QString, QString> algDisplayMap;
+    for (auto& [line, score] : rated) {
+        QString displayAlg = stripBracket(line);
+        // Key by the original alg (without slice indicator) for lookup
+        // The indicator replaces the leading / or \ so strip it to get the base key
+        QString baseAlg = displayAlg;
+        if (!baseAlg.isEmpty() && (baseAlg[0] == '\\'))
+            baseAlg[0] = '/';
+        ergoMap[baseAlg] = score;
+        algDisplayMap[baseAlg] = displayAlg;
+    }
 
     for (const QString& line : std::as_const(m_solutionLines)) {
         int mv, sl;
         parseCounts(line, mv, sl);
-        QString alg = stripBracket(line);
-        double eg = ergoMap.value(alg, 0.0);
-        rows.append({alg, mv, sl, eg});
+        QString baseAlg = stripBracket(line);
+        double eg = ergoMap.value(baseAlg, 0.0);
+        QString displayAlg = algDisplayMap.value(baseAlg, baseAlg);
+        rows.append({displayAlg, mv, sl, eg});
     }
 
     if (ergo && showErgo) {
@@ -2151,10 +2161,10 @@ void MainWindow::onRankErgoToggled(bool checked) {
 // a context-sensitive tooltip explaining why it's grayed out.
 // -------------------------------------------------------
 void MainWindow::updateRankErgoState() {
-    const bool cubeshapeActive = chkCubeshape->isChecked();
+    const bool cubeshapeActive = m_solutionLines.isEmpty() ? chkCubeshape->isChecked() : m_cubeshapeWasActive;
     const bool hasSolutions    = !m_solutionLines.isEmpty();
     const bool solving         = worker && worker->isRunning();
-const bool canRank         = cubeshapeActive && hasSolutions && !solving;
+    const bool canRank         = cubeshapeActive && hasSolutions && !solving;
 
     chkRankErgo->setEnabled(canRank);
 
