@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "sq1widget.h"
 #include "karnotation.h"
+#include "theme.h"
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -629,8 +630,9 @@ void MainWindow::buildUI() {
     topBarLayout->setContentsMargins(16, 0, 16, 0);
 
     QLabel* logoLabel = new QLabel();
-    logoLabel->setText("<span style='font-size:17px;font-weight:bold;color:#e0e0e0;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
-                       "<br><span style='font-size:10px;color:#888;'>by Abid and Matt</span>");
+    logoLabel->setText(QString("<span style='font-size:17px;font-weight:bold;color:%1;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
+                       "<br><span style='font-size:10px;color:%2;'>by Abid and Matt</span>")
+        .arg(Theme::TEXT_PRIMARY, Theme::TEXT_MUTED));
     logoLabel->setObjectName("logoLabel");
 
     QPushButton* btnAbout = new QPushButton("?");
@@ -660,10 +662,22 @@ void MainWindow::buildUI() {
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
     {
+        QWidget* cubeWrapper = new QWidget();
+        cubeWrapper->setFixedSize(cubeWidget->width(), cubeWidget->height());
+        cubeWidget->setParent(cubeWrapper);
+        cubeWidget->move(0, 0);
+
+        btnReset = new QPushButton("↺", cubeWrapper);
+        btnReset->setObjectName("btnReset");
+        btnReset->setFixedSize(34, 34);
+        btnReset->setToolTip("Reset  [Esc]");
+        btnReset->move(cubeWidget->width() - 34 - 6, cubeWidget->height() - 34 - 6);
+        btnReset->raise();
+
         QHBoxLayout* centerRow = new QHBoxLayout();
         centerRow->setContentsMargins(0,0,0,0);
         centerRow->addStretch();
-        centerRow->addWidget(cubeWidget);
+        centerRow->addWidget(cubeWrapper);
         centerRow->addStretch();
         leftCol->addLayout(centerRow);
     }
@@ -678,9 +692,8 @@ void MainWindow::buildUI() {
     QPushButton* btnD     = new QPushButton("D");
     QPushButton* btnDP    = new QPushButton("D'");
     QPushButton* btnSlice = new QPushButton();
-    btnSlice->setText("Slice\n[I/K]");
-    btnSlice->setFixedWidth(70);
-    btnSlice->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    btnSlice->setText("Slice [I/K]");
+    btnSlice->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     moveGrid->addWidget(btnUP,    0, 0);
     moveGrid->addWidget(btnSlice, 0, 1, 2, 1); // rowspan=2
@@ -689,27 +702,26 @@ void MainWindow::buildUI() {
     moveGrid->addWidget(btnDP,    1, 2);
 
     moveGrid->setColumnStretch(0, 1);
-    moveGrid->setColumnStretch(1, 0);
+    moveGrid->setColumnStretch(1, 1);
     moveGrid->setColumnStretch(2, 1);
+    moveGrid->setRowStretch(0, 1);
+    moveGrid->setRowStretch(1, 1);
 
     leftCol->addLayout(moveGrid);
 
-    // Row 3: Undo | Reset | Redo  (all on same line)
+    // Row 3: Undo | Redo
     QHBoxLayout* undoResetRedoRow = new QHBoxLayout();
     undoResetRedoRow->setSpacing(4);
-    btnUndo = new QPushButton("⟲");
+    btnUndo = new QPushButton("Undo (Z)");
     btnUndo->setObjectName("btnUndo");
     btnUndo->setEnabled(false);
     btnUndo->setToolTip("Undo  [Z]");
-    btnReset = new QPushButton("Reset  [Esc]");
-    btnReset->setObjectName("btnReset");
-    btnRedo = new QPushButton("⟳");
+    btnRedo = new QPushButton("Redo (Y)");
     btnRedo->setObjectName("btnRedo");
     btnRedo->setEnabled(false);
     btnRedo->setToolTip("Redo  [Y]");
     undoResetRedoRow->addWidget(btnUndo, 1);
     undoResetRedoRow->addWidget(btnRedo, 1);
-    undoResetRedoRow->addWidget(btnReset, 1);
     leftCol->addLayout(undoResetRedoRow);
 
     QGroupBox* grpScramble = new QGroupBox("Scramble / Alg input");
@@ -1341,88 +1353,92 @@ void MainWindow::updateConstraints() {
 // buildStyles
 // -------------------------------------------------------
 void MainWindow::buildStyles() {
-    setStyleSheet(R"(
-        QMainWindow, QWidget { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', Arial; font-size: 13px; }
-        QGroupBox { border: 1px solid #444; border-radius: 6px; margin-top: 8px; padding-top: 8px; color: #aaa; }
+    setStyleSheet(QString(R"(
+        QMainWindow, QWidget { background: %1; color: %2; font-family: 'Segoe UI', Arial; font-size: 13px; }
+        QGroupBox { border: 1px solid %3; border-radius: 6px; margin-top: 8px; padding-top: 8px; color: %4; }
         QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
         QCheckBox { spacing: 6px; }
-        QCheckBox::indicator { width:14px; height:14px; border-radius:3px; border:1px solid #666; background:#2a2a3e; }
-        QCheckBox::indicator:checked { background: #4a90d9; border-color: #4a90d9; }
-        QCheckBox#chkRankErgo::indicator:checked { background: #d97a4a; border-color: #d97a4a; }
+        QCheckBox::indicator { width:14px; height:14px; border-radius:3px; border:1px solid %5; background:%6; }
+        QCheckBox::indicator:checked { background: %7; border-color: %7; }
+        QCheckBox#chkRankErgo::indicator:checked { background: %8; border-color: %8; }
         QCheckBox:disabled { color: #4a4a5a; }
-        QCheckBox::indicator:disabled { border-color: #3a3a4e; background: #1e1e30; }
-        QLineEdit { background: #2a2a3e; border: 1px solid #555; border-radius: 4px; padding: 3px 6px; color: #fff; }
-        QLineEdit:disabled { color: #555; background: #1e1e30; border-color: #3a3a4e; }
-        QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; border-right: none; }
-        QSpinBox { background: #2a2a3e; border: 1px solid #555; border-radius: 4px;
+        QCheckBox::indicator:disabled { border-color: %9; background: %10; }
+        QLineEdit { background: %11; border: 1px solid %12; border-radius: 4px; padding: 3px 6px; color: #fff; }
+        QLineEdit:disabled { color: %13; background: %14; border-color: %15; }
+        QLineEdit#txtCommand { font-family: monospace; color: %16; font-size: 12px; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; border-right: none; }
+        QSpinBox { background: %17; border: 1px solid %18; border-radius: 4px;
                    padding: 2px 8px 2px 4px; color: #fff; }
-        QSpinBox:disabled { color: #555; background: #1e1e30; border-color: #3a3a4e; }
+        QSpinBox:disabled { color: %19; background: %20; border-color: %21; }
         QSpinBox::up-button, QSpinBox::down-button { width: 0; height: 0; border: 0; }
         QSpinBox::up-arrow,  QSpinBox::down-arrow  { width: 0; height: 0; image: none; }
-        QTextEdit#txtOutput { background: #0d1117; border: 1px solid #444; border-radius: 4px;
-                              font-family: monospace; font-size: 12px; color: #7ec8e3; }
-        QPushButton { background: #2a2a3e; border: 1px solid #555; border-radius: 5px; padding: 5px 12px; color: #ddd; }
-        QPushButton:hover { background: #3a3a5e; border-color: #777; }
-        QPushButton:pressed { background: #1a1a2e; }
-        QPushButton#btnSolve { background: #1a6b3c; border-color: #2db570; color: #fff; font-size: 13px; font-weight: bold; }
-        QPushButton#btnSolve:hover { background: #227a47; }
+        QTextEdit#txtOutput { background: %22; border: 1px solid %23; border-radius: 4px;
+                              font-family: monospace; font-size: 12px; color: %24; }
+        QPushButton { background: %25; border: 1px solid %26; border-radius: 5px; padding: 5px 12px; color: %27; }
+        QPushButton:hover { background: %28; border-color: %29; }
+        QPushButton:pressed { background: %30; }
+        QPushButton#btnSolve { background: %31; border-color: %32; color: #fff; font-size: 13px; font-weight: bold; }
+        QPushButton#btnSolve:hover { background: %33; }
         QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
-        QPushButton#btnCopy { background: #2a2a3e; border: 1px solid #555; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: #aaa; font-size: 14px; padding: 0; margin-right: 5px;}
-        QPushButton#btnCopy:hover { background: #3a3a5e; color: #ddd; }
-        QPushButton#btnReset { background: #6b1a1a; border-color: #b52d2d; color: #fdd; }
-        QPushButton#btnUndo, QPushButton#btnRedo { background: #2a2a3e; border-color: #555; color: #aaa; }
+        QPushButton#btnCopy { background: %34; border: 1px solid %35; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: %36; font-size: 14px; padding: 0; margin-right: 5px;}
+        QPushButton#btnCopy:hover { background: %37; color: %38; }
+        QPushButton#btnReset {
+            background: %39; border: 1px solid %40; border-radius: 17px;
+            color: #bbb; font-size: 18px; padding: 0;
+        }
+        QPushButton#btnReset:hover { background: %41; border-color: #888; color: #fff; }
+        QPushButton#btnUndo, QPushButton#btnRedo { background: %42; border-color: %43; color: %44; }
         QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled { background: #1e1e2a; border-color: #333; color: #444; }
         QPushButton#btnApplyScramble {
-            background: #2a2a3e; border: 1px solid #555;
-            border-radius: 4px; color: #ddd; padding: 4px 8px;
+            background: %45; border: 1px solid %46;
+            border-radius: 4px; color: %47; padding: 4px 8px;
         }
-        QPushButton#btnApplyScramble:hover { background: #3a3a5e; border-color: #777; }
+        QPushButton#btnApplyScramble:hover { background: %48; border-color: %49; }
         QPushButton#btnScrambleMode {
-            background: #2a2a3e; border: 1px solid #555;
+            background: %50; border: 1px solid %51;
             border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
-            border-right: none; color: #aaa; padding: 0 6px; font-size: 11px;
+            border-right: none; color: %52; padding: 0 6px; font-size: 11px;
         }
         QPushButton#btnScrambleMode:checked { color: #fff; background: #333350; }
-        QPushButton#btnScrambleMode:hover { background: #3a3a5e; }
+        QPushButton#btnScrambleMode:hover { background: %53; }
         QLineEdit#txtScramble {
             border-top-left-radius: 0; border-bottom-left-radius: 0;
         }
         QPushButton#btnExpand, QPushButton#btnCopyTerminal {
-            background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
-            color: #7a7aaa; font-size: 13px; padding: 0;
+            background: %54; border: 1px solid %55; border-radius: 4px;
+            color: %56; font-size: 13px; padding: 0;
         }
-        QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover { background: #2a2a4a; border-color: #5a5a8a; color: #b0b0dd; }
-        QProgressBar { border: none; background: #2a2a3e; border-radius: 3px; }
-        QProgressBar::chunk { background: #4a90d9; border-radius: 3px; }
-        QLabel#lblStatus { color: #888; font-size: 11px; }
-        QLabel#lblScrambleError { color: #ff5555; font-size: 11px; padding: 2px 2px; }
-        QLabel#lblCommandError  { color: #ff5555; font-size: 11px; padding: 2px 2px; }
-        QScrollBar:vertical { background: #0d1117; width: 12px; border-radius: 6px; margin: 0; }
-        QScrollBar::handle:vertical { background: #4a4a6e; border-radius: 6px; min-height: 24px; }
-        QScrollBar::handle:vertical:hover { background: #6a6aae; }
+        QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover { background: %57; border-color: %58; color: %59; }
+        QProgressBar { border: none; background: %60; border-radius: 3px; }
+        QProgressBar::chunk { background: %61; border-radius: 3px; }
+        QLabel#lblStatus { color: %62; font-size: 11px; }
+        QLabel#lblScrambleError { color: %63; font-size: 11px; padding: 2px 2px; }
+        QLabel#lblCommandError  { color: %64; font-size: 11px; padding: 2px 2px; }
+        QScrollBar:vertical { background: %65; width: 12px; border-radius: 6px; margin: 0; }
+        QScrollBar::handle:vertical { background: %66; border-radius: 6px; min-height: 24px; }
+        QScrollBar::handle:vertical:hover { background: %67; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; border: 0; }
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
         QTableWidget#m_solutionTable {
-            background: #0d1117; border: 1px solid #444;
-            border-radius: 4px; gridline-color: #0d1117;
+            background: %68; border: 1px solid %69;
+            border-radius: 4px; gridline-color: %70;
             font-family: monospace; font-size: 12px;
         }
         QTableWidget#m_solutionTable QHeaderView::section {
-            background: #1a1a2e; color: #7a9ab8; border: none;
-            border-bottom: 1px solid #2a2a4a; padding: 4px;
+            background: %71; color: %72; border: none;
+            border-bottom: 1px solid %73; padding: 4px;
             font-size: 11px; font-weight: bold;
         }
         QTableWidget#m_solutionTable::item:selected {
-            background: #1e3a5a; color: #ffffff;
+            background: %74; color: %75;
         }
         QPushButton#btnTableMode {
-            background: #1e1e30; border: 1px solid #3a3a5e; border-radius: 4px;
-            color: #7a7aaa; font-size: 13px; padding: 0;
+            background: %76; border: 1px solid %77; border-radius: 4px;
+            color: %78; font-size: 13px; padding: 0;
         }
-        QPushButton#btnTableMode:hover { background: #2a2a4a; border-color: #5a5a8a; color: #b0b0dd; }
+        QPushButton#btnTableMode:hover { background: %79; border-color: %80; color: %81; }
         QWidget#topBar {
-            background: #0e0e1c;
-            border-bottom: 2px solid #2a2a4a;
+            background: %82;
+            border-bottom: 2px solid %83;
             min-height: 52px;
             max-height: 52px;
         }
@@ -1431,10 +1447,10 @@ void MainWindow::buildStyles() {
             padding: 0;
         }
         QPushButton#btnAbout {
-            background: #2a2a3e;
-            border: 1px solid #4a4a6a;
+            background: %84;
+            border: 1px solid %85;
             border-radius: 15px;
-            color: #9090bb;
+            color: %86;
             font-size: 15px;
             font-weight: bold;
             padding: 0;
@@ -1444,20 +1460,111 @@ void MainWindow::buildStyles() {
             max-height: 30px;
         }
         QPushButton#btnAbout:hover {
-            background: #3a3a5e;
-            border-color: #7a7aaa;
-            color: #e0e0ff;
+            background: %87;
+            border-color: %88;
+            color: %89;
         }
         QToolTip {
-            background: #252540;
-            color: #d8d8f0;
-            border: 1px solid #5a5a8a;
+            background: %90;
+            color: %91;
+            border: 1px solid %92;
             border-radius: 5px;
             padding: 6px 10px;
             font-size: 12px;
             opacity: 230;
         }
-    )");
+    )")
+        .arg(Theme::PRIMARY_BG)
+        .arg(Theme::TEXT_PRIMARY)
+        .arg(Theme::BORDER_GROUP)
+        .arg(Theme::TEXT_SECONDARY)
+        .arg(Theme::CHECKBOX_BORDER)
+        .arg(Theme::CHECKBOX_BG)
+        .arg(Theme::CHECKBOX_CHECK_BLUE)
+        .arg(Theme::CHECKBOX_CHECK_ORANGE)
+        .arg(Theme::BORDER_DARK)
+        .arg(Theme::DISABLED_BG)
+        .arg(Theme::TERTIARY_BG)
+        .arg(Theme::BORDER_LIGHT)
+        .arg(Theme::TEXT_DISABLED)
+        .arg(Theme::DISABLED_BG)
+        .arg(Theme::BORDER_DARK)
+        .arg(Theme::TEXT_CYAN)
+        .arg(Theme::TERTIARY_BG)
+        .arg(Theme::BORDER_LIGHT)
+        .arg(Theme::TEXT_DISABLED)
+        .arg(Theme::DISABLED_BG)
+        .arg(Theme::BORDER_DARK)
+        .arg(Theme::SECONDARY_BG)
+        .arg(Theme::BORDER_GROUP)
+        .arg(Theme::TEXT_TERMINAL)
+        .arg(Theme::BUTTON_BG)
+        .arg(Theme::BUTTON_BORDER)
+        .arg(Theme::BUTTON_TEXT)
+        .arg(Theme::HOVER_BG)
+        .arg(Theme::BUTTON_BORDER)
+        .arg(Theme::PRESSED_BG)
+        .arg(Theme::BUTTON_SOLVE_BG)
+        .arg(Theme::BUTTON_SOLVE_BORDER)
+        .arg(Theme::BUTTON_SOLVE_HOVER)
+        .arg(Theme::BUTTON_BG)
+        .arg(Theme::BUTTON_BORDER)
+        .arg(Theme::BUTTON_SECONDARY_TEXT)
+        .arg(Theme::HOVER_BG)
+        .arg(Theme::BUTTON_TEXT)
+        .arg(Theme::BUTTON_RESET_BG)
+        .arg(Theme::BUTTON_RESET_BORDER)
+        .arg(Theme::BUTTON_RESET_HOVER)
+        .arg(Theme::BUTTON_BG)
+        .arg(Theme::BUTTON_BORDER)
+        .arg(Theme::BUTTON_SECONDARY_TEXT)
+        .arg(Theme::HOVER_BG)
+        .arg(Theme::BUTTON_BORDER)
+        .arg(Theme::BUTTON_TEXT)
+        .arg(Theme::BUTTON_BG)
+        .arg(Theme::BUTTON_BORDER)
+        .arg(Theme::BUTTON_TEXT)
+        .arg(Theme::HOVER_BG)
+        .arg(Theme::BUTTON_SECONDARY_TEXT)
+        .arg(Theme::BUTTON_UTIL_BG)
+        .arg(Theme::BUTTON_UTIL_BORDER)
+        .arg(Theme::BUTTON_UTIL_TEXT)
+        .arg(Theme::BUTTON_UTIL_HOVER_BG)
+        .arg(Theme::BUTTON_UTIL_HOVER_BORDER)
+        .arg(Theme::BUTTON_UTIL_HOVER_TEXT)
+        .arg(Theme::PROGRESS_BG)
+        .arg(Theme::PROGRESS_FILL)
+        .arg(Theme::STATUS_TEXT)
+        .arg(Theme::TEXT_ERROR)
+        .arg(Theme::TEXT_ERROR)
+        .arg(Theme::SCROLLBAR_BG)
+        .arg(Theme::SCROLLBAR_HANDLE)
+        .arg(Theme::SCROLLBAR_HOVER)
+        .arg(Theme::TABLE_BG)
+        .arg(Theme::TABLE_BORDER)
+        .arg(Theme::TABLE_BG)
+        .arg(Theme::TABLE_HEADER_BG)
+        .arg(Theme::TABLE_HEADER_TEXT)
+        .arg(Theme::TABLE_BORDER)
+        .arg(Theme::TABLE_SELECTED_BG)
+        .arg(Theme::TABLE_SELECTED_TEXT)
+        .arg(Theme::BUTTON_UTIL_BG)
+        .arg(Theme::BUTTON_UTIL_BORDER)
+        .arg(Theme::BUTTON_UTIL_TEXT)
+        .arg(Theme::BUTTON_UTIL_HOVER_BG)
+        .arg(Theme::BUTTON_UTIL_HOVER_BORDER)
+        .arg(Theme::BUTTON_UTIL_HOVER_TEXT)
+        .arg(Theme::DARK_BG)
+        .arg(Theme::BORDER_BOTTOM)
+        .arg(Theme::BUTTON_ABOUT_BG)
+        .arg(Theme::BUTTON_ABOUT_BORDER)
+        .arg(Theme::BUTTON_ABOUT_TEXT)
+        .arg(Theme::BUTTON_ABOUT_HOVER_BG)
+        .arg(Theme::BUTTON_ABOUT_HOVER_BORDER)
+        .arg(Theme::BUTTON_ABOUT_HOVER_TEXT)
+        .arg(Theme::TOOLTIP_BG)
+        .arg(Theme::TOOLTIP_TEXT)
+        .arg(Theme::TOOLTIP_BORDER));
 }
 
 // -------------------------------------------------------
@@ -1566,7 +1673,7 @@ void MainWindow::updateCommand() {
     QStringList args = buildArgList();
     txtCommand->setText("sq1opt " + args.join(" ") + " " + pos);
     lblCommandError->setVisible(false);
-    txtCommand->setStyleSheet("QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
+    txtCommand->setStyleSheet(QString("QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }").arg(Theme::TEXT_CYAN));
 }
 
 // -------------------------------------------------------
@@ -1605,11 +1712,12 @@ void MainWindow::onSolve() {
 
     // Swap Solve → Stop appearance (muted dark red, not alarming).
     btnSolve->setText("■  Stop");
-    btnSolve->setStyleSheet(
+    btnSolve->setStyleSheet(QString(
         "QPushButton#btnSolve {"
-        "  background: #3d1616; border: 1px solid #7a2e2e; padding-top: 0px; padding-bottom: 0px;"
-        "  color: #c89898; font-size: 12px; font-weight: bold; }"
-        "QPushButton#btnSolve:hover { background: #4d1e1e; }");
+        "  background: %1; border: 1px solid %2; padding-top: 0px; padding-bottom: 0px;"
+        "  color: %3; font-size: 12px; font-weight: bold; }"
+        "QPushButton#btnSolve:hover { background: %4; }")
+        .arg(Theme::BUTTON_STOP_BG, Theme::BUTTON_STOP_BORDER, Theme::BUTTON_STOP_TEXT, Theme::BUTTON_STOP_HOVER));
 
     progressBar->setVisible(true);
 
@@ -1658,10 +1766,10 @@ void MainWindow::onSolverLine(QString line) {
         btnCopyTerminal->setVisible(true);
         btnTableMode->setVisible(true);
         // Alternate row backgrounds: near-black vs subtle dark-blue, text always light blue
-        const char* bg = (m_solutionLines.size() % 2 == 1) ? "#0d1117" : "#131c28";
+        const char* bg = (m_solutionLines.size() % 2 == 1) ? Theme::ROW_ALT_DARK : Theme::ROW_ALT_LIGHT;
         QString solColor = m_expanded
-            ? (m_solutionLines.size() % 2 == 1 ? "#7abfe8" : "#cbcbcb")
-            : "#7abfe8";
+            ? (m_solutionLines.size() % 2 == 1 ? Theme::TEXT_SOLUTION : "#cbcbcb")
+            : Theme::TEXT_SOLUTION;
         QString solFsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
         QString solPadding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
         txtOutput->append(QString(
@@ -1673,8 +1781,8 @@ void MainWindow::onSolverLine(QString line) {
         updateRankErgoState();
     } else {
         QString nonsolFs = m_expanded ? "font-size:13px;line-height:1.6;" : "";
-        txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
-            .arg(nonsolFs, line.toHtmlEscaped()));
+        txtOutput->append(QString("<span style='color:%1;%2'>%3</span>")
+            .arg(Theme::TEXT_MUTED, nonsolFs, line.toHtmlEscaped()));
     }
 }
 

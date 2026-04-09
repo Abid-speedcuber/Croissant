@@ -4,6 +4,7 @@
 #include <QKeyEvent>
 #include <array>
 #include <functional>
+#include "theme.h"
 
 // -------------------------------------------------------
 // Sq1Widget: draws the Square-1 cube, handles clicks/keys
@@ -48,8 +49,13 @@ private:
 
     // Colors: 0=darkgrey(top face), 1=white(bot face), 2=red, 3=blue, 4=orange, 5=green, 6=grey(partial)
     QColor colors[7] = {
-        QColor("#333333"), QColor("#ffffff"), QColor("#ff0000"),
-        QColor("#0000ff"), QColor("#ff8600"), QColor("#00ff00"), QColor("#888888")
+        Theme::color(Theme::CUBE_TOP_FACE),
+        Theme::color(Theme::CUBE_BOT_FACE),
+        Theme::color(Theme::CUBE_RED),
+        Theme::color(Theme::CUBE_BLUE),
+        Theme::color(Theme::CUBE_ORANGE),
+        Theme::color(Theme::CUBE_GREEN),
+        Theme::color(Theme::CUBE_PARTIAL)
     };
 
     // side_colors[piece] = which color indices to use for side faces

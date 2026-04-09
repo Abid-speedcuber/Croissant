@@ -1,4 +1,5 @@
 #include "sq1widget.h"
+#include "theme.h"
 #include <QPainter>
 #include <QPolygonF>
 #include <QtMath>
@@ -97,13 +98,13 @@ QPointF Sq1Widget::polar(QPointF center, double angleDeg, double radius) {
 
 void Sq1Widget::drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill) {
     p.setBrush(fill);
-    p.setPen(QPen(Qt::black, 1));
+    p.setPen(QPen(Theme::color(Theme::CUBE_BORDER), 1));
     p.drawPolygon(QPolygonF(pts));
 }
 
 void Sq1Widget::drawSelection(QPainter& p, QVector<QPointF> pts) {
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(QColor("#ffff00"), 3));
+    p.setPen(QPen(Theme::color(Theme::CUBE_SELECTION), 3));
     p.drawPolygon(QPolygonF(pts));
 }
 
@@ -153,7 +154,7 @@ void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, doubl
 void Sq1Widget::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    p.fillRect(rect(), Qt::black);
+    p.fillRect(rect(), Theme::color(Theme::CANVAS_BG));
 
     drawLayer(p, 0,  12, {TOP_CX, TOP_CY}, -105);  // top layer, starts at -105 deg
     drawLayer(p, 12, 24, {BOT_CX, BOT_CY},  105);  // bot layer, starts at 105 deg
