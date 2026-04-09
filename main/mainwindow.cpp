@@ -2002,27 +2002,13 @@ void MainWindow::rebuildTable() {
 
     bool useKarn = chkKarnotation->isChecked(); // showErgo already declared above
     auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
-    // Build a map from stripped original alg -> (ergo score, display alg with slice indicator)
-    QMap<QString, double> ergoMap;
-    QMap<QString, QString> algDisplayMap;
+    // rated[i].first is the full line with slice indicator injected (bracket still attached).
+    // Build rows directly from rated so the display alg already has the indicator.
     for (auto& [line, score] : rated) {
-        QString displayAlg = stripBracket(line);
-        // Key by the original alg (without slice indicator) for lookup
-        // The indicator replaces the leading / or \ so strip it to get the base key
-        QString baseAlg = displayAlg;
-        if (!baseAlg.isEmpty() && (baseAlg[0] == '\\'))
-            baseAlg[0] = '/';
-        ergoMap[baseAlg] = score;
-        algDisplayMap[baseAlg] = displayAlg;
-    }
-
-    for (const QString& line : std::as_const(m_solutionLines)) {
         int mv, sl;
         parseCounts(line, mv, sl);
-        QString baseAlg = stripBracket(line);
-        double eg = ergoMap.value(baseAlg, 0.0);
-        QString displayAlg = algDisplayMap.value(baseAlg, baseAlg);
-        rows.append({displayAlg, mv, sl, eg});
+        QString displayAlg = stripBracket(line);
+        rows.append({displayAlg, mv, sl, score});
     }
 
     if (ergo && showErgo) {
