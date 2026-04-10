@@ -613,6 +613,28 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     });
 }
 
+static QString invertScrambleStr(const QString& str) {
+    if (str.trimmed().isEmpty()) return str;
+    QStringList parts = str.trimmed().split('/');
+    std::reverse(parts.begin(), parts.end());
+    QStringList result;
+    for (QString part : parts) {
+        part = part.trimmed();
+        // extract numbers from optional parens
+        QString inner = part;
+        inner.remove('('); inner.remove(')');
+        QStringList nums = inner.split(',');
+        if (nums.size() == 2) {
+            bool ok1, ok2;
+            int a = nums[0].trimmed().toInt(&ok1);
+            int b = nums[1].trimmed().toInt(&ok2);
+            if (ok1 && ok2) { result << QString("%1,%2").arg(-a).arg(-b); continue; }
+        }
+        result << part; // pass through slashes and unknowns
+    }
+    return result.join("/");
+}
+
 void MainWindow::buildUI() {
     QWidget* central = new QWidget(this);
     setCentralWidget(central);
@@ -1089,21 +1111,116 @@ void MainWindow::buildUI() {
 
     connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
         lblScrambleError->setVisible(false);
+        m_mainInput->setStyleSheet("");
+
         if (m_inputModeIndex == 2) {
-            if (text.trimmed().isEmpty()) return;
+            // Position mode: live update cube from hex string
+            if (text.trimmed().isEmpty()) { cubeWidget->reset(); updateCommand(); return; }
             bool ok = cubeWidget->setPositionFromString(text.trimmed());
-            if (ok) updateCommand();
+            if (ok) { m_mainInput->setStyleSheet(""); updateCommand(); }
+            else      m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
         } else {
-            if (text.trimmed().isEmpty()) {
+            // Scramble/Alg: always apply from solved state
+            if (text.trimmed().isEmpty()) { cubeWidget->reset(); updateCommand(); return; }
+
+            // Reset to solved first, then apply
+            cubeWidget->reset();
+
+            QString raw = text.trimmed();
+            if (m_inputModeIndex == 1) {
+                // Alg mode: invert
+                raw = invertScrambleStr(raw);
+            }
+
+            // Parse and apply silently
+            struct Move { bool isSlice; int x, y; };
+            QVector<Move> moves;
+            int idx = 0; bool ok = true;
+            while (idx < raw.size() && ok) {
+                while (idx < raw.size() && raw[idx].isSpace()) idx++;
+                if (idx >= raw.size()) break;
+                if (raw[idx] == '/') {
+                    moves.append({true, 0, 0}); idx++;
+                } else if (raw[idx] == '(' || raw[idx].isDigit() || raw[idx] == '-') {
+                    if (raw[idx] == '(') idx++;
+                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
+                    int sign = 1;
+                    if (idx < raw.size() && raw[idx] == '-') { sign = -1; idx++; }
+                    int num = 0; bool hasDigit = false;
+                    while (idx < raw.size() && raw[idx].isDigit()) { num = num*10+(raw[idx].toLatin1()-'0'); idx++; hasDigit = true; }
+                    if (!hasDigit) { ok = false; break; }
+                    int x = sign * num;
+                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
+                    if (idx >= raw.size() || raw[idx] != ',') { ok = false; break; }
+                    idx++;
+                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
+                    sign = 1;
+                    if (idx < raw.size() && raw[idx] == '-') { sign = -1; idx++; }
+                    num = 0; hasDigit = false;
+                    while (idx < raw.size() && raw[idx].isDigit()) { num = num*10+(raw[idx].toLatin1()-'0'); idx++; hasDigit = true; }
+                    if (!hasDigit) { ok = false; break; }
+                    int y = sign * num;
+                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
+                    if (idx < raw.size() && raw[idx] == ')') idx++;
+                    moves.append({false, x, y});
+                } else {
+                    ok = false; break;
+                }
+            }
+
+            if (!ok) {
+                // Soft error: just tint the border, don't pop anything
+                m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
                 cubeWidget->reset();
                 updateCommand();
                 return;
             }
-            m_scrambleIsAlg = (m_inputModeIndex == 1);
-            txtScramble->setText(text);
-            onApplyScramble();
-            if (!m_undoStack.isEmpty()) m_undoStack.removeLast();
-            btnUndo->setEnabled(!m_undoStack.isEmpty());
+
+            // Apply to the (already reset) cube state
+            int pos[24] = {};
+            int mid = 0;
+            {
+                std::string s = cubeWidget->getPositionString().toStdString();
+                int j = 0, nextPC = -3, nextPE = 18;
+                for (int i = 0; i < 16 && j < 24; i++) {
+                    int k = (unsigned char)s[i];
+                    if (k >= 'a' && k <= 'z') k += ('A'-'a');
+                    if      (k>='A'&&k<='H') k-='A';
+                    else if (k>='1'&&k<='8') k-=('1'-8);
+                    else if (k=='U'||k=='V') { k=nextPC; nextPC-=3; }
+                    else if (k=='W')         { k=nextPC; nextPC-=3; }
+                    else if (k=='X'||k=='Y') { k=nextPE; nextPE+=3; }
+                    else if (k=='Z')         { k=nextPE; nextPE+=3; }
+                    pos[j++]=k;
+                    if (k>=0&&k<8) pos[j++]=k;
+                }
+                mid = (s.size()>=17) ? (s[16]=='/'?1:0) : (!s.empty()&&s.back()=='/'?1:0);
+            }
+
+            auto doTop = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[11]; for(int i=11;i>0;i--) pos[i]=pos[i-1]; pos[0]=c; } };
+            auto doBot = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[23]; for(int i=23;i>12;i--) pos[i]=pos[i-1]; pos[12]=c; } };
+            auto canSlice = [&](){ return pos[0]!=pos[11]&&pos[5]!=pos[6]&&pos[12]!=pos[23]&&pos[17]!=pos[18]; };
+            auto doSlice = [&](){ if(!canSlice()) return; for(int i=6;i<12;i++) std::swap(pos[i],pos[i+6]); mid=1-mid; };
+
+            for (const Move& mv : moves) {
+                if (mv.isSlice) doSlice();
+                else { doTop(mv.x); doBot(mv.y); }
+            }
+
+            const QString pieceChars = "ABCDEFGH12345678";
+            QString posStr;
+            for (int i = 0; i < 24; i++) {
+                posStr += pieceChars[pos[i]];
+                if (pos[i] < 8) i++;
+            }
+            posStr += (mid == 0 ? '-' : '/');
+
+            bool applied = cubeWidget->setPositionFromString(posStr);
+            if (!applied) {
+                m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+                cubeWidget->reset();
+            }
+            updateCommand();
         }
     });
 
@@ -2243,7 +2360,6 @@ void MainWindow::onApplyScramble() {
     lblScrambleError->setVisible(false);
     txtScramble->setStyleSheet("");
     updateCommand();
-    appendStatusLine(m_scrambleIsAlg ? "Algorithm applied (inverted)." : "Scramble applied.");
 }
 
 void MainWindow::appendStatusLine(const QString& msg) {
