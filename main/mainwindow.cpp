@@ -804,46 +804,6 @@ void MainWindow::buildUI() {
         updateCommand();
         btnRedo->setEnabled(!m_redoStack.isEmpty());       
     });
-    auto applyInputMode = [this](int idx) {
-        m_inputModeIndex = idx;
-        static const char* labels[] = {"SCRAMBLE", "ALG", "POSITION"};
-        static const char* placeholders[] = {
-            "1,0 / 3,3 / 0,-3 / ...  (supports karn)",
-            "1,0 / 3,3 / 0,-3 / ...  (supports karn)",
-            "ABCDEFGH12345678-"
-        };
-        m_inputMode->setText(labels[idx]);
-        m_mainInput->setPlaceholderText(placeholders[idx]);
-        m_mainInput->clear();
-        lblScrambleError->setVisible(false);
-    };
-
-    // Mode toggle button: cycles SCRAMBLE → ALG → POSITION
-    connect(m_inputMode, &QPushButton::clicked, this, [this, applyInputMode]{
-        applyInputMode((m_inputModeIndex + 1) % 3);
-    });
-
-    // Arrow button: opens dropdown menu
-    connect(m_inputModeArrow, &QPushButton::clicked, this, [this, applyInputMode]{
-        QMenu* menu = new QMenu(this);
-        menu->setStyleSheet(QString(
-            "QMenu { background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 6px; padding: 4px; color: #e0e0e0; font-size: 12px; }"
-            "QMenu::item { padding: 6px 20px; border-radius: 4px; }"
-            "QMenu::item:selected { background: #3a3a5e; }"
-            "QMenu::item:checked { color: #2db570; font-weight: bold; }"
-        ));
-        QAction* aScram = menu->addAction("Scramble");
-        QAction* aAlg   = menu->addAction("Alg");
-        QAction* aPos   = menu->addAction("Position");
-        aScram->setCheckable(true); aScram->setChecked(m_inputModeIndex == 0);
-        aAlg->setCheckable(true);   aAlg->setChecked(m_inputModeIndex == 1);
-        aPos->setCheckable(true);   aPos->setChecked(m_inputModeIndex == 2);
-        connect(aScram, &QAction::triggered, this, [applyInputMode]{ applyInputMode(0); });
-        connect(aAlg,   &QAction::triggered, this, [applyInputMode]{ applyInputMode(1); });
-        connect(aPos,   &QAction::triggered, this, [applyInputMode]{ applyInputMode(2); });
-        // Show menu below the arrow button
-        menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height())));
-    });
 
     connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
         lblScrambleError->setVisible(false);
@@ -1093,6 +1053,59 @@ void MainWindow::buildUI() {
     cmdSolveLayout->addWidget(m_mainInput, 1);
     cmdSolveLayout->addWidget(btnSolve);
     topLay->addWidget(cmdSolveRow);
+
+    // Mode toggle button: cycles SCRAMBLE → ALG → POSITION
+    connect(m_inputMode, &QPushButton::clicked, this, [this]{
+        qDebug() << "inputMode clicked, new index:" << ((m_inputModeIndex + 1) % 3);
+        m_inputModeIndex = (m_inputModeIndex + 1) % 3;
+        if (m_inputModeIndex == 0) { m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
+        else if (m_inputModeIndex == 1) { m_inputMode->setText("ALG");  m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
+        else                           { m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-"); }
+        m_mainInput->clear();
+        lblScrambleError->setVisible(false);
+    });
+
+    // Arrow button: opens dropdown menu
+    connect(m_inputModeArrow, &QPushButton::clicked, this, [this]{
+        qDebug() << "inputModeArrow clicked";
+        QMenu* menu = new QMenu(this);
+        menu->setStyleSheet(
+            "QMenu { background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 6px; padding: 4px; color: #e0e0e0; font-size: 12px; }"
+            "QMenu::item { padding: 6px 20px; border-radius: 4px; }"
+            "QMenu::item:selected { background: #3a3a5e; }"
+            "QMenu::item:checked { color: #2db570; font-weight: bold; }"
+        );
+        QAction* aScram = menu->addAction("Scramble");
+        QAction* aAlg   = menu->addAction("Alg");
+        QAction* aPos   = menu->addAction("Position");
+        aScram->setCheckable(true); aScram->setChecked(m_inputModeIndex == 0);
+        aAlg->setCheckable(true);   aAlg->setChecked(m_inputModeIndex == 1);
+        aPos->setCheckable(true);   aPos->setChecked(m_inputModeIndex == 2);
+        connect(aScram, &QAction::triggered, this, [this]{ m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
+        connect(aAlg,   &QAction::triggered, this, [this]{ m_inputModeIndex = 1; m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
+        connect(aPos,   &QAction::triggered, this, [this]{ m_inputModeIndex = 2; m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-");                        m_mainInput->clear(); lblScrambleError->setVisible(false); });
+        menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height())));
+    });
+
+    connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
+        lblScrambleError->setVisible(false);
+        if (m_inputModeIndex == 2) {
+            if (text.trimmed().isEmpty()) return;
+            bool ok = cubeWidget->setPositionFromString(text.trimmed());
+            if (ok) updateCommand();
+        } else {
+            if (text.trimmed().isEmpty()) {
+                cubeWidget->reset();
+                updateCommand();
+                return;
+            }
+            m_scrambleIsAlg = (m_inputModeIndex == 1);
+            txtScramble->setText(text);
+            onApplyScramble();
+            if (!m_undoStack.isEmpty()) m_undoStack.removeLast();
+            btnUndo->setEnabled(!m_undoStack.isEmpty());
+        }
+    });
 
     lblCommandError = new QLabel("");
     lblCommandError->setObjectName("lblCommandError");
