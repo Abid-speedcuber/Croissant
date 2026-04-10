@@ -1656,27 +1656,10 @@ QString MainWindow::buildStyleSheet() {
             min-width: 48px;
         }
         QSpinBox:disabled { color: %13; background: %14; border-color: %15; }
-        QSpinBox::up-button {
-            subcontrol-origin: border; subcontrol-position: top right;
-            width: 16px; border-left: 1px solid %12;
-            border-top-right-radius: 4px;
-            background: %61;
-        }
-        QSpinBox::down-button {
-            subcontrol-origin: border; subcontrol-position: bottom right;
-            width: 16px; border-left: 1px solid %12; border-top: 1px solid %12;
-            border-bottom-right-radius: 4px;
-            background: %61;
-        }
-        QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: %62; }
-        QSpinBox::up-arrow   { width: 6px; height: 6px;
-                               border-left: 3px solid transparent;
-                               border-right: 3px solid transparent;
-                               border-bottom: 4px solid %2; }
-        QSpinBox::down-arrow { width: 6px; height: 6px;
-                               border-left: 3px solid transparent;
-                               border-right: 3px solid transparent;
-                               border-top: 4px solid %2; }
+        QSpinBox::up-button   { width: 0; border: none; }
+        QSpinBox::down-button { width: 0; border: none; }
+        QSpinBox::up-arrow    { width: 0; height: 0; }
+        QSpinBox::down-arrow  { width: 0; height: 0; }
         QTextEdit#txtOutput { background: %17; border: 1px solid %3; border-radius: 4px;
                               font-family: monospace; font-size: 12px; color: %18; padding: 4px; }
         QTextEdit#txtOutput > QWidget { background: %17; }
