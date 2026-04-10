@@ -737,42 +737,14 @@ void MainWindow::buildUI() {
     undoResetRedoRow->addWidget(btnRedo, 1);
     leftCol->addLayout(undoResetRedoRow);
 
-    QGroupBox* grpScramble = new QGroupBox("Scramble / Alg input");
-    QVBoxLayout* scrambleLay = new QVBoxLayout(grpScramble);
-    scrambleLay->setSpacing(4);
-    scrambleLay->setContentsMargins(6,8,6,6);
-    QHBoxLayout* scrambleInputRow = new QHBoxLayout();
-    scrambleInputRow->setSpacing(0);
-    scrambleInputRow->setContentsMargins(0,0,0,0);
-
-    btnScrambleMode = new QPushButton("scram");
-    btnScrambleMode->setObjectName("btnScrambleMode");
-    btnScrambleMode->setCheckable(true);
-    btnScrambleMode->setChecked(false);
-    btnScrambleMode->setFixedWidth(48);
-    btnScrambleMode->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    btnScrambleMode->setToolTip("Toggle between Scramble and Algorithm mode.\n"
-                                "Algorithm mode inverts the sequence before applying.");
-
-    txtScramble = new QLineEdit();
-    txtScramble->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
-    txtScramble->setToolTip("Enter a move sequence in (x,y)/ format to be applied on the current cube");
-    txtScramble->setObjectName("txtScramble");
-
-    scrambleInputRow->addWidget(btnScrambleMode);
-    scrambleInputRow->addWidget(txtScramble);
-    scrambleLay->addLayout(scrambleInputRow);
-
+    // Stub out old scramble widgets so references don't break
+    btnScrambleMode = new QPushButton(); btnScrambleMode->setVisible(false);
+    txtScramble = new QLineEdit();       txtScramble->setVisible(false);
+    btnApplyScramble = new QPushButton(); btnApplyScramble->setVisible(false);
     lblScrambleError = new QLabel("");
     lblScrambleError->setObjectName("lblScrambleError");
     lblScrambleError->setWordWrap(true);
     lblScrambleError->setVisible(false);
-    scrambleLay->addWidget(lblScrambleError);
-
-    btnApplyScramble = new QPushButton("Apply");
-    btnApplyScramble->setObjectName("btnApplyScramble");
-    scrambleLay->addWidget(btnApplyScramble);
-    leftCol->addWidget(grpScramble);
     leftCol->addStretch();
 
     leftScroll = new QScrollArea();
@@ -832,15 +804,43 @@ void MainWindow::buildUI() {
         updateCommand();
         btnRedo->setEnabled(!m_redoStack.isEmpty());       
     });
-    connect(btnApplyScramble, &QPushButton::clicked, this, &MainWindow::onApplyScramble);
-    connect(txtScramble, &QLineEdit::returnPressed, this, &MainWindow::onApplyScramble);
-    connect(txtScramble, &QLineEdit::textEdited, this, [this]{
+    // Mode button cycles: SCRAMBLE → ALG → POSITION
+    connect(m_inputMode, &QPushButton::clicked, this, [this]{
+        m_inputModeIndex = (m_inputModeIndex + 1) % 3;
+        static const char* labels[] = {"SCRAMBLE", "ALG", "POSITION"};
+        static const char* placeholders[] = {
+            "1,0 / 3,3 / 0,-3 / ...  (supports karn)",
+            "1,0 / 3,3 / 0,-3 / ...  (supports karn)",
+            "ABCDEFGH12345678-"
+        };
+        m_inputMode->setText(labels[m_inputModeIndex]);
+        m_mainInput->setPlaceholderText(placeholders[m_inputModeIndex]);
+        m_mainInput->clear();
         lblScrambleError->setVisible(false);
-        txtScramble->setStyleSheet("");
     });
-    connect(btnScrambleMode, &QPushButton::toggled, this, [this](bool checked){
-        m_scrambleIsAlg = checked;
-        btnScrambleMode->setText(checked ? "Alg" : "Scram");
+
+    connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
+        lblScrambleError->setVisible(false);
+        if (m_inputModeIndex == 2) {
+            // Position mode: live update cube
+            if (text.trimmed().isEmpty()) return;
+            bool ok = cubeWidget->setPositionFromString(text.trimmed());
+            if (ok) updateCommand();
+        } else {
+            // Scramble/Alg mode: live apply on each keystroke
+            if (text.trimmed().isEmpty()) {
+                cubeWidget->reset();
+                updateCommand();
+                return;
+            }
+            // Temporarily set mode flags and reuse onApplyScramble logic
+            m_scrambleIsAlg = (m_inputModeIndex == 1);
+            txtScramble->setText(text);
+            onApplyScramble();
+            // Restore undo stack – live updates shouldn't pollute undo
+            if (!m_undoStack.isEmpty()) m_undoStack.removeLast();
+            btnUndo->setEnabled(!m_undoStack.isEmpty());
+        }
     });
 
     root->addWidget(leftScroll);
@@ -1028,23 +1028,37 @@ void MainWindow::buildUI() {
     cmdSolveLayout->setContentsMargins(0, 0, 0, 0);
     cmdSolveLayout->setSpacing(0);
 
+    // Hidden command line (does its job under the hood)
     txtCommand = new QLineEdit();
     txtCommand->setReadOnly(false);
     txtCommand->setObjectName("txtCommand");
+    txtCommand->setVisible(false);
 
     btnCopy = new QPushButton("⎘");
     btnCopy->setObjectName("btnCopy");
     btnCopy->setFixedWidth(32);
     btnCopy->setFixedHeight(24);
     btnCopy->setToolTip("Copy command");
+    btnCopy->setVisible(false);
 
     btnSolve = new QPushButton("▶ Solve");
     btnSolve->setObjectName("btnSolve");
-    btnSolve->setFixedHeight(24);
+    btnSolve->setFixedHeight(32);
     btnSolve->setFixedWidth(90);
 
-    cmdSolveLayout->addWidget(txtCommand, 1);
-    cmdSolveLayout->addWidget(btnCopy);
+    // Unified input bar: mode dropdown + input + solve button
+    m_inputMode = new QPushButton("SCRAMBLE");
+    m_inputMode->setObjectName("btnInputMode");
+    m_inputMode->setFixedHeight(32);
+    m_inputMode->setFixedWidth(90);
+
+    m_mainInput = new QLineEdit();
+    m_mainInput->setObjectName("txtMainInput");
+    m_mainInput->setFixedHeight(32);
+    m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
+
+    cmdSolveLayout->addWidget(m_inputMode);
+    cmdSolveLayout->addWidget(m_mainInput, 1);
     cmdSolveLayout->addWidget(btnSolve);
     topLay->addWidget(cmdSolveRow);
 
@@ -1528,6 +1542,17 @@ QString MainWindow::buildStyleSheet() {
         QPushButton#btnScrambleMode:hover { background: %22; }
         QLineEdit#txtScramble {
             border-top-left-radius: 0; border-bottom-left-radius: 0;
+        }
+        QPushButton#btnInputMode {
+            background: #1a6b3c; border: 1px solid #2db570;
+            border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+            border-right: none; color: #fff; padding: 0 8px; font-size: 11px; font-weight: bold;
+        }
+        QPushButton#btnInputMode:hover { background: #227a47; }
+        QLineEdit#txtMainInput {
+            border-top-left-radius: 0; border-bottom-left-radius: 0;
+            border-right: none; border-radius: 0;
+            font-family: monospace; font-size: 12px;
         }
         QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
             background: %30; border: 1px solid %31; border-radius: 4px;

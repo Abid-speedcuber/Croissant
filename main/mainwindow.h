@@ -124,6 +124,10 @@ private:
     qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
     bool          m_scrambleIsAlg{false};
+    int           m_inputModeIndex{0}; // 0=scramble, 1=alg, 2=position
+    QPushButton*  m_inputMode{nullptr};
+    QPushButton*  m_inputModeDropdown{nullptr};
+    QLineEdit*    m_mainInput{nullptr};
     int           m_sliceCount{0};
     QTimer*       m_sliceTimer{nullptr};    // true = input alg mode (inverts before applying)
     bool          m_cubeshapeWasActive{false}; // cubeshape state captured at solve time
