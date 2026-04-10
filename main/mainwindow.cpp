@@ -631,9 +631,15 @@ void MainWindow::buildUI() {
     topBarLayout->setContentsMargins(16, 0, 16, 0);
 
     QLabel* logoLabel = new QLabel();
-    logoLabel->setText(QString("<span style='font-size:17px;font-weight:bold;color:%1;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
-                       "<br><span style='font-size:10px;color:%2;'>by Abid and Matt</span>")
-        .arg(Theme::TEXT_PRIMARY, Theme::TEXT_MUTED));
+    auto updateLogo = [this, logoLabel]() {
+        QString primary = m_lightTheme ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
+        QString muted   = m_lightTheme ? Theme::LIGHT_TEXT_MUTED   : Theme::TEXT_MUTED;
+        logoLabel->setText(QString("<span style='font-size:17px;font-weight:bold;color:%1;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
+                           "<br><span style='font-size:10px;color:%2;'>by Abid and Matt</span>")
+            .arg(primary, muted));
+    };
+    updateLogo();
+    m_updateLogo = updateLogo;
     logoLabel->setObjectName("logoLabel");
 
     btnHamburger = new QPushButton("☰");
@@ -669,19 +675,23 @@ void MainWindow::buildUI() {
         cubeWidget->setParent(cubeWrapper);
         cubeWidget->move(0, 0);
 
-        btnReset = new QPushButton("↺", cubeWrapper);
-        btnReset->setObjectName("btnReset");
-        btnReset->setFixedSize(34, 34);
-        btnReset->setToolTip("Reset  [Esc]");
-        btnReset->move(cubeWidget->width() - 34 - 6, cubeWidget->height() - 34 - 6);
-        btnReset->raise();
-
         QHBoxLayout* centerRow = new QHBoxLayout();
         centerRow->setContentsMargins(0,0,0,0);
         centerRow->addStretch();
         centerRow->addWidget(cubeWrapper);
         centerRow->addStretch();
         leftCol->addLayout(centerRow);
+
+        btnReset = new QPushButton("Reset");
+        btnReset->setObjectName("btnReset");
+        btnReset->setFixedSize(80, 34);
+        btnReset->setToolTip("Reset  [Esc]");
+
+        QHBoxLayout* resetRow = new QHBoxLayout();
+        resetRow->setContentsMargins(0, 2, 0, 0);
+        resetRow->addStretch();
+        resetRow->addWidget(btnReset);
+        leftCol->addLayout(resetRow);
     }
 
     // Grid: U' | Slice (rowspan 2) | U
@@ -1340,8 +1350,11 @@ void MainWindow::updateConstraints() {
     if (isDepthsNow) {
         txtDepths->setStyleSheet("");  // revert to global style
     } else {
-        txtDepths->setStyleSheet(
-            "QLineEdit { color: #666; background: #1e1e30; border-color: #3a3a4e; }");
+        txtDepths->setStyleSheet(QString(
+            "QLineEdit { color: %1; background: %2; border-color: %3; }")
+            .arg(m_lightTheme ? "#aaa" : "#666",
+                 m_lightTheme ? Theme::LIGHT_DISABLED_BG : "#1e1e30",
+                 m_lightTheme ? Theme::LIGHT_BORDER_DARK : "#3a3a4e"));
     }
 
     spnMaxX->setEnabled(chkMaxX->isChecked());
@@ -1440,31 +1453,31 @@ QString MainWindow::buildStyleSheet() {
         QLineEdit#txtCommand { font-family: monospace; color: %16; font-size: 12px; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; border-right: none; }
         QSpinBox {
             background: %11; border: 1px solid %12; border-radius: 4px;
-            padding: 2px 20px 2px 6px; color: %60;
+            padding: 2px 4px 2px 6px; color: %60;
             min-width: 48px;
         }
         QSpinBox:disabled { color: %13; background: %14; border-color: %15; }
         QSpinBox::up-button {
             subcontrol-origin: border; subcontrol-position: top right;
-            width: 18px; border-left: 1px solid %12;
+            width: 16px; border-left: 1px solid %12;
             border-top-right-radius: 4px;
             background: %61;
         }
         QSpinBox::down-button {
             subcontrol-origin: border; subcontrol-position: bottom right;
-            width: 18px; border-left: 1px solid %12; border-top: 1px solid %12;
+            width: 16px; border-left: 1px solid %12; border-top: 1px solid %12;
             border-bottom-right-radius: 4px;
             background: %61;
         }
         QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: %62; }
-        QSpinBox::up-arrow   { width: 7px; height: 7px; image: none;
-                               border-left: 4px solid transparent;
-                               border-right: 4px solid transparent;
-                               border-bottom: 5px solid %2; }
-        QSpinBox::down-arrow { width: 7px; height: 7px; image: none;
-                               border-left: 4px solid transparent;
-                               border-right: 4px solid transparent;
-                               border-top: 5px solid %2; }
+        QSpinBox::up-arrow   { width: 6px; height: 6px;
+                               border-left: 3px solid transparent;
+                               border-right: 3px solid transparent;
+                               border-bottom: 4px solid %2; }
+        QSpinBox::down-arrow { width: 6px; height: 6px;
+                               border-left: 3px solid transparent;
+                               border-right: 3px solid transparent;
+                               border-top: 4px solid %2; }
         QTextEdit#txtOutput { background: %17; border: 1px solid %3; border-radius: 4px;
                               font-family: monospace; font-size: 12px; color: %18; }
         QPushButton { background: %19; border: 1px solid %20; border-radius: 5px; padding: 5px 12px; color: %21; }
@@ -1476,8 +1489,8 @@ QString MainWindow::buildStyleSheet() {
         QPushButton#btnCopy { background: %11; border: 1px solid %12; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: %4; font-size: 14px; padding: 0; margin-right: 5px;}
         QPushButton#btnCopy:hover { background: %22; color: %21; }
         QPushButton#btnReset {
-            background: %27; border: 1px solid %28; border-radius: 17px;
-            color: %4; font-size: 18px; padding: 0;
+            background: %27; border: 1px solid %28; border-radius: 6px;
+            color: %4; font-size: 13px; padding: 4px 10px;
         }
         QPushButton#btnReset:hover { background: %29; border-color: %20; color: %21; }
         QPushButton#btnUndo, QPushButton#btnRedo {
@@ -2215,12 +2228,12 @@ void MainWindow::rebuildTable() {
             });
     }
 
-    const QColor rowA(13, 17, 23);
-    const QColor rowB(19, 28, 40);
-    const QColor textCol(122, 191, 232);
-    const QColor textColAlt = m_expanded ? QColor(203, 203, 203) : textCol;
-    const QColor metaCol(154, 172, 190);
-    const QColor metaColAlt = m_expanded ? QColor(150, 150, 150, 238) : metaCol;
+    const QColor rowA = m_lightTheme ? QColor(Theme::LIGHT_ROW_ALT_DARK) : QColor(Theme::ROW_ALT_DARK);
+    const QColor rowB = m_lightTheme ? QColor(Theme::LIGHT_ROW_ALT_LIGHT) : QColor(Theme::ROW_ALT_LIGHT);
+    const QColor textCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor(Theme::TEXT_SOLUTION);
+    const QColor textColAlt = m_expanded ? (m_lightTheme ? QColor("#444466") : QColor(203, 203, 203)) : textCol;
+    const QColor metaCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SECONDARY) : QColor(154, 172, 190);
+    const QColor metaColAlt = m_expanded ? (m_lightTheme ? QColor("#666688") : QColor(150, 150, 150, 238)) : metaCol;
     const int rowH = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
@@ -2266,6 +2279,7 @@ void MainWindow::rebuildTable() {
         m_solutionTable->setRowHeight(i, rowH);
     }
 }
+
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
@@ -2319,7 +2333,7 @@ void MainWindow::onRankErgoToggled(bool checked) {
     for (auto& [line, score] : rated) {
         const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
         bool isAltRow   = (solIdx % 2 == 1);
-        QString color   = m_expanded ? (isAltRow ? "#cdcdcd" : "#7abfe8") : "#7abfe8";
+        QString color   = m_expanded ? (isAltRow ? Theme::ERGO_ALT_TEXT_DARK : Theme::TEXT_SOLUTION) : Theme::TEXT_SOLUTION;
         QString fsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
         QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
         QString display = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
@@ -2475,6 +2489,7 @@ void MainWindow::showAboutModal() {
 
 void MainWindow::applyTheme() {
     setStyleSheet(buildStyleSheet());
+    if (m_updateLogo) m_updateLogo();
     // Repaint the cube widget with the right canvas bg
     QString canvasBg = m_lightTheme ? Theme::LIGHT_CANVAS_BG : Theme::PRIMARY_BG;
     cubeWidget->setStyleSheet(QString("background: %1;").arg(canvasBg));

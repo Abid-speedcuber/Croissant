@@ -144,5 +144,6 @@ private:
     void openSidebar();
     void closeSidebar();
     void applyTheme();
+    std::function<void()> m_updateLogo;
     QString buildStyleSheet();
 };

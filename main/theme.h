@@ -176,6 +176,13 @@ namespace Theme {
     static constexpr const char* LIGHT_SIDEBAR_BORDER = "#c0c0da";
     static constexpr const char* LIGHT_CANVAS_BG      = "#f0f0f8";
 
+    // ========== INLINE / RUNTIME DYNAMIC COLORS ==========
+    static constexpr const char* DEPTHS_INACTIVE_COLOR  = "#666";
+    static constexpr const char* DEPTHS_INACTIVE_BG     = "#1e1e30";
+    static constexpr const char* DEPTHS_INACTIVE_BORDER = "#3a3a4e";
+    static constexpr const char* ERGO_ALT_TEXT_DARK     = "#cdcdcd";
+    static constexpr const char* ERGO_ALT_META_DARK     = "#969696";
+
     // ========== UTILITY FUNCTION ==========
     // Returns a QColor from any theme constant
     inline QColor color(const char* hex) {
