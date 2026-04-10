@@ -676,24 +676,16 @@ void MainWindow::buildUI() {
         cubeWidget->move(0, 0);
 
         QWidget* cubeWithReset = new QWidget();
-        QVBoxLayout* cubeWithResetLay = new QVBoxLayout(cubeWithReset);
-        cubeWithResetLay->setContentsMargins(0,0,0,0);
-        cubeWithResetLay->setSpacing(0);
+        cubeWithReset->setFixedSize(cubeWrapper->width(), cubeWrapper->height());
+        cubeWrapper->setParent(cubeWithReset);
+        cubeWrapper->move(0, 0);
 
-        QWidget* resetRow = new QWidget();
-        QHBoxLayout* resetRowLay = new QHBoxLayout(resetRow);
-        resetRowLay->setContentsMargins(0,0,4,4);
-        resetRowLay->setSpacing(0);
-        resetRowLay->addStretch();
-
-        btnReset = new QPushButton("Reset");
+        btnReset = new QPushButton("Reset", cubeWithReset);
         btnReset->setObjectName("btnReset");
-        btnReset->setFixedSize(64, 28);
+        btnReset->setFixedSize(52, 52);
         btnReset->setToolTip("Reset  [Esc]");
-        resetRowLay->addWidget(btnReset);
-
-        cubeWithResetLay->addWidget(resetRow);
-        cubeWithResetLay->addWidget(cubeWrapper);
+        btnReset->move(cubeWithReset->width() - 52 - 6, 6);
+        btnReset->raise();
 
         QHBoxLayout* centerRow = new QHBoxLayout();
         centerRow->setContentsMargins(0,0,0,0);
@@ -829,7 +821,6 @@ void MainWindow::buildUI() {
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
         btnUndo->setEnabled(!m_undoStack.isEmpty());
-        appendStatusLine("Undone.");
     });
     connect(btnRedo, &QPushButton::clicked, this, [this]{
         if (m_redoStack.isEmpty()) return;
@@ -839,8 +830,7 @@ void MainWindow::buildUI() {
         CubeSnapshot snap = m_redoStack.takeLast();
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
-        btnRedo->setEnabled(!m_redoStack.isEmpty());
-        appendStatusLine("Redone.");
+        btnRedo->setEnabled(!m_redoStack.isEmpty());       
     });
     connect(btnApplyScramble, &QPushButton::clicked, this, &MainWindow::onApplyScramble);
     connect(txtScramble, &QLineEdit::returnPressed, this, &MainWindow::onApplyScramble);
@@ -1507,8 +1497,9 @@ QString MainWindow::buildStyleSheet() {
         QPushButton#btnCopy { background: %11; border: 1px solid %12; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: %4; font-size: 14px; padding: 0; margin-right: 5px;}
         QPushButton#btnCopy:hover { background: %22; color: %21; }
         QPushButton#btnReset {
-            background: %27; border: 1px solid %28; border-radius: 14px;
-            color: %4; font-size: 12px; padding: 3px 10px;
+            background: %27; border: 1px solid %28; border-radius: 26px;
+            color: %4; font-size: 11px; font-weight: bold; padding: 0;
+            letter-spacing: -0.5px;
         }
         QPushButton#btnReset:hover { background: %29; border-color: %20; color: %21; }
         QPushButton#btnUndo, QPushButton#btnRedo {
@@ -1974,21 +1965,6 @@ void MainWindow::pushUndoState() {
 // onReset
 // -------------------------------------------------------
 void MainWindow::onReset() {
-    txtOutput->clear();
-    m_rawLines.clear();
-    m_solutionLines.clear();
-    m_seenSolutions.clear();
-    chkRankErgo->blockSignals(true);
-    chkRankErgo->setChecked(false);
-    chkRankErgo->blockSignals(false);
-    appendStatusLine("Reset.");
-    btnExpand->setVisible(false);
-    btnCopyTerminal->setVisible(false);
-    btnTableMode->setVisible(false);
-    m_tableVisible = false;
-    txtOutput->setVisible(true);
-    m_tableContainer->setVisible(false);
-    if (m_expanded) toggleExpand();
     updateRankErgoState();
     updateCommand();
 }
