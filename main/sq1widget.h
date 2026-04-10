@@ -25,10 +25,12 @@ public:
 
 signals:
     void positionChanged(); // emitted whenever cube state changes
+    void userInteracted();  // emitted on mouse-driven piece swap/state change (for undo)
 
 protected:
     void paintEvent(QPaintEvent*) override;
     void mousePressEvent(QMouseEvent*) override;
+    void mouseMoveEvent(QMouseEvent*) override;
     void keyPressEvent(QKeyEvent*) override;
 
 private:

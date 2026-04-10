@@ -255,6 +255,7 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
     }
 
     if(isMiddle) {
+        emit userInteracted();
         // Cycle: square (middle=0, partial=0) → kite (middle=1, partial=0) → either (partial=1) → square
         if (middle_partial == 0 && middle == 0) {
             middle = 1;
@@ -266,13 +267,16 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
         }
     } else if(piece >= 0) {
         if(event->button() == Qt::RightButton) {
+            emit userInteracted();
             partiality[piece] = (partiality[piece]+1)%3;
             if(piece<23 && position[piece]==position[piece+1])
                 partiality[piece+1] = partiality[piece];
         } else {
             if(selected == -1) {
                 selected = piece;
+                // no state change yet — undo pushed when swap completes
             } else {
+                emit userInteracted();
                 swapSelected(piece);
             }
         }
@@ -280,6 +284,22 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
 
     update();
     emit positionChanged();
+}
+
+void Sq1Widget::mouseMoveEvent(QMouseEvent* event) {
+    QPointF pt = event->position();
+    bool overPiece = false;
+    if (pt.y() < MID_TOP) {
+        overPiece = hitTestTop(pt) >= 0;
+    } else if (pt.y() < MID_BOT) {
+        constexpr double r_len = MAIN_LEN + SUB_LEN;
+        double x1 = TOP_CX - r_len * 0.97;
+        double x3 = TOP_CX + r_len * 0.97;
+        overPiece = (pt.x() >= x1 && pt.x() <= x3);
+    } else {
+        overPiece = hitTestBot(pt) >= 0;
+    }
+    setCursor(overPiece ? Qt::PointingHandCursor : Qt::ArrowCursor);
 }
 
 void Sq1Widget::swapSelected(int piece) {

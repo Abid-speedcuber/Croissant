@@ -145,6 +145,7 @@ private:
     QWidget*      m_sidebarOverlay{nullptr};
     bool          m_sidebarOpen{false};
     QPushButton*  btnHamburger{nullptr};
+    QWidget*      m_inputBarOuter{nullptr};
     void showSettingsModal();
     void showHowToUseModal();
     void openSidebar();

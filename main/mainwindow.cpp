@@ -685,6 +685,7 @@ void MainWindow::buildUI() {
     // ── Full-width input bar ──────────────────────────────────────────────────
     QWidget* inputBarOuter = new QWidget();
     inputBarOuter->setObjectName("inputBarOuter");
+    m_inputBarOuter = inputBarOuter;
     inputBarOuter->setStyleSheet(QString(
         "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
         .arg(Theme::DARK_BG, Theme::BORDER_BOTTOM));
@@ -742,6 +743,7 @@ void MainWindow::buildUI() {
     leftCol->setSpacing(4);
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
+    connect(cubeWidget, &Sq1Widget::userInteracted,  this, &MainWindow::pushUndoState);
     {
         QWidget* cubeWrapper = new QWidget();
         cubeWrapper->setFixedSize(cubeWidget->width(), cubeWidget->height());
@@ -1571,7 +1573,15 @@ void MainWindow::buildUI() {
         btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise();
     });
 
+    // Hand cursor on all clickable widgets
+    const auto allBtns = findChildren<QPushButton*>();
+    for (auto* b : allBtns) b->setCursor(Qt::PointingHandCursor);
+    const auto allChks = findChildren<QCheckBox*>();
+    for (auto* c : allChks) c->setCursor(Qt::PointingHandCursor);
+    m_solutionTable->setCursor(Qt::PointingHandCursor);
+
     updateConstraints();
+    rebuildTerminalView();
 }
 
 // -------------------------------------------------------
@@ -1599,6 +1609,16 @@ void MainWindow::toggleExpand() {
 
 void MainWindow::rebuildTerminalView() {
     txtOutput->clear();
+    if (m_rawLines.isEmpty()) {
+        QTextCursor cur(txtOutput->document());
+        QTextCharFormat fmt;
+        fmt.setForeground(QColor(m_lightTheme ? "#888899" : "#2a2a3a"));
+        fmt.setFontItalic(false);
+        fmt.setFontPointSize(10);
+        fmt.setFontFamily("monospace");
+        cur.insertText("solution will be displayed here...", fmt);
+        return;
+    }
     QTextCursor cur(txtOutput->document());
     int solIdx = 0;
     for (const QString& line : std::as_const(m_rawLines)) {
@@ -1835,26 +1855,27 @@ QString MainWindow::buildStyleSheet() {
         }
         QPushButton#btnInputMode {
             background: #1a6b3c; border: 1px solid #2db570;
-            border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
-            border-right: none; color: #fff; padding: 0 8px; font-size: 11px; font-weight: bold;
+            border-radius: 14px 0 0 14px;
+            border-right: none; color: #fff; padding: 0 10px; font-size: 11px; font-weight: bold;
         }
         QPushButton#btnInputMode:hover { background: #227a47; }
         QPushButton#btnInputModeArrow {
             background: #1a6b3c; border: 1px solid #2db570;
-            border-radius: 0; border-left: 1px solid #2db570;
-            border-right: none; color: #fff; padding: 0; font-size: 11px;
+            border-radius: 0 14px 14px 0;
+            border-left: 1px solid rgba(255,255,255,0.25);
+            color: #fff; padding: 0 6px; font-size: 11px;
         }
         QPushButton#btnInputModeArrow:hover { background: #227a47; }
         QPushButton#btnApply {
-            background: #2a3a2e; border: 1px solid #2db570;
-            border-left: none; border-radius: 0;
-            border-top-right-radius: 4px; border-bottom-right-radius: 4px;
-            color: #7ecfa0; font-size: 12px; font-weight: bold; padding: 0 10px;
+            background: #1a6b3c; border: 1px solid #2db570;
+            border-radius: 14px; margin-left: 8px;
+            color: #fff; font-size: 11px; font-weight: bold; padding: 0 12px;
+            min-width: 52px;
         }
-        QPushButton#btnApply:hover { background: #1a6b3c; color: #fff; }
+        QPushButton#btnApply:hover { background: #227a47; }
         QLineEdit#txtMainInput {
-            border-top-left-radius: 0; border-bottom-left-radius: 0;
-            border-right: none; border-radius: 0;
+            border-radius: 4px; border: 1px solid %12;
+            margin-left: 6px;
             font-family: monospace; font-size: 12px;
         }
         QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
@@ -1932,6 +1953,9 @@ QString MainWindow::buildStyleSheet() {
             padding: 6px 10px;
             font-size: 12px;
             opacity: 230;
+        }
+        QPushButton, QCheckBox, QAbstractItemView::item {
+            cursor: pointer;
         }
     )")
         .arg(PRIMARY_BG)          // %1  main bg
@@ -2143,6 +2167,7 @@ void MainWindow::onSolve() {
     chkRankErgo->blockSignals(false);
     updateRankErgoState();
 
+    txtOutput->clear();
     appendStatusLine("Solving…");
 
     // Swap Solve → Stop appearance (muted dark red, not alarming).
@@ -2870,6 +2895,47 @@ void MainWindow::applyTheme() {
         "QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px;"
         " border-right: none; border-radius: 0; border-top-left-radius: 4px;"
         " border-bottom-left-radius: 4px; }").arg(cyan));
+
+    // Input bar background
+    if (m_inputBarOuter) {
+        QString barBg     = m_lightTheme ? Theme::LIGHT_DARK_BG   : Theme::DARK_BG;
+        QString barBorder = m_lightTheme ? Theme::LIGHT_BORDER_BOTTOM : Theme::BORDER_BOTTOM;
+        m_inputBarOuter->setStyleSheet(QString(
+            "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
+            .arg(barBg, barBorder));
+    }
+    // Input bar: light theme overrides
+    if (m_lightTheme) {
+        m_inputMode->setStyleSheet(
+            "QPushButton#btnInputMode {"
+            "  background: #1a6b3c; border: 1px solid #2db570;"
+            "  border-radius: 4px 0 0 4px; border-right: none;"
+            "  color: #fff; padding: 0 8px; font-size: 11px; font-weight: bold; }"
+            "QPushButton#btnInputMode:hover { background: #227a47; }");
+        m_inputModeArrow->setStyleSheet(
+            "QPushButton#btnInputModeArrow {"
+            "  background: #1a6b3c; border: 1px solid #2db570;"
+            "  border-radius: 0; border-left: 1px solid rgba(255,255,255,0.2);"
+            "  border-right: none; color: #fff; padding: 0; font-size: 11px; }"
+            "QPushButton#btnInputModeArrow:hover { background: #227a47; }");
+        btnApply->setStyleSheet(
+            "QPushButton#btnApply {"
+            "  background: #1a6b3c; border: 2px solid #2db570;"
+            "  border-radius: 4px; margin-left: 6px;"
+            "  color: #fff; font-size: 12px; font-weight: bold; padding: 0 14px; }"
+            "QPushButton#btnApply:hover { background: #227a47; }");
+        m_mainInput->setStyleSheet(
+            "QLineEdit#txtMainInput {"
+            "  border-top-left-radius: 0; border-bottom-left-radius: 0;"
+            "  border-top-right-radius: 4px; border-bottom-right-radius: 4px;"
+            "  border-right: 1px solid #aaa; border-radius: 0;"
+            "  font-family: monospace; font-size: 12px; }");
+    } else {
+        m_inputMode->setStyleSheet("");
+        m_inputModeArrow->setStyleSheet("");
+        btnApply->setStyleSheet("");
+        m_mainInput->setStyleSheet("");
+    }
 }
 
 void MainWindow::openSidebar() {
