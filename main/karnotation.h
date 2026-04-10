@@ -307,8 +307,10 @@ inline std::string dictReplace(std::string str, const std::map<std::string,std::
     std::string prev;
     do {
         prev = str;
-        for (const auto& [k, v] : dict)
+        for (const auto& [k, v] : dict) {
             str = replaceAll(str, k, v);
+            if (str != prev) break;
+        }
     } while (str != prev);
     return str;
 }
