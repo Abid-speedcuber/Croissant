@@ -675,23 +675,32 @@ void MainWindow::buildUI() {
         cubeWidget->setParent(cubeWrapper);
         cubeWidget->move(0, 0);
 
-        QHBoxLayout* centerRow = new QHBoxLayout();
-        centerRow->setContentsMargins(0,0,0,0);
-        centerRow->addStretch();
-        centerRow->addWidget(cubeWrapper);
-        centerRow->addStretch();
-        leftCol->addLayout(centerRow);
+        QWidget* cubeWithReset = new QWidget();
+        QVBoxLayout* cubeWithResetLay = new QVBoxLayout(cubeWithReset);
+        cubeWithResetLay->setContentsMargins(0,0,0,0);
+        cubeWithResetLay->setSpacing(0);
+
+        QWidget* resetRow = new QWidget();
+        QHBoxLayout* resetRowLay = new QHBoxLayout(resetRow);
+        resetRowLay->setContentsMargins(0,0,4,4);
+        resetRowLay->setSpacing(0);
+        resetRowLay->addStretch();
 
         btnReset = new QPushButton("Reset");
         btnReset->setObjectName("btnReset");
-        btnReset->setFixedSize(80, 34);
+        btnReset->setFixedSize(64, 28);
         btnReset->setToolTip("Reset  [Esc]");
+        resetRowLay->addWidget(btnReset);
 
-        QHBoxLayout* resetRow = new QHBoxLayout();
-        resetRow->setContentsMargins(0, 2, 0, 0);
-        resetRow->addStretch();
-        resetRow->addWidget(btnReset);
-        leftCol->addLayout(resetRow);
+        cubeWithResetLay->addWidget(resetRow);
+        cubeWithResetLay->addWidget(cubeWrapper);
+
+        QHBoxLayout* centerRow = new QHBoxLayout();
+        centerRow->setContentsMargins(0,0,0,0);
+        centerRow->addStretch();
+        centerRow->addWidget(cubeWithReset);
+        centerRow->addStretch();
+        leftCol->addLayout(centerRow);
     }
 
     // Grid: U' | Slice (rowspan 2) | U
@@ -1074,6 +1083,8 @@ void MainWindow::buildUI() {
     txtOutput->setReadOnly(true);
     txtOutput->setObjectName("txtOutput");
     txtOutput->setMinimumHeight(120);
+    txtOutput->setStyleSheet("QTextEdit { background: #000000; }");
+    txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
 
     // Floating buttons — parented to outputWrapper so they overlay the terminal
     btnExpand = new QPushButton("⤢", outputWrapper);
@@ -1277,28 +1288,34 @@ void MainWindow::toggleExpand() {
 
 void MainWindow::rebuildTerminalView() {
     txtOutput->clear();
+    QTextCursor cur(txtOutput->document());
     int solIdx = 0;
     for (const QString& line : std::as_const(m_rawLines)) {
         bool isSol = line.contains('[') && line.contains(']');
+        if (!cur.atStart()) cur.insertBlock();
+        QTextCharFormat fmt;
         if (isSol) {
-            const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
-            QString color   = m_expanded
-                ? (solIdx % 2 == 0 ? "#7abfe8" : "#cbcbcb")
-                : "#7abfe8";
-            QString fsStyle = m_expanded
-                ? "font-size:15px;line-height:1.9;"
-                : "";
-            QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
-            txtOutput->append(QString(
-                "<div style='background:%1;color:%2;font-weight:bold;"
-                "margin:0;%3%4'>%5</div>")
-                .arg(bg, color, fsStyle, padding, line.toHtmlEscaped()));
+            bool isAlt = (solIdx % 2 == 1);
+            QString col = m_lightTheme
+                ? (isAlt ? "#2a6a2a" : "#1a4a8a")
+                : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+            fmt.setForeground(QColor(col));
+            fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
+            fmt.setFontPointSize(m_expanded ? 13 : 10);
+            QTextBlockFormat blkFmt;
+            blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
+            cur.setBlockFormat(blkFmt);
             solIdx++;
         } else {
-            QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
-            txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
-                .arg(fsStyle, line.toHtmlEscaped()));
+            QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+            fmt.setForeground(QColor(col));
+            fmt.setFontWeight(QFont::Normal);
+            fmt.setFontPointSize(m_expanded ? 11 : 10);
+            QTextBlockFormat blkFmt;
+            blkFmt.setLineHeight(m_expanded ? 150 : 120, QTextBlockFormat::ProportionalHeight);
+            cur.setBlockFormat(blkFmt);
         }
+        cur.insertText(line, fmt);
     }
     txtOutput->verticalScrollBar()->setValue(0);
 }
@@ -1479,7 +1496,8 @@ QString MainWindow::buildStyleSheet() {
                                border-right: 3px solid transparent;
                                border-top: 4px solid %2; }
         QTextEdit#txtOutput { background: %17; border: 1px solid %3; border-radius: 4px;
-                              font-family: monospace; font-size: 12px; color: %18; }
+                              font-family: monospace; font-size: 12px; color: %18; padding: 4px; }
+        QTextEdit#txtOutput > QWidget { background: %17; }
         QPushButton { background: %19; border: 1px solid %20; border-radius: 5px; padding: 5px 12px; color: %21; }
         QPushButton:hover { background: %22; border-color: %20; }
         QPushButton:pressed { background: %23; }
@@ -1489,8 +1507,8 @@ QString MainWindow::buildStyleSheet() {
         QPushButton#btnCopy { background: %11; border: 1px solid %12; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: %4; font-size: 14px; padding: 0; margin-right: 5px;}
         QPushButton#btnCopy:hover { background: %22; color: %21; }
         QPushButton#btnReset {
-            background: %27; border: 1px solid %28; border-radius: 6px;
-            color: %4; font-size: 13px; padding: 4px 10px;
+            background: %27; border: 1px solid %28; border-radius: 14px;
+            color: %4; font-size: 12px; padding: 3px 10px;
         }
         QPushButton#btnReset:hover { background: %29; border-color: %20; color: %21; }
         QPushButton#btnUndo, QPushButton#btnRedo {
@@ -1511,9 +1529,9 @@ QString MainWindow::buildStyleSheet() {
         }
         QPushButton#btnApplyScramble:hover { background: %22; border-color: %20; }
         QPushButton#btnScrambleMode {
-            background: %11; border: 1px solid %12;
+            background: #333350; border: 1px solid %12;
             border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
-            border-right: none; color: %4; padding: 0 6px; font-size: 11px;
+            border-right: none; color: #fff; padding: 0 6px; font-size: 11px;
         }
         QPushButton#btnScrambleMode:checked { color: #fff; background: #333350; }
         QPushButton#btnScrambleMode:hover { background: %22; }
@@ -1555,7 +1573,7 @@ QString MainWindow::buildStyleSheet() {
             border-bottom: 1px solid %44; padding: 4px;
             font-size: 11px; font-weight: bold;
         }
-        QTableWidget#m_solutionTable::item { background: %43; color: %2; }
+        QTableWidget#m_solutionTable::item { }
         QTableWidget#m_solutionTable::item:selected {
             background: %48; color: %49;
         }
@@ -1863,24 +1881,38 @@ void MainWindow::onSolverLine(QString line) {
         btnExpand->setVisible(true);
         btnCopyTerminal->setVisible(true);
         btnTableMode->setVisible(true);
-        // Alternate row backgrounds: near-black vs subtle dark-blue, text always light blue
-        const char* bg = (m_solutionLines.size() % 2 == 1) ? Theme::ROW_ALT_DARK : Theme::ROW_ALT_LIGHT;
-        QString solColor = m_expanded
-            ? (m_solutionLines.size() % 2 == 1 ? Theme::TEXT_SOLUTION : "#cbcbcb")
-            : Theme::TEXT_SOLUTION;
-        QString solFsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
-        QString solPadding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
-        txtOutput->append(QString(
-            "<div style='background:%1;color:%2;font-weight:bold;"
-            "margin:0;%3%4'>%5</div>")
-            .arg(bg, solColor, solFsStyle, solPadding, line.toHtmlEscaped()));
-        // Enable rank button as soon as the first solution arrives — even mid-solve —
-        // so stopping early still allows ranking whatever was found.
         updateRankErgoState();
+        {
+            bool isAlt = (m_solutionLines.size() % 2 == 0);
+            QString col = m_lightTheme
+                ? (isAlt ? "#2a6a2a" : "#1a4a8a")
+                : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+            QTextCursor cur = txtOutput->textCursor();
+            cur.movePosition(QTextCursor::End);
+            if (!txtOutput->document()->isEmpty()) cur.insertBlock();
+            QTextBlockFormat blkFmt;
+            blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
+            cur.setBlockFormat(blkFmt);
+            QTextCharFormat fmt;
+            fmt.setForeground(QColor(col));
+            fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
+            fmt.setFontPointSize(m_expanded ? 13 : 10);
+            cur.insertText(line, fmt);
+            txtOutput->setTextCursor(cur);
+        }
     } else {
-        QString nonsolFs = m_expanded ? "font-size:13px;line-height:1.6;" : "";
-        txtOutput->append(QString("<span style='color:%1;%2'>%3</span>")
-            .arg(Theme::TEXT_MUTED, nonsolFs, line.toHtmlEscaped()));
+        QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+        QTextCursor cur = txtOutput->textCursor();
+        cur.movePosition(QTextCursor::End);
+        if (!txtOutput->document()->isEmpty()) cur.insertBlock();
+        QTextBlockFormat blkFmt;
+        blkFmt.setLineHeight(m_expanded ? 150 : 120, QTextBlockFormat::ProportionalHeight);
+        cur.setBlockFormat(blkFmt);
+        QTextCharFormat fmt;
+        fmt.setForeground(QColor(col));
+        fmt.setFontPointSize(m_expanded ? 11 : 10);
+        cur.insertText(line, fmt);
+        txtOutput->setTextCursor(cur);
     }
 }
 
@@ -2163,8 +2195,19 @@ void MainWindow::onApplyScramble() {
 }
 
 void MainWindow::appendStatusLine(const QString& msg) {
-    txtOutput->append(QString("<div style='color:#6a9ab8;font-size:11px;padding:1px 4px;font-style:italic;'>%1</div>")
-        .arg(msg.toHtmlEscaped()));
+    QString col = m_lightTheme ? Theme::LIGHT_TEXT_TERMINAL : "#6a9ab8";
+    QTextCursor cur = txtOutput->textCursor();
+    cur.movePosition(QTextCursor::End);
+    if (!txtOutput->document()->isEmpty()) cur.insertBlock();
+    QTextCharFormat fmt;
+    fmt.setForeground(QColor(col));
+    fmt.setFontItalic(true);
+    fmt.setFontPointSize(m_expanded ? 11 : 9);
+    QTextBlockFormat blkFmt;
+    blkFmt.setLineHeight(120, QTextBlockFormat::ProportionalHeight);
+    cur.setBlockFormat(blkFmt);
+    cur.insertText(msg, fmt);
+    txtOutput->setTextCursor(cur);
 }
 
 void MainWindow::rebuildTable() {
@@ -2228,12 +2271,13 @@ void MainWindow::rebuildTable() {
             });
     }
 
-    const QColor rowA = m_lightTheme ? QColor(Theme::LIGHT_ROW_ALT_DARK) : QColor(Theme::ROW_ALT_DARK);
-    const QColor rowB = m_lightTheme ? QColor(Theme::LIGHT_ROW_ALT_LIGHT) : QColor(Theme::ROW_ALT_LIGHT);
-    const QColor textCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor(Theme::TEXT_SOLUTION);
-    const QColor textColAlt = m_expanded ? (m_lightTheme ? QColor("#444466") : QColor(203, 203, 203)) : textCol;
+    const QColor rowA = QColor(m_lightTheme ? Theme::LIGHT_TABLE_BG : Theme::ROW_ALT_DARK);
+    const QColor rowB = m_lightTheme ? rowA : QColor(Theme::ROW_ALT_LIGHT);
+    // Dark mode: row A gets blue text, row B gets white text (alternating)
+    const QColor textCol    = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor(Theme::TEXT_SOLUTION);
+        const QColor textColAlt = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor("#cbcbcb");
     const QColor metaCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SECONDARY) : QColor(154, 172, 190);
-    const QColor metaColAlt = m_expanded ? (m_lightTheme ? QColor("#666688") : QColor(150, 150, 150, 238)) : metaCol;
+    const QColor metaColAlt = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SECONDARY) : QColor(150, 150, 150, 238);
     const int rowH = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
@@ -2246,25 +2290,33 @@ void MainWindow::rebuildTable() {
         auto cell = [&](int col, const QString& txt, bool isMeta = false) {
             QTableWidgetItem* item = new QTableWidgetItem(txt);
             item->setBackground(bg);
+            QColor c = isMeta ? (isAltRow ? metaColAlt : metaCol)
+                               : (isAltRow ? textColAlt : textCol);
+            item->setForeground(c);
             if (m_expanded) {
-                QColor c = isMeta ? (isAltRow ? metaColAlt : metaCol)
-                                  : (isAltRow ? textColAlt : textCol);
-                item->setForeground(c);
                 QFont f = item->font();
                 f.setPointSize(fontSize);
                 item->setFont(f);
-            } else {
-                item->setForeground(isMeta ? metaCol : textCol);
             }
             item->setTextAlignment(Qt::AlignCenter);
             m_solutionTable->setItem(i, col, item);
         };
 
-        cell(0, QString::number(i+1), true);
+        QTableWidgetItem* numItem = new QTableWidgetItem(QString::number(i+1));
+        numItem->setBackground(bg);
+        numItem->setForeground(isAltRow ? metaColAlt : metaCol);
+        numItem->setTextAlignment(Qt::AlignCenter);
+        {
+            QFont f = numItem->font();
+            f.setPointSize(m_expanded ? fontSize - 2 : 10);
+            f.setItalic(true);
+            numItem->setFont(f);
+        }
+        m_solutionTable->setItem(i, 0, numItem);
         // Solution column: left-aligned
         QTableWidgetItem* algItem = new QTableWidgetItem(r.alg);
         algItem->setBackground(bg);
-        algItem->setForeground(m_expanded && isAltRow ? textColAlt : textCol);
+        algItem->setForeground(isAltRow ? textColAlt : textCol);
         algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
         if (m_expanded) {
             QFont f = algItem->font();
@@ -2319,28 +2371,35 @@ void MainWindow::onRankErgoToggled(bool checked) {
     auto rated = rateAndSort(m_solutionLines, m_posHex, true); // always use karn for rating
 
     txtOutput->clear();
-    // First emit non-solution lines (status/info lines)
+    QTextCursor cur(txtOutput->document());
+    bool firstBlock = true;
+    auto insertLine = [&](const QString& text, const QString& color, bool bold, int ptSize, int lineH) {
+        if (!firstBlock) cur.insertBlock();
+        firstBlock = false;
+        QTextBlockFormat blkFmt;
+        blkFmt.setLineHeight(lineH, QTextBlockFormat::ProportionalHeight);
+        cur.setBlockFormat(blkFmt);
+        QTextCharFormat fmt;
+        fmt.setForeground(QColor(color));
+        fmt.setFontWeight(bold ? QFont::Bold : QFont::Normal);
+        fmt.setFontPointSize(ptSize);
+        cur.insertText(text, fmt);
+    };
     for (const QString& line : std::as_const(m_rawLines)) {
         bool isSol = line.contains('[') && line.contains(']');
         if (!isSol) {
-            QString fsStyle = m_expanded ? "font-size:13px;line-height:1.6;" : "";
-            txtOutput->append(QString("<span style='color:#888;%1'>%2</span>")
-                .arg(fsStyle, line.toHtmlEscaped()));
+            QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+            insertLine(line, col, false, m_expanded ? 11 : 10, m_expanded ? 150 : 120);
         }
     }
-
     int solIdx = 0;
     for (auto& [line, score] : rated) {
-        const char* bg  = (solIdx % 2 == 0) ? "#0d1117" : "#131c28";
-        bool isAltRow   = (solIdx % 2 == 1);
-        QString color   = m_expanded ? (isAltRow ? Theme::ERGO_ALT_TEXT_DARK : Theme::TEXT_SOLUTION) : Theme::TEXT_SOLUTION;
-        QString fsStyle = m_expanded ? "font-size:15px;line-height:1.9;" : "";
-        QString padding = m_expanded ? "padding:5px 8px;" : "padding:1px 4px;";
+        bool isAlt = (solIdx % 2 == 1);
+        QString col = m_lightTheme
+            ? (isAlt ? "#2a6a2a" : "#1a4a8a")
+            : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
         QString display = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
-        txtOutput->append(QString(
-            "<div style='background:%1;color:%2;font-weight:bold;"
-            "margin:0;%3%4'>%5</div>")
-            .arg(bg, color, fsStyle, padding, display.toHtmlEscaped()));
+        insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         solIdx++;
     }
     appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
@@ -2490,6 +2549,15 @@ void MainWindow::showAboutModal() {
 void MainWindow::applyTheme() {
     setStyleSheet(buildStyleSheet());
     if (m_updateLogo) m_updateLogo();
+    updateConstraints();
+    QString termBg = m_lightTheme ? Theme::LIGHT_SECONDARY_BG : "#000000";
+    txtOutput->setStyleSheet(QString("QTextEdit { background: %1; }").arg(termBg));
+    txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
+    if (!m_rawLines.isEmpty()) {
+        if (chkRankErgo->isChecked()) onRankErgoToggled(true);
+        else rebuildTerminalView();
+    }
+    if (m_tableVisible) rebuildTable();
     // Repaint the cube widget with the right canvas bg
     QString canvasBg = m_lightTheme ? Theme::LIGHT_CANVAS_BG : Theme::PRIMARY_BG;
     cubeWidget->setStyleSheet(QString("background: %1;").arg(canvasBg));
