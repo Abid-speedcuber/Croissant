@@ -126,7 +126,7 @@ private:
     bool          m_scrambleIsAlg{false};
     int           m_inputModeIndex{0}; // 0=scramble, 1=alg, 2=position
     QPushButton*  m_inputMode{nullptr};
-    QPushButton*  m_inputModeDropdown{nullptr};
+    QPushButton*  m_inputModeArrow{nullptr};
     QLineEdit*    m_mainInput{nullptr};
     int           m_sliceCount{0};
     QTimer*       m_sliceTimer{nullptr};    // true = input alg mode (inverts before applying)

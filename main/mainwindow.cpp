@@ -804,19 +804,45 @@ void MainWindow::buildUI() {
         updateCommand();
         btnRedo->setEnabled(!m_redoStack.isEmpty());       
     });
-    // Mode button cycles: SCRAMBLE → ALG → POSITION
-    connect(m_inputMode, &QPushButton::clicked, this, [this]{
-        m_inputModeIndex = (m_inputModeIndex + 1) % 3;
+    auto applyInputMode = [this](int idx) {
+        m_inputModeIndex = idx;
         static const char* labels[] = {"SCRAMBLE", "ALG", "POSITION"};
         static const char* placeholders[] = {
             "1,0 / 3,3 / 0,-3 / ...  (supports karn)",
             "1,0 / 3,3 / 0,-3 / ...  (supports karn)",
             "ABCDEFGH12345678-"
         };
-        m_inputMode->setText(labels[m_inputModeIndex]);
-        m_mainInput->setPlaceholderText(placeholders[m_inputModeIndex]);
+        m_inputMode->setText(labels[idx]);
+        m_mainInput->setPlaceholderText(placeholders[idx]);
         m_mainInput->clear();
         lblScrambleError->setVisible(false);
+    };
+
+    // Mode toggle button: cycles SCRAMBLE → ALG → POSITION
+    connect(m_inputMode, &QPushButton::clicked, this, [this, applyInputMode]{
+        applyInputMode((m_inputModeIndex + 1) % 3);
+    });
+
+    // Arrow button: opens dropdown menu
+    connect(m_inputModeArrow, &QPushButton::clicked, this, [this, applyInputMode]{
+        QMenu* menu = new QMenu(this);
+        menu->setStyleSheet(QString(
+            "QMenu { background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 6px; padding: 4px; color: #e0e0e0; font-size: 12px; }"
+            "QMenu::item { padding: 6px 20px; border-radius: 4px; }"
+            "QMenu::item:selected { background: #3a3a5e; }"
+            "QMenu::item:checked { color: #2db570; font-weight: bold; }"
+        ));
+        QAction* aScram = menu->addAction("Scramble");
+        QAction* aAlg   = menu->addAction("Alg");
+        QAction* aPos   = menu->addAction("Position");
+        aScram->setCheckable(true); aScram->setChecked(m_inputModeIndex == 0);
+        aAlg->setCheckable(true);   aAlg->setChecked(m_inputModeIndex == 1);
+        aPos->setCheckable(true);   aPos->setChecked(m_inputModeIndex == 2);
+        connect(aScram, &QAction::triggered, this, [applyInputMode]{ applyInputMode(0); });
+        connect(aAlg,   &QAction::triggered, this, [applyInputMode]{ applyInputMode(1); });
+        connect(aPos,   &QAction::triggered, this, [applyInputMode]{ applyInputMode(2); });
+        // Show menu below the arrow button
+        menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height())));
     });
 
     connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
@@ -1046,11 +1072,16 @@ void MainWindow::buildUI() {
     btnSolve->setFixedHeight(32);
     btnSolve->setFixedWidth(90);
 
-    // Unified input bar: mode dropdown + input + solve button
+    // Unified input bar: mode toggle + dropdown arrow + input + solve button
     m_inputMode = new QPushButton("SCRAMBLE");
     m_inputMode->setObjectName("btnInputMode");
     m_inputMode->setFixedHeight(32);
-    m_inputMode->setFixedWidth(90);
+    m_inputMode->setFixedWidth(82);
+
+    m_inputModeArrow = new QPushButton("▾");
+    m_inputModeArrow->setObjectName("btnInputModeArrow");
+    m_inputModeArrow->setFixedHeight(32);
+    m_inputModeArrow->setFixedWidth(20);
 
     m_mainInput = new QLineEdit();
     m_mainInput->setObjectName("txtMainInput");
@@ -1058,6 +1089,7 @@ void MainWindow::buildUI() {
     m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
 
     cmdSolveLayout->addWidget(m_inputMode);
+    cmdSolveLayout->addWidget(m_inputModeArrow);
     cmdSolveLayout->addWidget(m_mainInput, 1);
     cmdSolveLayout->addWidget(btnSolve);
     topLay->addWidget(cmdSolveRow);
@@ -1549,6 +1581,12 @@ QString MainWindow::buildStyleSheet() {
             border-right: none; color: #fff; padding: 0 8px; font-size: 11px; font-weight: bold;
         }
         QPushButton#btnInputMode:hover { background: #227a47; }
+        QPushButton#btnInputModeArrow {
+            background: #1a6b3c; border: 1px solid #2db570;
+            border-radius: 0; border-left: 1px solid #2db570;
+            border-right: none; color: #fff; padding: 0; font-size: 11px;
+        }
+        QPushButton#btnInputModeArrow:hover { background: #227a47; }
         QLineEdit#txtMainInput {
             border-top-left-radius: 0; border-bottom-left-radius: 0;
             border-right: none; border-radius: 0;
