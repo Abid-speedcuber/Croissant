@@ -682,6 +682,51 @@ void MainWindow::buildUI() {
     topBarLayout->addStretch();
     outerLayout->addWidget(topBar);
 
+    // ── Full-width input bar ──────────────────────────────────────────────────
+    QWidget* inputBarOuter = new QWidget();
+    inputBarOuter->setObjectName("inputBarOuter");
+    inputBarOuter->setStyleSheet(QString(
+        "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
+        .arg(Theme::DARK_BG, Theme::BORDER_BOTTOM));
+    QHBoxLayout* inputBarOuterLay = new QHBoxLayout(inputBarOuter);
+    inputBarOuterLay->setContentsMargins(12, 6, 12, 6);
+    inputBarOuterLay->setSpacing(0);
+
+    QWidget* inputBarInner = new QWidget();
+    inputBarInner->setMaximumWidth(1400);
+    QHBoxLayout* inputBarLay = new QHBoxLayout(inputBarInner);
+    inputBarLay->setContentsMargins(0, 0, 0, 0);
+    inputBarLay->setSpacing(0);
+
+    m_inputMode = new QPushButton("SCRAMBLE");
+    m_inputMode->setObjectName("btnInputMode");
+    m_inputMode->setFixedHeight(32);
+    m_inputMode->setFixedWidth(82);
+
+    m_inputModeArrow = new QPushButton("▾");
+    m_inputModeArrow->setObjectName("btnInputModeArrow");
+    m_inputModeArrow->setFixedHeight(32);
+    m_inputModeArrow->setFixedWidth(20);
+
+    m_mainInput = new QLineEdit();
+    m_mainInput->setObjectName("txtMainInput");
+    m_mainInput->setFixedHeight(32);
+    m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
+
+    btnApply = new QPushButton("Apply");
+    btnApply->setObjectName("btnApply");
+    btnApply->setFixedHeight(32);
+    btnApply->setFixedWidth(64);
+
+    inputBarLay->addWidget(m_inputMode);
+    inputBarLay->addWidget(m_inputModeArrow);
+    inputBarLay->addWidget(m_mainInput, 1);
+    inputBarLay->addWidget(btnApply);
+
+    inputBarOuterLay->addWidget(inputBarInner, 1);
+
+    outerLayout->addWidget(inputBarOuter);
+
     QWidget* contentWidget = new QWidget();
     outerLayout->addWidget(contentWidget, 1);
 
@@ -765,6 +810,11 @@ void MainWindow::buildUI() {
     undoResetRedoRow->addWidget(btnRedo, 1);
     leftCol->addLayout(undoResetRedoRow);
 
+    btnSolve = new QPushButton("▶  Solve");
+    btnSolve->setObjectName("btnSolve");
+    btnSolve->setFixedHeight(48);
+    leftCol->addWidget(btnSolve);
+
     // Stub out old scramble widgets so references don't break
     btnScrambleMode = new QPushButton(); btnScrambleMode->setVisible(false);
     txtScramble = new QLineEdit();       txtScramble->setVisible(false);
@@ -831,30 +881,6 @@ void MainWindow::buildUI() {
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
         btnRedo->setEnabled(!m_redoStack.isEmpty());       
-    });
-
-    connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
-        lblScrambleError->setVisible(false);
-        if (m_inputModeIndex == 2) {
-            // Position mode: live update cube
-            if (text.trimmed().isEmpty()) return;
-            bool ok = cubeWidget->setPositionFromString(text.trimmed());
-            if (ok) updateCommand();
-        } else {
-            // Scramble/Alg mode: live apply on each keystroke
-            if (text.trimmed().isEmpty()) {
-                cubeWidget->reset();
-                updateCommand();
-                return;
-            }
-            // Temporarily set mode flags and reuse onApplyScramble logic
-            m_scrambleIsAlg = (m_inputModeIndex == 1);
-            txtScramble->setText(text);
-            onApplyScramble();
-            // Restore undo stack – live updates shouldn't pollute undo
-            if (!m_undoStack.isEmpty()) m_undoStack.removeLast();
-            btnUndo->setEnabled(!m_undoStack.isEmpty());
-        }
     });
 
     root->addWidget(leftScroll);
@@ -1037,11 +1063,6 @@ void MainWindow::buildUI() {
     topLay->setSpacing(6);
     topLay->addWidget(grpOptions);
 
-    QWidget* cmdSolveRow = new QWidget();
-    QHBoxLayout* cmdSolveLayout = new QHBoxLayout(cmdSolveRow);
-    cmdSolveLayout->setContentsMargins(0, 0, 0, 0);
-    cmdSolveLayout->setSpacing(0);
-
     // Hidden command line (does its job under the hood)
     txtCommand = new QLineEdit();
     txtCommand->setReadOnly(false);
@@ -1055,32 +1076,142 @@ void MainWindow::buildUI() {
     btnCopy->setToolTip("Copy command");
     btnCopy->setVisible(false);
 
-    btnSolve = new QPushButton("▶ Solve");
-    btnSolve->setObjectName("btnSolve");
-    btnSolve->setFixedHeight(32);
-    btnSolve->setFixedWidth(90);
+    // Apply button
+    connect(m_mainInput, &QLineEdit::returnPressed, this, [this]{
+        btnApply->click();
+    });
 
-    // Unified input bar: mode toggle + dropdown arrow + input + solve button
-    m_inputMode = new QPushButton("SCRAMBLE");
-    m_inputMode->setObjectName("btnInputMode");
-    m_inputMode->setFixedHeight(32);
-    m_inputMode->setFixedWidth(82);
+    m_mainInput->installEventFilter(this);
 
-    m_inputModeArrow = new QPushButton("▾");
-    m_inputModeArrow->setObjectName("btnInputModeArrow");
-    m_inputModeArrow->setFixedHeight(32);
-    m_inputModeArrow->setFixedWidth(20);
+    connect(btnApply, &QPushButton::clicked, this, [this]{
+        const QString text = m_mainInput->text().trimmed();
+        if (text.isEmpty()) return;
 
-    m_mainInput = new QLineEdit();
-    m_mainInput->setObjectName("txtMainInput");
-    m_mainInput->setFixedHeight(32);
-    m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
+        if (m_inputModeIndex == 2) {
+            // Position mode
+            pushUndoState();
+            bool ok = cubeWidget->setPositionFromString(text);
+            if (!ok) {
+                m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+                m_undoStack.removeLast();
+                btnUndo->setEnabled(!m_undoStack.isEmpty());
+            } else {
+                m_mainInput->setStyleSheet("");
+                updateCommand();
+            }
+            return;
+        }
 
-    cmdSolveLayout->addWidget(m_inputMode);
-    cmdSolveLayout->addWidget(m_inputModeArrow);
-    cmdSolveLayout->addWidget(m_mainInput, 1);
-    cmdSolveLayout->addWidget(btnSolve);
-    topLay->addWidget(cmdSolveRow);
+        // Scramble/Alg mode — full parsing pipeline
+        pushUndoState();
+
+        if (m_applyFromSolved) {
+            cubeWidget->reset();
+            // don't push another undo for the reset — the pushUndoState above already saved pre-reset state
+        }
+
+        QString raw = text;
+        if (m_inputModeIndex == 1) {
+            raw = invertScrambleStr(raw);
+        }
+
+        // Convert karn to numeric first
+        std::string karnStr = raw.toStdString();
+        bool hasAlpha = false;
+        for (char c : karnStr) if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
+        if (hasAlpha) {
+            std::string converted = unkarnify(karnStr);
+            raw = QString::fromStdString(converted);
+        }
+
+        raw.replace('\\', '/');
+
+        struct Move { bool isSlice; int x, y; };
+        QVector<Move> moves;
+        bool ok = true;
+
+        QStringList segments = raw.split('/');
+        for (int si = 0; si < segments.size() && ok; si++) {
+            QString seg = segments[si].trimmed();
+            seg.remove('('); seg.remove(')');
+
+            if (si > 0) moves.append({true, 0, 0});
+
+            if (seg.isEmpty()) continue;
+
+            if (seg.contains(',')) {
+                QStringList parts = seg.split(',');
+                if (parts.size() != 2) { ok = false; break; }
+                bool ok1, ok2;
+                int x = parts[0].trimmed().toInt(&ok1);
+                int y = parts[1].trimmed().toInt(&ok2);
+                if (!ok1 || !ok2) { ok = false; break; }
+                moves.append({false, x, y});
+            } else {
+                // bare number → y defaults to 0
+                bool ok1;
+                int x = seg.toInt(&ok1);
+                if (!ok1) { ok = false; break; }
+                moves.append({false, x, 0});
+            }
+        }
+
+        if (!ok) {
+            m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+            m_undoStack.removeLast();
+            btnUndo->setEnabled(!m_undoStack.isEmpty());
+            return;
+        }
+
+        // Apply on top of CURRENT cube state (not reset)
+        int pos[24] = {};
+        int mid = 0;
+        {
+            std::string s = cubeWidget->getPositionString().toStdString();
+            int j = 0, nextPC = -3, nextPE = 18;
+            for (int i = 0; i < 16 && j < 24; i++) {
+                int k = (unsigned char)s[i];
+                if (k >= 'a' && k <= 'z') k += ('A'-'a');
+                if      (k>='A'&&k<='H') k-='A';
+                else if (k>='1'&&k<='8') k-=('1'-8);
+                else if (k=='U'||k=='V') { k=nextPC; nextPC-=3; }
+                else if (k=='W')         { k=nextPC; nextPC-=3; }
+                else if (k=='X'||k=='Y') { k=nextPE; nextPE+=3; }
+                else if (k=='Z')         { k=nextPE; nextPE+=3; }
+                pos[j++]=k;
+                if (k>=0&&k<8) pos[j++]=k;
+            }
+            mid = (s.size()>=17) ? (s[16]=='/'?1:0) : (!s.empty()&&s.back()=='/'?1:0);
+        }
+
+        auto doTop = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[11]; for(int i=11;i>0;i--) pos[i]=pos[i-1]; pos[0]=c; } };
+        auto doBot = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[23]; for(int i=23;i>12;i--) pos[i]=pos[i-1]; pos[12]=c; } };
+        auto canSlice = [&](){ return pos[0]!=pos[11]&&pos[5]!=pos[6]&&pos[12]!=pos[23]&&pos[17]!=pos[18]; };
+        auto doSlice = [&](){ if(!canSlice()) return; for(int i=6;i<12;i++) std::swap(pos[i],pos[i+6]); mid=1-mid; };
+
+        for (const Move& mv : moves) {
+            if (mv.isSlice) doSlice();
+            else { doTop(mv.x); doBot(mv.y); }
+        }
+
+        const QString pieceChars = "ABCDEFGH12345678";
+        QString posStr;
+        for (int i = 0; i < 24; i++) {
+            posStr += pieceChars[pos[i]];
+            if (pos[i] < 8) i++;
+        }
+        posStr += (mid == 0 ? '-' : '/');
+
+        bool applied = cubeWidget->setPositionFromString(posStr);
+        if (!applied) {
+            m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+            m_undoStack.removeLast();
+            btnUndo->setEnabled(!m_undoStack.isEmpty());
+        } else {
+            m_mainInput->setStyleSheet("");
+            updateCommand();
+        }
+    });
 
     // Mode toggle button: cycles SCRAMBLE → ALG → POSITION
     connect(m_inputMode, &QPushButton::clicked, this, [this]{
@@ -1118,19 +1249,16 @@ void MainWindow::buildUI() {
     connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
         lblScrambleError->setVisible(false);
         m_mainInput->setStyleSheet("");
-
         if (m_inputModeIndex == 2) {
-            // Position mode: live update cube from hex string
-            if (text.trimmed().isEmpty()) { cubeWidget->reset(); updateCommand(); return; }
-            bool ok = cubeWidget->setPositionFromString(text.trimmed());
-            if (ok) { m_mainInput->setStyleSheet(""); updateCommand(); }
-            else      m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+            // Position mode: just validate border, no auto-apply
+            if (text.trimmed().isEmpty()) { m_mainInput->setStyleSheet(""); return; }
+            // Peek validity without committing
+            // (full apply only on Apply button press)
+            return;
         } else {
-            // Scramble/Alg: always apply from solved state
-            if (text.trimmed().isEmpty()) { cubeWidget->reset(); updateCommand(); return; }
-
-            // Reset to solved first, then apply
-            cubeWidget->reset();
+            // No live apply — handled by Apply button
+            return; {
+            if (false) {
 
             QString raw = text.trimmed();
             if (m_inputModeIndex == 1) {
@@ -1237,6 +1365,7 @@ void MainWindow::buildUI() {
                 cubeWidget->reset();
             }
             updateCommand();
+            } }
         }
     });
 
@@ -1716,6 +1845,13 @@ QString MainWindow::buildStyleSheet() {
             border-right: none; color: #fff; padding: 0; font-size: 11px;
         }
         QPushButton#btnInputModeArrow:hover { background: #227a47; }
+        QPushButton#btnApply {
+            background: #2a3a2e; border: 1px solid #2db570;
+            border-left: none; border-radius: 0;
+            border-top-right-radius: 4px; border-bottom-right-radius: 4px;
+            color: #7ecfa0; font-size: 12px; font-weight: bold; padding: 0 10px;
+        }
+        QPushButton#btnApply:hover { background: #1a6b3c; color: #fff; }
         QLineEdit#txtMainInput {
             border-top-left-radius: 0; border-bottom-left-radius: 0;
             border-right: none; border-radius: 0;
@@ -3095,6 +3231,18 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     // (sendEvent below will re-enter here with watched == cubeWidget.)
     if (watched == cubeWidget)
         return QMainWindow::eventFilter(watched, event);
+
+    // ── Shift+Enter in m_mainInput: apply from solved state ──────────────────
+    if ((watched == m_mainInput) && ke->key() == Qt::Key_Return) {
+        if (ke->modifiers() & Qt::ShiftModifier) {
+            m_applyFromSolved = true;
+            btnApply->click();
+            m_applyFromSolved = false;
+            return true;
+        }
+        // plain Enter is handled by returnPressed signal
+        return QMainWindow::eventFilter(watched, event);
+    }
 
     // ── Text inputs get all keys — never steal from them ─────────────────────
     {

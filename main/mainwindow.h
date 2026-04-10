@@ -87,6 +87,7 @@ private:
     QLineEdit*    txtCommand;
     QPushButton*  btnSolve;
     QPushButton*  btnCopy;
+    QPushButton*  btnApply{nullptr};
     QPushButton*  btnReset;
     QPushButton*  btnUndo;
     QPushButton*  btnRedo;
@@ -124,6 +125,7 @@ private:
     qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
     bool          m_scrambleIsAlg{false};
+    bool          m_applyFromSolved{false};
     int           m_inputModeIndex{0}; // 0=scramble, 1=alg, 2=position
     QPushButton*  m_inputMode{nullptr};
     QPushButton*  m_inputModeArrow{nullptr};
