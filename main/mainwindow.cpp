@@ -620,17 +620,23 @@ static QString invertScrambleStr(const QString& str) {
     QStringList result;
     for (QString part : parts) {
         part = part.trimmed();
-        // extract numbers from optional parens
         QString inner = part;
         inner.remove('('); inner.remove(')');
-        QStringList nums = inner.split(',');
-        if (nums.size() == 2) {
-            bool ok1, ok2;
-            int a = nums[0].trimmed().toInt(&ok1);
-            int b = nums[1].trimmed().toInt(&ok2);
-            if (ok1 && ok2) { result << QString("%1,%2").arg(-a).arg(-b); continue; }
+        inner = inner.trimmed();
+        if (inner.contains(',')) {
+            QStringList nums = inner.split(',');
+            if (nums.size() == 2) {
+                bool ok1, ok2;
+                int a = nums[0].trimmed().toInt(&ok1);
+                int b = nums[1].trimmed().toInt(&ok2);
+                if (ok1 && ok2) { result << QString("%1,%2").arg(-a).arg(-b); continue; }
+            }
+        } else if (!inner.isEmpty()) {
+            bool ok1;
+            int a = inner.toInt(&ok1);
+            if (ok1) { result << QString::number(-a); continue; }
         }
-        result << part; // pass through slashes and unknowns
+        result << part;
     }
     return result.join("/");
 }
@@ -1132,39 +1138,49 @@ void MainWindow::buildUI() {
                 raw = invertScrambleStr(raw);
             }
 
+            // Convert karn to numeric first
+            std::string karnStr = raw.toStdString();
+            bool hasAlpha = false;
+            for (char c : karnStr) if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
+            if (hasAlpha) {
+                std::string converted = unkarnify(karnStr);
+                raw = QString::fromStdString(converted);
+            }
+
             // Parse and apply silently
+            // Normalise: replace \ with / and collapse spaces
+            raw.replace('\\', '/');
+
             struct Move { bool isSlice; int x, y; };
             QVector<Move> moves;
-            int idx = 0; bool ok = true;
-            while (idx < raw.size() && ok) {
-                while (idx < raw.size() && raw[idx].isSpace()) idx++;
-                if (idx >= raw.size()) break;
-                if (raw[idx] == '/') {
-                    moves.append({true, 0, 0}); idx++;
-                } else if (raw[idx] == '(' || raw[idx].isDigit() || raw[idx] == '-') {
-                    if (raw[idx] == '(') idx++;
-                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
-                    int sign = 1;
-                    if (idx < raw.size() && raw[idx] == '-') { sign = -1; idx++; }
-                    int num = 0; bool hasDigit = false;
-                    while (idx < raw.size() && raw[idx].isDigit()) { num = num*10+(raw[idx].toLatin1()-'0'); idx++; hasDigit = true; }
-                    if (!hasDigit) { ok = false; break; }
-                    int x = sign * num;
-                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
-                    if (idx >= raw.size() || raw[idx] != ',') { ok = false; break; }
-                    idx++;
-                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
-                    sign = 1;
-                    if (idx < raw.size() && raw[idx] == '-') { sign = -1; idx++; }
-                    num = 0; hasDigit = false;
-                    while (idx < raw.size() && raw[idx].isDigit()) { num = num*10+(raw[idx].toLatin1()-'0'); idx++; hasDigit = true; }
-                    if (!hasDigit) { ok = false; break; }
-                    int y = sign * num;
-                    while (idx < raw.size() && raw[idx].isSpace()) idx++;
-                    if (idx < raw.size() && raw[idx] == ')') idx++;
+            bool ok = true;
+
+            // Split by '/' — each segment is either empty (= slice boundary) or a turn
+            // Leading/trailing '/' produce empty segments at start/end = slices
+            QStringList segments = raw.split('/');
+            for (int si = 0; si < segments.size() && ok; si++) {
+                QString seg = segments[si].trimmed();
+                seg.remove('('); seg.remove(')');
+
+                if (si > 0) moves.append({true, 0, 0}); // every '/' is a slice
+
+                if (seg.isEmpty()) continue; // just a slash with no turn
+
+                // Could be "x,y", "x" (bare number), or garbage
+                if (seg.contains(',')) {
+                    QStringList parts = seg.split(',');
+                    if (parts.size() != 2) { ok = false; break; }
+                    bool ok1, ok2;
+                    int x = parts[0].trimmed().toInt(&ok1);
+                    int y = parts[1].trimmed().toInt(&ok2);
+                    if (!ok1 || !ok2) { ok = false; break; }
                     moves.append({false, x, y});
                 } else {
-                    ok = false; break;
+                    // bare number → y defaults to 0
+                    bool ok1;
+                    int x = seg.toInt(&ok1);
+                    if (!ok1) { ok = false; break; }
+                    moves.append({false, x, 0});
                 }
             }
 
@@ -3100,8 +3116,8 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     // ── Text inputs get all keys — never steal from them ─────────────────────
     {
         QWidget* fw = QApplication::focusWidget();
-        if (fw == txtCommand || fw == txtScramble || fw == txtDepths ||
-            watched == txtCommand || watched == txtScramble || watched == txtDepths)
+        if (fw == txtCommand || fw == txtScramble || fw == txtDepths || fw == m_mainInput ||
+            watched == txtCommand || watched == txtScramble || watched == txtDepths || watched == m_mainInput)
             return QMainWindow::eventFilter(watched, event);
     }
 
