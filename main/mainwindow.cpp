@@ -341,9 +341,9 @@ static std::string unkarnify(const std::string& algIn) {
     // addCommas pass on each slash-segment
     auto parts = splitStr(final_, '/');
     final_.clear();
-    for (const auto& part : parts) {
-        if (!final_.empty()) final_ += "/";
-        final_ += addCommasToMove(part);
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i) final_ += "/";
+        final_ += addCommasToMove(parts[i]);
     }
 
     return final_;
@@ -3446,29 +3446,32 @@ void MainWindow::showHowToUseModal() {
     body->setText(QString(
         "<b style='color:%1;font-size:13px;'>Cube Controls</b><br>"
         "<b style='color:%1;'>Keyboard shortcuts:</b><br>"
-        "• <b style='color:%2;'>J</b> = U (top clockwise) &nbsp; <b style='color:%2;'>F</b> = U' (top counter-clockwise)<br>"
-        "• <b style='color:%2;'>S</b> = D (bottom clockwise) &nbsp; <b style='color:%2;'>L</b> = D' (bottom counter-clockwise)<br>"
+        "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset the cube to solved<br>"
+        "The below shortcuts are identical to those of the csTimer virtual squan.<br>"
+        "• <b style='color:%2;'>J</b> = U, but only by one piece &nbsp; <b style='color:%2;'>F</b> = U', but only by one piece <br>"
+        "• <b style='color:%2;'>S</b> = D, but only by one piece &nbsp; <b style='color:%2;'>L</b> = D', but only by one piece <br>"
         "• <b style='color:%2;'>I</b> or <b style='color:%2;'>K</b> = Slice<br>"
-        "• <b style='color:%2;'>H</b> = UU &nbsp; <b style='color:%2;'>G</b> = U'U' &nbsp; <b style='color:%2;'>W</b> = DD &nbsp; <b style='color:%2;'>O</b> = D'D'<br>"
-        "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset<br><br>"
+        "• <b style='color:%2;'>H</b> = 3,0 (U) &nbsp; <b style='color:%2;'>G</b> = -3,0 (U')<br>"
+        "• <b style='color:%2;'>W</b> = 0,3 (D) &nbsp; <b style='color:%2;'>O</b> = 0,-3 (D')<br><br>"
         "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
-        "Type a move sequence in <b style='color:%2;'>(x,y)/</b> format and click <b>Apply</b>.<br>"
-        "Toggle the mode button to switch between <b>Scram</b> (applies as-is) and <b>Alg</b> (inverts before applying).<br>"
-        "Karnotation names like <b style='color:%2;'>U</b>, <b style='color:%2;'>E</b>, <b style='color:%2;'>bjj</b> etc. are supported.<br><br>"
+        "Type some moves and hit <b>Apply</b>. Karn will be parsed correctly.<br>"
+        "Use the mode button (to the left of the alg input) to switch between <b>Scram</b> (applies moves forward) and <b>Alg</b> (inverts before applying).<br><br>"
         "<b style='color:%1;font-size:13px;'>Options</b><br>"
-        "• <b>Slice metric</b>: count only slices as moves (instead of layer turns).<br>"
-        "• <b>All optimal</b>: find all solutions at the optimal length, not just the first.<br>"
-        "• <b>+suboptimal</b>: also find solutions up to N moves longer than optimal.<br>"
-        "• <b>Specific depths</b>: search only these move counts (comma-separated).<br>"
-        "• <b>Generator alg</b>: output sets up the case; otherwise it solves it.<br>"
-        "• <b>Stay in cubeshape</b>: restricts to algs that stay in cubeshape throughout.<br>"
-        "• <b>Karnotation output</b>: display solutions using karnotation names.<br>"
-        "• <b>Max X / Y / Total</b>: limit how large layer turns can be.<br><br>"
+        "you can read the descriptions for the options by hovering over them, but here's a comprehensive list:<br>"
+        "• <b>Slice metric</b>: only count slices as moves (instead of also including U and D moves when counting the \"movecount\" of an alg).<br>"
+        "• <b>All optimal</b>: instead of stopping the solver after finding one of the shortest solutions, find all of them. (\"shortest\" means: the least \"moves\". change what a \"move\" mean with the slice metric option)<br>"
+        "• <b>+suboptimal</b>: on top of finding all the shortest solutions, also find solutions up to N moves longer than optimal.<br>"
+        "• <b>Specific depths</b>: search only for solutions that are these moves long (comma-separated). e.g. \"8,9\" will return all solutions that are 8 moves and 9 moves long.<br>"
+        "• <b>Generator alg</b>: instead of solving the case displayed in the app, output algs will set up the case.<br>"
+        "• <b>Stay in cubeshape</b>: restrict to algs that stay in cubeshape (CS) throughout.<br>"
+        "• <b>Karnotation output</b>: display solutions in karn instead of WCA notation.<br>"
+        "• <b>Max top / bottom / total turns</b>: limit how big the layer turns can be. Hover over the options to see details.<br><br>"
         "<b style='color:%1;font-size:13px;'>Output</b><br>"
-        "Solutions appear in the terminal. Use <b>⊞</b> to switch to table view.<br>"
-        "Use <b>⤢</b> to expand the terminal to full screen.<br>"
-        "Right-click a row in table view to copy the algorithm or the whole row.<br>"
-        "If <b>Stay in cubeshape</b> was active, you can enable <b>Roughly rank algs</b> to sort by ergonomics.<br>"
+        "Solutions will appear in the terminal. After you generated some algs, these buttons will appear:<br>"
+        "• the <b>⊞</b> button: switch between terminal view and table view.<br>"
+        "• the <b>⤢</b> button: expand the terminal to full screen.<br>"
+        "Right-click a row in the table view to copy the alg, or to copy the whole row.<br>"
+        "If <b>Stay in cubeshape</b> was active, you can click on <b>Roughly rank algs based on relative ergonomics</b> (located below the terminal area), which will sort the output algs by an estimate of their actual speed.<br>"
     ).arg(textPrimary, textCyan));
 
     sa->setWidget(body);

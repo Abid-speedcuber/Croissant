@@ -1305,6 +1305,7 @@ class PositionSolver {
 		int tw=0, tu=0;
 		int mu=0, md=0;
 		int angle=0;
+		std::cout << moveList << std::endl;
 		if( generator ){
 			bool isFirstOutputSlice = true;
 			for( int i=moveLen-1; i>=0; i--){
@@ -1343,6 +1344,7 @@ class PositionSolver {
 			}
 		}
 		out += printmove(mu, md, !generator);
+		std::cout << out << std::endl;
 		if (karnotation) {
 			bool startSlice = !out.empty() && (out.front() == '/' || out.front() == '\\');
 			// Replace "/" and "\" with spaces
@@ -1350,7 +1352,10 @@ class PositionSolver {
 			out = replaceAll(out, "\\", " ");
 
 			// Add padding spaces and apply wcaToKarn replacements iteratively
-			out = dictReplace(" " + trimStr(out) + " ", WCA_TO_KARN);
+			for (const auto& [k, v] : WCA_TO_KARN) {
+				std::cout << k << ": " << v << std::endl;
+			}
+			out = replaceWithVector(" " + trimStr(out) + " ", WCA_TO_KARN);
 			out = trimStr(out);
 
 			// Collapse multiple spaces iteratively
