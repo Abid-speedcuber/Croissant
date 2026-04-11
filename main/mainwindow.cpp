@@ -1,9 +1,9 @@
 #include "mainwindow.h"
 #include "sq1widget.h"
-#include "sq1_logic.h"
-#include "karnotation.h"
-#include "theme.h"
-#include "stylesheet.h"
+#include "sq1-core/sq1_logic.h"
+#include "sq1-core/karnotation.h"
+#include "styles/theme.h"
+#include "styles/stylesheet.h"
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QVBoxLayout>

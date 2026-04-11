@@ -4,7 +4,7 @@
 #include <QKeyEvent>
 #include <array>
 #include <functional>
-#include "theme.h"
+#include "styles/theme.h"
 
 // -------------------------------------------------------
 // Sq1Widget: draws the Square-1 cube, handles clicks/keys

@@ -10,7 +10,7 @@
 #include <QKeyEvent>
 #include <QScrollArea>
 #include <atomic>
-#include "stylesheet.h"
+#include "styles/stylesheet.h"
 
 class QProcess;
 class Sq1Widget;

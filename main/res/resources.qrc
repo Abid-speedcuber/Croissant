@@ -1,8 +1,6 @@
 <RCC>
   <qresource prefix="/">
     <file>icon.ico</file>
-  </qresource>
-  <qresource prefix="/styles">
-    <file>stylesheet.qss</file>
+    <file alias="stylesheet.qss">../styles/stylesheet.qss</file>
   </qresource>
 </RCC>

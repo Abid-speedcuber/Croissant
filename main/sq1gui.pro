@@ -1,8 +1,8 @@
 QT += core gui widgets
 
 CONFIG += c++17
-win32: RC_ICONS = icon.ico
-RESOURCES += resources.qrc
+win32: RC_ICONS = res/icon.ico
+RESOURCES += res/resources.qrc
 
 TARGET   = solve-a-squan
 TEMPLATE = app
@@ -13,12 +13,12 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     sq1widget.cpp \
-    stylesheet.cpp \
-    sq1_logic.cpp
+    styles/stylesheet.cpp \
+    sq1-core/sq1_logic.cpp
 
 HEADERS += \
     mainwindow.h \
     sq1widget.h \
-    karnotation.h \
-    stylesheet.h \
-    sq1_logic.h
+    sq1-core/karnotation.h \
+    styles/stylesheet.h \
+    sq1-core/sq1_logic.h

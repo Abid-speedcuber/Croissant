@@ -82,7 +82,7 @@ QString buildStyleSheet(bool lightTheme) {
     QString INPUT_TEXT = b("#fff", Theme::LIGHT_TEXT_PRIMARY);
 
     // Load stylesheet from file
-    QFile styleFile(":/styles/stylesheet.qss");
+    QFile styleFile(":/stylesheet.qss");
     if (!styleFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
         return ""; // Return empty if file not found
     }

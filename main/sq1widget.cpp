@@ -1,5 +1,5 @@
 #include "sq1widget.h"
-#include "theme.h"
+#include "styles/theme.h"
 #include <QPainter>
 #include <QPolygonF>
 #include <QtMath>
