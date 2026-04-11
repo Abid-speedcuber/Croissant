@@ -168,16 +168,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_sliceTimer->setSingleShot(true);
     connect(m_sliceTimer, &QTimer::timeout, this, [this]
             {
-        int saves = (m_sliceCount % 2 == 0) ? 2 : 1;
-        m_undoStack.append(m_slicePending.first());
-        if (saves == 2 && m_slicePending.size() >= 2)
-            m_undoStack.append(m_slicePending.last());
-        while (m_undoStack.size() > 64) m_undoStack.removeFirst();
-        btnUndo->setEnabled(true);
-        m_redoStack.clear();
-        btnRedo->setEnabled(false);
-        m_sliceCount = 0;
-        m_slicePending.clear(); });
+                int saves = (m_sliceCount % 2 == 0) ? 2 : 1;
+                m_undoStack.append(m_slicePending.first());
+                if (saves == 2 && m_slicePending.size() >= 2)
+                    m_undoStack.append(m_slicePending.last());
+                while (m_undoStack.size() > 64) m_undoStack.removeFirst();
+                btnUndo->setEnabled(true);
+                m_redoStack.clear();
+                btnRedo->setEnabled(false);
+                m_sliceCount = 0;
+                m_slicePending.clear(); });
 }
 
 static QString invertScrambleStr(const QString &str)
@@ -271,7 +271,7 @@ void MainWindow::buildUI()
     QWidget *inputBarOuter = new QWidget();
     inputBarOuter->setObjectName("inputBarOuter");
     m_inputBarOuter = inputBarOuter;
-    
+
     QHBoxLayout *inputBarLay = new QHBoxLayout(inputBarOuter);
     inputBarLay->setContentsMargins(0, 0, 0, 0);
     inputBarLay->setSpacing(0);
@@ -443,49 +443,49 @@ void MainWindow::buildUI()
             { pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_F,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]
             {
-        cubeWidget->setFocus();
-        m_sliceCount++;
-        m_slicePending.append({cubeWidget->getPositionString()});
-        QKeyEvent e(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier);
-        QApplication::sendEvent(cubeWidget, &e);
-        m_sliceTimer->start(600); });
+                cubeWidget->setFocus();
+                m_sliceCount++;
+                m_slicePending.append({cubeWidget->getPositionString()});
+                QKeyEvent e(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier);
+                QApplication::sendEvent(cubeWidget, &e);
+                m_sliceTimer->start(600); });
     connect(btnD, &QPushButton::clicked, cubeWidget, [this]
             { pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnDP, &QPushButton::clicked, cubeWidget, [this]
             { pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
     connect(btnReset, &QPushButton::clicked, this, [this]
             {
-        QString before = cubeWidget->getPositionString();
-        cubeWidget->reset();
-        QString after = cubeWidget->getPositionString();
-        if (before != after) {
-            m_undoStack.append({before});
-            if (m_undoStack.size() > 64) m_undoStack.removeFirst();
-            btnUndo->setEnabled(true);
-            m_redoStack.clear();
-            btnRedo->setEnabled(false);
-        }
-        onReset(); });
+                QString before = cubeWidget->getPositionString();
+                cubeWidget->reset();
+                QString after = cubeWidget->getPositionString();
+                if (before != after) {
+                    m_undoStack.append({before});
+                    if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+                    btnUndo->setEnabled(true);
+                    m_redoStack.clear();
+                    btnRedo->setEnabled(false);
+                }
+                onReset(); });
     connect(btnUndo, &QPushButton::clicked, this, [this]
             {
-        if (m_undoStack.isEmpty()) return;
-        m_redoStack.append({cubeWidget->getPositionString()});
-        if (m_redoStack.size() > 64) m_redoStack.removeFirst();
-        btnRedo->setEnabled(true);
-        CubeSnapshot snap = m_undoStack.takeLast();
-        cubeWidget->setPositionFromString(snap.posStr);
-        updateCommand();
-        btnUndo->setEnabled(!m_undoStack.isEmpty()); });
+                if (m_undoStack.isEmpty()) return;
+                m_redoStack.append({cubeWidget->getPositionString()});
+                if (m_redoStack.size() > 64) m_redoStack.removeFirst();
+                btnRedo->setEnabled(true);
+                CubeSnapshot snap = m_undoStack.takeLast();
+                cubeWidget->setPositionFromString(snap.posStr);
+                updateCommand();
+                btnUndo->setEnabled(!m_undoStack.isEmpty()); });
     connect(btnRedo, &QPushButton::clicked, this, [this]
             {
-        if (m_redoStack.isEmpty()) return;
-        m_undoStack.append({cubeWidget->getPositionString()});
-        if (m_undoStack.size() > 64) m_undoStack.removeFirst();
-        btnUndo->setEnabled(true);
-        CubeSnapshot snap = m_redoStack.takeLast();
-        cubeWidget->setPositionFromString(snap.posStr);
-        updateCommand();
-        btnRedo->setEnabled(!m_redoStack.isEmpty()); });
+                if (m_redoStack.isEmpty()) return;
+                m_undoStack.append({cubeWidget->getPositionString()});
+                if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+                btnUndo->setEnabled(true);
+                CubeSnapshot snap = m_redoStack.takeLast();
+                cubeWidget->setPositionFromString(snap.posStr);
+                updateCommand();
+                btnRedo->setEnabled(!m_redoStack.isEmpty()); });
 
     root->addWidget(leftScroll);
 
@@ -687,279 +687,328 @@ void MainWindow::buildUI()
 
     connect(btnApply, &QPushButton::clicked, this, [this]
             {
-        const QString text = m_mainInput->text().trimmed();
-        if (text.isEmpty()) return;
+                const QString text = m_mainInput->text().trimmed();
+                if (text.isEmpty()) return;
 
-        if (m_inputModeIndex == 2) {
-            pushUndoState();
-            bool ok = cubeWidget->setPositionFromString(text);
-            if (!ok) {
-                m_mainInput->setProperty("hasError", true);
-                style()->polish(m_mainInput);
-                m_undoStack.removeLast();
-                btnUndo->setEnabled(!m_undoStack.isEmpty());
-            } else {
-                m_mainInput->setProperty("hasError", false);
-                style()->polish(m_mainInput);
-                updateCommand();
-            }
-            return;
-        }
+                if (m_inputModeIndex == 2) {
+                    pushUndoState();
+                    bool ok = cubeWidget->setPositionFromString(text);
+                    if (!ok) {
+                        m_mainInput->setProperty("hasError", true);
+                        style()->polish(m_mainInput);
+                        m_undoStack.removeLast();
+                        btnUndo->setEnabled(!m_undoStack.isEmpty());
+                    } else {
+                        m_mainInput->setProperty("hasError", false);
+                        style()->polish(m_mainInput);
+                        updateCommand();
+                    }
+                    return;
+                }
 
-        pushUndoState();
+                pushUndoState();
 
-        if (m_applyFromSolved) {
-            cubeWidget->reset();
-        }
+                if (m_applyFromSolved) {
+                    cubeWidget->reset();
+                }
 
-        QString raw = text;
-        if (m_inputModeIndex == 1) {
-            raw = invertScrambleStr(raw);
-        }
+                QString raw = text;
+                if (m_inputModeIndex == 1) {
+                    raw = invertScrambleStr(raw);
+                }
 
-        std::string karnStr = raw.toStdString();
-        bool hasAlpha = false;
-        for (char c : karnStr) if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
-        if (hasAlpha) {
-            std::string converted = unkarnify(karnStr);
-            raw = QString::fromStdString(converted);
-        }
+                // addCommas rules
+                {
+                    raw.replace('/', ' ').replace('\\', ' ');
+                    raw = raw.simplified();
+                    QStringList tokens = raw.split(' ', Qt::SkipEmptyParts);
+                    for (QString &tok : tokens) {
+                        QString t = tok;
+                        t.remove('('); t.remove(')');
+                        if (t.isEmpty() || t.contains(',')) continue;
+                        bool allNumeric = true;
+                        for (QChar ch : t)
+                            if (ch != '-' && !ch.isDigit()) { allNumeric = false; break; }
+                        if (!allNumeric) continue;
+                        if (t.size() == 1)
+                            tok = t + ",0";
+                        else if (t.size() == 2)
+                            tok = (t[0] == '-') ? t + ",0"
+                                                : QString(t[0]) + "," + t[1];
+                        else if (t.size() == 3)
+                            tok = (t[0] == '-') ? t.left(2) + "," + t[2]
+                                                : QString(t[0]) + "," + t.mid(1);
+                        else if (t.size() == 4)
+                            tok = t.left(2) + "," + t.mid(2);
+                    }
+                    raw = tokens.join(' ');
+                }
+                // Step 3: unkarnify — KARN_TO_WCA dict replacement + shorthand resolution.
+                // replaceShorthands(unkarnifyHelp(s)) mirrors the JS step 8 pipeline:
+                //   unkarnifyHelp applies KARN_TO_WCA on the space-separated token stream
+                //   and normalises to slash-separated output;
+                //   replaceShorthands then resolves alignment-dependent shorthand tokens
+                //   (bjj, fv10, kk0-1, …) which are not in KARN_TO_WCA directly.
+                {
+                    std::string s = raw.toStdString();
+                    s = replaceShorthands(unkarnifyHelp(s));
+                    raw = QString::fromStdString(s);
+                }
 
-        raw.replace('\\', '/');
+                struct Move { bool isSlice; int x, y; };
+                QVector<Move> moves;
+                bool ok = true;
 
-        struct Move { bool isSlice; int x, y; };
-        QVector<Move> moves;
-        bool ok = true;
+                QStringList segments = raw.split('/');
+                for (int si = 0; si < segments.size() && ok; si++) {
+                    QString seg = segments[si].trimmed();
+                    seg.remove('('); seg.remove(')');
 
-        QStringList segments = raw.split('/');
-        for (int si = 0; si < segments.size() && ok; si++) {
-            QString seg = segments[si].trimmed();
-            seg.remove('('); seg.remove(')');
+                    if (si > 0) moves.append({true, 0, 0});
 
-            if (si > 0) moves.append({true, 0, 0});
+                    if (seg.isEmpty()) continue;
 
-            if (seg.isEmpty()) continue;
+                    if (seg.contains(',')) {
+                        QStringList parts = seg.split(',');
+                        if (parts.size() != 2) { ok = false; break; }
+                        bool ok1, ok2;
+                        int x = parts[0].trimmed().toInt(&ok1);
+                        int y = parts[1].trimmed().toInt(&ok2);
+                        if (!ok1 || !ok2) { ok = false; break; }
+                        moves.append({false, x, y});
+                    } else {
+                        bool ok1;
+                        int x = seg.toInt(&ok1);
+                        if (!ok1) { ok = false; break; }
+                        moves.append({false, x, 0});
+                    }
+                }
 
-            if (seg.contains(',')) {
-                QStringList parts = seg.split(',');
-                if (parts.size() != 2) { ok = false; break; }
-                bool ok1, ok2;
-                int x = parts[0].trimmed().toInt(&ok1);
-                int y = parts[1].trimmed().toInt(&ok2);
-                if (!ok1 || !ok2) { ok = false; break; }
-                moves.append({false, x, y});
-            } else {
-                bool ok1;
-                int x = seg.toInt(&ok1);
-                if (!ok1) { ok = false; break; }
-                moves.append({false, x, 0});
-            }
-        }
+                if (!ok) {
+                    m_mainInput->setProperty("hasError", true);
+                    style()->polish(m_mainInput);
+                    m_undoStack.removeLast();
+                    btnUndo->setEnabled(!m_undoStack.isEmpty());
+                    return;
+                }
 
-        if (!ok) {
-            m_mainInput->setProperty("hasError", true);
-            style()->polish(m_mainInput);
-            m_undoStack.removeLast();
-            btnUndo->setEnabled(!m_undoStack.isEmpty());
-            return;
-        }
+                int pos[24] = {};
+                int mid = 0;
+                {
+                    std::string s = cubeWidget->getPositionString().toStdString();
+                    int j = 0, nextPC = -3, nextPE = 18;
+                    for (int i = 0; i < 16 && j < 24; i++) {
+                        int k = (unsigned char)s[i];
+                        if (k >= 'a' && k <= 'z') k += ('A'-'a');
+                        if      (k>='A'&&k<='H') k-='A';
+                        else if (k>='1'&&k<='8') k-=('1'-8);
+                        else if (k=='U'||k=='V') { k=nextPC; nextPC-=3; }
+                        else if (k=='W')         { k=nextPC; nextPC-=3; }
+                        else if (k=='X'||k=='Y') { k=nextPE; nextPE+=3; }
+                        else if (k=='Z')         { k=nextPE; nextPE+=3; }
+                        pos[j++]=k;
+                        if (k>=0&&k<8) pos[j++]=k;
+                    }
+                    mid = (s.size()>=17) ? (s[16]=='/'?1:0) : (!s.empty()&&s.back()=='/'?1:0);
+                }
 
-        int pos[24] = {};
-        int mid = 0;
-        {
-            std::string s = cubeWidget->getPositionString().toStdString();
-            int j = 0, nextPC = -3, nextPE = 18;
-            for (int i = 0; i < 16 && j < 24; i++) {
-                int k = (unsigned char)s[i];
-                if (k >= 'a' && k <= 'z') k += ('A'-'a');
-                if      (k>='A'&&k<='H') k-='A';
-                else if (k>='1'&&k<='8') k-=('1'-8);
-                else if (k=='U'||k=='V') { k=nextPC; nextPC-=3; }
-                else if (k=='W')         { k=nextPC; nextPC-=3; }
-                else if (k=='X'||k=='Y') { k=nextPE; nextPE+=3; }
-                else if (k=='Z')         { k=nextPE; nextPE+=3; }
-                pos[j++]=k;
-                if (k>=0&&k<8) pos[j++]=k;
-            }
-            mid = (s.size()>=17) ? (s[16]=='/'?1:0) : (!s.empty()&&s.back()=='/'?1:0);
-        }
+                auto doTop = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[11]; for(int i=11;i>0;i--) pos[i]=pos[i-1]; pos[0]=c; } };
+                auto doBot = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[23]; for(int i=23;i>12;i--) pos[i]=pos[i-1]; pos[12]=c; } };
+                auto canSlice = [&](){ return pos[0]!=pos[11]&&pos[5]!=pos[6]&&pos[12]!=pos[23]&&pos[17]!=pos[18]; };
+                auto doSlice = [&](){ if(!canSlice()) return; for(int i=6;i<12;i++) std::swap(pos[i],pos[i+6]); mid=1-mid; };
 
-        auto doTop = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[11]; for(int i=11;i>0;i--) pos[i]=pos[i-1]; pos[0]=c; } };
-        auto doBot = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[23]; for(int i=23;i>12;i--) pos[i]=pos[i-1]; pos[12]=c; } };
-        auto canSlice = [&](){ return pos[0]!=pos[11]&&pos[5]!=pos[6]&&pos[12]!=pos[23]&&pos[17]!=pos[18]; };
-        auto doSlice = [&](){ if(!canSlice()) return; for(int i=6;i<12;i++) std::swap(pos[i],pos[i+6]); mid=1-mid; };
+                for (const Move& mv : moves) {
+                    if (mv.isSlice) doSlice();
+                    else { doTop(mv.x); doBot(mv.y); }
+                }
 
-        for (const Move& mv : moves) {
-            if (mv.isSlice) doSlice();
-            else { doTop(mv.x); doBot(mv.y); }
-        }
+                // ── Sliceability guard ────────────────────────────────────────────────
+                // The resulting position must be sliceable: no corner piece can straddle
+                // the cut line. canSlice() checks the four boundary index pairs (0/11
+                // and 5/6 on top; 12/23 and 17/18 on bottom) — if any pair holds the
+                // same corner value, that piece is split across the cut.
+                if (!canSlice()) {
+                    const QString errMsg =
+                        "Position after applying this alg is not sliceable — "
+                        "a corner is split across the cut line. "
+                        "The alg may be incomplete or incorrect.";
+                    QToolTip::showText(
+                        m_mainInput->mapToGlobal(QPoint(0, m_mainInput->height())),
+                        errMsg, m_mainInput, {}, 4000);
+                    m_mainInput->setProperty("hasError", true);
+                    style()->polish(m_mainInput);
+                    m_undoStack.removeLast();
+                    btnUndo->setEnabled(!m_undoStack.isEmpty());
+                    return;
+                }
 
-        const QString pieceChars = "ABCDEFGH12345678";
-        QString posStr;
-        for (int i = 0; i < 24; i++) {
-            posStr += pieceChars[pos[i]];
-            if (pos[i] < 8) i++;
-        }
-        posStr += (mid == 0 ? '-' : '/');
+                const QString pieceChars = "ABCDEFGH12345678";
+                QString posStr;
+                for (int i = 0; i < 24; i++) {
+                    posStr += pieceChars[pos[i]];
+                    if (pos[i] < 8) i++;
+                }
+                posStr += (mid == 0 ? '-' : '/');
 
-        bool applied = cubeWidget->setPositionFromString(posStr);
-        if (!applied) {
-            m_mainInput->setProperty("hasError", true);
-            style()->polish(m_mainInput);
-            m_undoStack.removeLast();
-            btnUndo->setEnabled(!m_undoStack.isEmpty());
-        } else {
-            m_mainInput->setProperty("hasError", false);
-            style()->polish(m_mainInput);
-            updateCommand();
-        } });
+                bool applied = cubeWidget->setPositionFromString(posStr);
+                if (!applied) {
+                    m_mainInput->setProperty("hasError", true);
+                    style()->polish(m_mainInput);
+                    m_undoStack.removeLast();
+                    btnUndo->setEnabled(!m_undoStack.isEmpty());
+                } else {
+                    m_mainInput->setProperty("hasError", false);
+                    QToolTip::hideText();
+                    style()->polish(m_mainInput);
+                    updateCommand();
+                } });
 
     connect(m_inputMode, &QPushButton::clicked, this, [this]
             {
-        qDebug() << "inputMode clicked, new index:" << ((m_inputModeIndex + 1) % 3);
-        m_inputModeIndex = (m_inputModeIndex + 1) % 3;
-        if (m_inputModeIndex == 0) { m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
-        else if (m_inputModeIndex == 1) { m_inputMode->setText("ALG");  m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
-        else                           { m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-"); }
-        m_mainInput->clear();
-        lblScrambleError->setVisible(false); });
+                qDebug() << "inputMode clicked, new index:" << ((m_inputModeIndex + 1) % 3);
+                m_inputModeIndex = (m_inputModeIndex + 1) % 3;
+                if (m_inputModeIndex == 0) { m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
+                else if (m_inputModeIndex == 1) { m_inputMode->setText("ALG");  m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
+                else                           { m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-"); }
+                m_mainInput->clear();
+                lblScrambleError->setVisible(false); });
 
     connect(m_inputModeArrow, &QPushButton::clicked, this, [this]
             {
-        qDebug() << "inputModeArrow clicked";
-        QMenu* menu = new QMenu(this);
-        menu->setStyleSheet(
-            "QMenu { background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 6px; padding: 4px; color: #e0e0e0; font-size: 12px; }"
-            "QMenu::item { padding: 6px 20px; border-radius: 4px; }"
-            "QMenu::item:selected { background: #3a3a5e; }"
-            "QMenu::item:checked { color: #2db570; font-weight: bold; }"
-        );
-        QAction* aScram = menu->addAction("Scramble");
-        QAction* aAlg   = menu->addAction("Alg");
-        QAction* aPos   = menu->addAction("Position");
-        aScram->setCheckable(true); aScram->setChecked(m_inputModeIndex == 0);
-        aAlg->setCheckable(true);   aAlg->setChecked(m_inputModeIndex == 1);
-        aPos->setCheckable(true);   aPos->setChecked(m_inputModeIndex == 2);
-        connect(aScram, &QAction::triggered, this, [this]{ m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
-        connect(aAlg,   &QAction::triggered, this, [this]{ m_inputModeIndex = 1; m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
-        connect(aPos,   &QAction::triggered, this, [this]{ m_inputModeIndex = 2; m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-");                        m_mainInput->clear(); lblScrambleError->setVisible(false); });
-        menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height()))); });
+                qDebug() << "inputModeArrow clicked";
+                QMenu* menu = new QMenu(this);
+                menu->setStyleSheet(
+                    "QMenu { background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 6px; padding: 4px; color: #e0e0e0; font-size: 12px; }"
+                    "QMenu::item { padding: 6px 20px; border-radius: 4px; }"
+                    "QMenu::item:selected { background: #3a3a5e; }"
+                    "QMenu::item:checked { color: #2db570; font-weight: bold; }"
+                    );
+                QAction* aScram = menu->addAction("Scramble");
+                QAction* aAlg   = menu->addAction("Alg");
+                QAction* aPos   = menu->addAction("Position");
+                aScram->setCheckable(true); aScram->setChecked(m_inputModeIndex == 0);
+                aAlg->setCheckable(true);   aAlg->setChecked(m_inputModeIndex == 1);
+                aPos->setCheckable(true);   aPos->setChecked(m_inputModeIndex == 2);
+                connect(aScram, &QAction::triggered, this, [this]{ m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
+                connect(aAlg,   &QAction::triggered, this, [this]{ m_inputModeIndex = 1; m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
+                connect(aPos,   &QAction::triggered, this, [this]{ m_inputModeIndex = 2; m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-");                        m_mainInput->clear(); lblScrambleError->setVisible(false); });
+                menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height()))); });
 
     connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString &text)
             {
-        lblScrambleError->setVisible(false);
-        m_mainInput->setProperty("hasError", false);
-        style()->polish(m_mainInput);
-        if (m_inputModeIndex == 2) {
-            if (text.trimmed().isEmpty()) { 
+                lblScrambleError->setVisible(false);
                 m_mainInput->setProperty("hasError", false);
                 style()->polish(m_mainInput);
-                return; 
-            }
-            return;
-        } else {
-            return; {
-            if (false) {
-
-            QString raw = text.trimmed();
-            if (m_inputModeIndex == 1) {
-                raw = invertScrambleStr(raw);
-            }
-
-            std::string karnStr = raw.toStdString();
-            bool hasAlpha = false;
-            for (char c : karnStr) if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
-            if (hasAlpha) {
-                std::string converted = unkarnify(karnStr);
-                raw = QString::fromStdString(converted);
-            }
-
-            raw.replace('\\', '/');
-
-            struct Move { bool isSlice; int x, y; };
-            QVector<Move> moves;
-            bool ok = true;
-
-            QStringList segments = raw.split('/');
-            for (int si = 0; si < segments.size() && ok; si++) {
-                QString seg = segments[si].trimmed();
-                seg.remove('('); seg.remove(')');
-
-                if (si > 0) moves.append({true, 0, 0});
-
-                if (seg.isEmpty()) continue;
-
-                if (seg.contains(',')) {
-                    QStringList parts = seg.split(',');
-                    if (parts.size() != 2) { ok = false; break; }
-                    bool ok1, ok2;
-                    int x = parts[0].trimmed().toInt(&ok1);
-                    int y = parts[1].trimmed().toInt(&ok2);
-                    if (!ok1 || !ok2) { ok = false; break; }
-                    moves.append({false, x, y});
+                if (m_inputModeIndex == 2) {
+                    if (text.trimmed().isEmpty()) {
+                        m_mainInput->setProperty("hasError", false);
+                        style()->polish(m_mainInput);
+                        return;
+                    }
+                    return;
                 } else {
-                    bool ok1;
-                    int x = seg.toInt(&ok1);
-                    if (!ok1) { ok = false; break; }
-                    moves.append({false, x, 0});
-                }
-            }
+                    return; {
+                        if (false) {
 
-            if (!ok) {
-                m_mainInput->setProperty("hasError", true);
-                style()->polish(m_mainInput);
-                cubeWidget->reset();
-                updateCommand();
-                return;
-            }
+                            QString raw = text.trimmed();
+                            if (m_inputModeIndex == 1) {
+                                raw = invertScrambleStr(raw);
+                            }
 
-            int pos[24] = {};
-            int mid = 0;
-            {
-                std::string s = cubeWidget->getPositionString().toStdString();
-                int j = 0, nextPC = -3, nextPE = 18;
-                for (int i = 0; i < 16 && j < 24; i++) {
-                    int k = (unsigned char)s[i];
-                    if (k >= 'a' && k <= 'z') k += ('A'-'a');
-                    if      (k>='A'&&k<='H') k-='A';
-                    else if (k>='1'&&k<='8') k-=('1'-8);
-                    else if (k=='U'||k=='V') { k=nextPC; nextPC-=3; }
-                    else if (k=='W')         { k=nextPC; nextPC-=3; }
-                    else if (k=='X'||k=='Y') { k=nextPE; nextPE+=3; }
-                    else if (k=='Z')         { k=nextPE; nextPE+=3; }
-                    pos[j++]=k;
-                    if (k>=0&&k<8) pos[j++]=k;
-                }
-                mid = (s.size()>=17) ? (s[16]=='/'?1:0) : (!s.empty()&&s.back()=='/'?1:0);
-            }
+                            std::string karnStr = raw.toStdString();
+                            bool hasAlpha = false;
+                            for (char c : karnStr) if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
+                            if (hasAlpha) {
+                                std::string converted = unkarnify(karnStr);
+                                raw = QString::fromStdString(converted);
+                            }
 
-            auto doTop = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[11]; for(int i=11;i>0;i--) pos[i]=pos[i-1]; pos[0]=c; } };
-            auto doBot = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[23]; for(int i=23;i>12;i--) pos[i]=pos[i-1]; pos[12]=c; } };
-            auto canSlice = [&](){ return pos[0]!=pos[11]&&pos[5]!=pos[6]&&pos[12]!=pos[23]&&pos[17]!=pos[18]; };
-            auto doSlice = [&](){ if(!canSlice()) return; for(int i=6;i<12;i++) std::swap(pos[i],pos[i+6]); mid=1-mid; };
+                            raw.replace('\\', '/');
 
-            for (const Move& mv : moves) {
-                if (mv.isSlice) doSlice();
-                else { doTop(mv.x); doBot(mv.y); }
-            }
+                            struct Move { bool isSlice; int x, y; };
+                            QVector<Move> moves;
+                            bool ok = true;
 
-            const QString pieceChars = "ABCDEFGH12345678";
-            QString posStr;
-            for (int i = 0; i < 24; i++) {
-                posStr += pieceChars[pos[i]];
-                if (pos[i] < 8) i++;
-            }
-            posStr += (mid == 0 ? '-' : '/');
+                            QStringList segments = raw.split('/');
+                            for (int si = 0; si < segments.size() && ok; si++) {
+                                QString seg = segments[si].trimmed();
+                                seg.remove('('); seg.remove(')');
 
-            bool applied = cubeWidget->setPositionFromString(posStr);
-            if (!applied) {
-                m_mainInput->setProperty("hasError", true);
-                style()->polish(m_mainInput);
-                cubeWidget->reset();
-            }
-            updateCommand();
-            } }
-        } });
+                                if (si > 0) moves.append({true, 0, 0});
+
+                                if (seg.isEmpty()) continue;
+
+                                if (seg.contains(',')) {
+                                    QStringList parts = seg.split(',');
+                                    if (parts.size() != 2) { ok = false; break; }
+                                    bool ok1, ok2;
+                                    int x = parts[0].trimmed().toInt(&ok1);
+                                    int y = parts[1].trimmed().toInt(&ok2);
+                                    if (!ok1 || !ok2) { ok = false; break; }
+                                    moves.append({false, x, y});
+                                } else {
+                                    bool ok1;
+                                    int x = seg.toInt(&ok1);
+                                    if (!ok1) { ok = false; break; }
+                                    moves.append({false, x, 0});
+                                }
+                            }
+
+                            if (!ok) {
+                                m_mainInput->setProperty("hasError", true);
+                                style()->polish(m_mainInput);
+                                cubeWidget->reset();
+                                updateCommand();
+                                return;
+                            }
+
+                            int pos[24] = {};
+                            int mid = 0;
+                            {
+                                std::string s = cubeWidget->getPositionString().toStdString();
+                                int j = 0, nextPC = -3, nextPE = 18;
+                                for (int i = 0; i < 16 && j < 24; i++) {
+                                    int k = (unsigned char)s[i];
+                                    if (k >= 'a' && k <= 'z') k += ('A'-'a');
+                                    if      (k>='A'&&k<='H') k-='A';
+                                    else if (k>='1'&&k<='8') k-=('1'-8);
+                                    else if (k=='U'||k=='V') { k=nextPC; nextPC-=3; }
+                                    else if (k=='W')         { k=nextPC; nextPC-=3; }
+                                    else if (k=='X'||k=='Y') { k=nextPE; nextPE+=3; }
+                                    else if (k=='Z')         { k=nextPE; nextPE+=3; }
+                                    pos[j++]=k;
+                                    if (k>=0&&k<8) pos[j++]=k;
+                                }
+                                mid = (s.size()>=17) ? (s[16]=='/'?1:0) : (!s.empty()&&s.back()=='/'?1:0);
+                            }
+
+                            auto doTop = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[11]; for(int i=11;i>0;i--) pos[i]=pos[i-1]; pos[0]=c; } };
+                            auto doBot = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[23]; for(int i=23;i>12;i--) pos[i]=pos[i-1]; pos[12]=c; } };
+                            auto canSlice = [&](){ return pos[0]!=pos[11]&&pos[5]!=pos[6]&&pos[12]!=pos[23]&&pos[17]!=pos[18]; };
+                            auto doSlice = [&](){ if(!canSlice()) return; for(int i=6;i<12;i++) std::swap(pos[i],pos[i+6]); mid=1-mid; };
+
+                            for (const Move& mv : moves) {
+                                if (mv.isSlice) doSlice();
+                                else { doTop(mv.x); doBot(mv.y); }
+                            }
+
+                            const QString pieceChars = "ABCDEFGH12345678";
+                            QString posStr;
+                            for (int i = 0; i < 24; i++) {
+                                posStr += pieceChars[pos[i]];
+                                if (pos[i] < 8) i++;
+                            }
+                            posStr += (mid == 0 ? '-' : '/');
+
+                            bool applied = cubeWidget->setPositionFromString(posStr);
+                            if (!applied) {
+                                m_mainInput->setProperty("hasError", true);
+                                style()->polish(m_mainInput);
+                                cubeWidget->reset();
+                            }
+                            updateCommand();
+                        } }
+                } });
 
     lblCommandError = new QLabel("");
     lblCommandError->setObjectName("lblCommandError");
@@ -1035,27 +1084,27 @@ void MainWindow::buildUI()
     m_solutionTable->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_solutionTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint &pos)
             {
-        int row = m_solutionTable->rowAt(pos.y());
-        if (row < 0) return;
-        QMenu menu(this);
-        QAction* copyRow = menu.addAction("Copy row");
-        QAction* copyAlg = menu.addAction("Copy algorithm");
-        QAction* chosen = menu.exec(m_solutionTable->viewport()->mapToGlobal(pos));
-        if (chosen == copyRow) {
-            QStringList parts;
-            for (int c = 0; c < m_solutionTable->columnCount(); c++) {
-                QTableWidgetItem* it = m_solutionTable->item(row, c);
-                if (it) parts << it->text();
-            }
-            QApplication::clipboard()->setText(parts.join("\t"));
-            appendStatusLine("Row copied to clipboard.");
-        } else if (chosen == copyAlg) {
-            QTableWidgetItem* it = m_solutionTable->item(row, 1);
-            if (it) {
-                QApplication::clipboard()->setText(it->text());
-                appendStatusLine("Algorithm copied to clipboard.");
-            }
-        } });
+                int row = m_solutionTable->rowAt(pos.y());
+                if (row < 0) return;
+                QMenu menu(this);
+                QAction* copyRow = menu.addAction("Copy row");
+                QAction* copyAlg = menu.addAction("Copy algorithm");
+                QAction* chosen = menu.exec(m_solutionTable->viewport()->mapToGlobal(pos));
+                if (chosen == copyRow) {
+                    QStringList parts;
+                    for (int c = 0; c < m_solutionTable->columnCount(); c++) {
+                        QTableWidgetItem* it = m_solutionTable->item(row, c);
+                        if (it) parts << it->text();
+                    }
+                    QApplication::clipboard()->setText(parts.join("\t"));
+                    appendStatusLine("Row copied to clipboard.");
+                } else if (chosen == copyAlg) {
+                    QTableWidgetItem* it = m_solutionTable->item(row, 1);
+                    if (it) {
+                        QApplication::clipboard()->setText(it->text());
+                        appendStatusLine("Algorithm copied to clipboard.");
+                    }
+                } });
     tableLay->addWidget(m_solutionTable, 1);
 
     outputWrapperLay->addWidget(m_tableContainer);
@@ -1081,79 +1130,79 @@ void MainWindow::buildUI()
     connect(btnExpand, &QPushButton::clicked, this, &MainWindow::toggleExpand);
     connect(btnCopyTerminal, &QPushButton::clicked, this, [this]
             {
-        QApplication::clipboard()->setText(txtOutput->toPlainText());
-        appendStatusLine("Terminal copied to clipboard!"); });
+                QApplication::clipboard()->setText(txtOutput->toPlainText());
+                appendStatusLine("Terminal copied to clipboard!"); });
     connect(btnTableMode, &QPushButton::clicked, this, [this]
             {
-        m_tableVisible = !m_tableVisible;
-        txtOutput->setVisible(!m_tableVisible);
-        m_tableContainer->setVisible(m_tableVisible);
-        btnTableMode->setText(m_tableVisible ? "▤" : "⊞");
-        btnTableMode->setToolTip(m_tableVisible ? "Switch to terminal view" : "Switch to table view");
-        if (m_tableVisible) rebuildTable();
-        else if (chkRankErgo->isChecked()) onRankErgoToggled(true);
-        else rebuildTerminalView(); });
+                m_tableVisible = !m_tableVisible;
+                txtOutput->setVisible(!m_tableVisible);
+                m_tableContainer->setVisible(m_tableVisible);
+                btnTableMode->setText(m_tableVisible ? "▤" : "⊞");
+                btnTableMode->setToolTip(m_tableVisible ? "Switch to terminal view" : "Switch to table view");
+                if (m_tableVisible) rebuildTable();
+                else if (chkRankErgo->isChecked()) onRankErgoToggled(true);
+                else rebuildTerminalView(); });
     connect(chkRankErgo, &QCheckBox::toggled, this, &MainWindow::onRankErgoToggled);
     connect(txtCommand, &QLineEdit::textEdited, this, [this](const QString &text)
             {
-        auto showCmdError = [this](const QString& msg) {
-            lblCommandError->setText(msg);
-            lblCommandError->setVisible(true);
-            txtCommand->setStyleSheet(
-                "QLineEdit#txtCommand { font-family: monospace; color: #ff5555; font-size: 12px; border-color: #ff5555; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
-        };
-        auto clearCmdError = [this]() {
-            lblCommandError->setVisible(false);
-            txtCommand->setStyleSheet(
-                "QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
-        };
+                auto showCmdError = [this](const QString& msg) {
+                    lblCommandError->setText(msg);
+                    lblCommandError->setVisible(true);
+                    txtCommand->setStyleSheet(
+                        "QLineEdit#txtCommand { font-family: monospace; color: #ff5555; font-size: 12px; border-color: #ff5555; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
+                };
+                auto clearCmdError = [this]() {
+                    lblCommandError->setVisible(false);
+                    txtCommand->setStyleSheet(
+                        "QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
+                };
 
-        QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
-        if (parts.isEmpty()) { clearCmdError(); return; }
+                QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
+                if (parts.isEmpty()) { clearCmdError(); return; }
 
-        QString pos = parts.last();
+                QString pos = parts.last();
 
-        if (pos.startsWith('-') || pos.contains(',')) {
-            showCmdError("No position string at end of command — last token looks like a flag.");
-            return;
-        }
-        if (pos.length() < 15 || pos.length() > 17) {
-            if (pos.length() > 0)
-                showCmdError(QString("Position string should be 15–17 characters, got %1.").arg(pos.length()));
-            else
+                if (pos.startsWith('-') || pos.contains(',')) {
+                    showCmdError("No position string at end of command — last token looks like a flag.");
+                    return;
+                }
+                if (pos.length() < 15 || pos.length() > 17) {
+                    if (pos.length() > 0)
+                        showCmdError(QString("Position string should be 15–17 characters, got %1.").arg(pos.length()));
+                    else
+                        clearCmdError();
+                    return;
+                }
+
+                static const QString validChars = "ABCDEFGHabcdefgh12345678UVWXYZuvwxyz-/";
+                bool validCharsOk = true;
+                for (int ci = 0; ci < pos.length(); ci++) {
+                    if (!validChars.contains(pos[ci])) {
+                        validCharsOk = false;
+                        break;
+                    }
+                }
+                if (!validCharsOk) {
+                    showCmdError("Invalid character in position string.");
+                    return;
+                }
+
+                bool applied = cubeWidget->setPositionFromString(pos);
+                if (!applied) {
+                    showCmdError("Invalid position string — duplicate or unrecognised pieces.");
+                    return;
+                }
                 clearCmdError();
-            return;
-        }
-
-        static const QString validChars = "ABCDEFGHabcdefgh12345678UVWXYZuvwxyz-/";
-        bool validCharsOk = true;
-        for (int ci = 0; ci < pos.length(); ci++) {
-            if (!validChars.contains(pos[ci])) {
-                validCharsOk = false;
-                break;
-            }
-        }
-        if (!validCharsOk) {
-            showCmdError("Invalid character in position string.");
-            return;
-        }
-
-        bool applied = cubeWidget->setPositionFromString(pos);
-        if (!applied) {
-            showCmdError("Invalid position string — duplicate or unrecognised pieces.");
-            return;
-        }
-        clearCmdError();
-        syncFlagsFromCommand(text); });
+                syncFlagsFromCommand(text); });
 
     QTimer::singleShot(0, this, [this]
                        {
-        int w = m_outputWrapper->width();
-        int margin = 6; int bw = 22;
-        btnExpand->move(w - margin - bw, margin);
-        btnTableMode->move(w - margin - bw*2 - 4, margin);
-        btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
-        btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise(); });
+                           int w = m_outputWrapper->width();
+                           int margin = 6; int bw = 22;
+                           btnExpand->move(w - margin - bw, margin);
+                           btnTableMode->move(w - margin - bw*2 - 4, margin);
+                           btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
+                           btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise(); });
 
     const auto allBtns = findChildren<QPushButton *>();
     for (auto *b : allBtns)
@@ -1705,12 +1754,12 @@ void MainWindow::onSolverDone(int code)
         int delay = (elapsed < 3000) ? 400 : 0;
         QTimer::singleShot(delay, this, [this]
                            {
-            m_tableVisible = true;
-            txtOutput->setVisible(false);
-            m_tableContainer->setVisible(true);
-            btnTableMode->setText("▤");
-            btnTableMode->setToolTip("Switch to terminal view");
-            rebuildTable(); });
+                               m_tableVisible = true;
+                               txtOutput->setVisible(false);
+                               m_tableContainer->setVisible(true);
+                               btnTableMode->setText("▤");
+                               btnTableMode->setToolTip("Switch to terminal view");
+                               rebuildTable(); });
     }
 }
 
@@ -2403,11 +2452,11 @@ void MainWindow::showAboutModal()
     // Enable clicking the in-text link to open the ReadDocs popup
     connect(body, &QLabel::linkActivated, this, [this](const QString &link)
             {
-        if (link == "read_old_docs") {
-            showReadDocsPopup();
-        } else {
-            QDesktopServices::openUrl(QUrl(link));
-        } });
+                if (link == "read_old_docs") {
+                    showReadDocsPopup();
+                } else {
+                    QDesktopServices::openUrl(QUrl(link));
+                } });
 
     lay->addWidget(title);
     lay->addWidget(body);
@@ -2575,8 +2624,8 @@ void MainWindow::showReadDocsPopup()
 
     connect(tb, &QTextBrowser::anchorClicked, this, [this](const QUrl &url)
             {
-        if (url.toString() == "open_old_docs") showOldDocsPopup();
-        else QDesktopServices::openUrl(url); });
+                if (url.toString() == "open_old_docs") showOldDocsPopup();
+                else QDesktopServices::openUrl(url); });
 
     lay->addWidget(tb, 1);
 
@@ -2738,7 +2787,7 @@ void MainWindow::applyTheme()
     }
     if (m_tableVisible)
         rebuildTable();
-    
+
     // Update command line color
     QString cyan = Theme::textCyan(m_lightTheme);
     txtCommand->setStyleSheet(QString(
@@ -2897,10 +2946,10 @@ void MainWindow::closeSidebar()
     anim->setEasingCurve(QEasingCurve::InCubic);
     connect(anim, &QPropertyAnimation::finished, this, [ov, this]
             {
-        if (ov) ov->deleteLater();
-        m_sidebar = nullptr;
-        m_sidebarOverlay = nullptr;
-        m_sidebarOpen = false; });
+                if (ov) ov->deleteLater();
+                m_sidebar = nullptr;
+                m_sidebarOverlay = nullptr;
+                m_sidebarOpen = false; });
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
@@ -2940,10 +2989,10 @@ void MainWindow::showSettingsModal()
     chkLight->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
     connect(chkLight, &QCheckBox::toggled, this, [this, overlay](bool checked)
             {
-        m_lightTheme = checked;
-        applyTheme();
-        // Rebuild overlay style so it doesn't look stale
-        overlay->setStyleSheet("background: rgba(0,0,0,160);"); });
+                m_lightTheme = checked;
+                applyTheme();
+                // Rebuild overlay style so it doesn't look stale
+                overlay->setStyleSheet("background: rgba(0,0,0,160);"); });
     lay->addWidget(chkLight);
 
     QLabel *hint = new QLabel("More settings coming soon.");

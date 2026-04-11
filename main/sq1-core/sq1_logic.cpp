@@ -86,172 +86,166 @@ std::string addCommasToMove(const std::string &move)
     }
 }
 
-std::string getAlignment(bool topA, bool bottomA)
-{
-    return (topA ? "1" : "0") + std::string(bottomA ? "-1" : "0");
+std::string getAlignment(bool topA, bool bottomA) {
+    return std::string(topA ? "1" : "0") + std::string(bottomA ? "-1" : "0");
 }
 
-std::string unkarnifyHelp(const std::string &scramble)
-{
+// ---------------------------------------------------------------------------
+// unkarnifyHelp — apply KARN_TO_WCA dict to a space-separated token string
+// and normalise the result to a slash-separated numeric string.
+// Input must be SPACE-separated (not slash-separated) so the space-padded
+// dict keys can match at token boundaries.
+// Mirrors karn.js unkarnifyHelp.
+// ---------------------------------------------------------------------------
+std::string unkarnifyHelp(const std::string& scramble) {
+    // Wrap in spaces so space-padded keys match at the edges too.
     std::string s = dictReplace(" " + scramble + " ", KARN_TO_WCA);
-    // trim
-    size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos)
-        return "";
-    size_t b = s.find_last_not_of(" \t\r\n");
-    s = s.substr(a, b - a + 1);
-    // collapse consecutive slashes and spaces-around-slashes
-    // replace runs of "/ /" or " /" etc. → single "/"
-    // simple approach: replace multiple-slash runs
-    std::string out;
-    for (size_t i = 0; i < s.size();)
-    {
-        bool isSlashOrSpace = (s[i] == '/' || s[i] == ' ');
-        if (isSlashOrSpace)
-        {
-            // scan ahead for the whole run
-            size_t j = i;
-            bool sawSlash = false;
-            while (j < s.size() && (s[j] == '/' || s[j] == ' '))
-            {
-                if (s[j] == '/')
-                    sawSlash = true;
-                j++;
-            }
-            if (sawSlash)
-                out += '/';
-            else
-                out += ' ';
-            i = j;
-        }
-        else
-        {
-            out += s[i++];
-        }
-    }
-    // replace remaining spaces with '/'
-    for (char &c : out)
-        if (c == ' ')
-            c = '/';
-    // collapse double slashes
-    while (out.find("//") != std::string::npos)
-        out = replaceAll(out, "//", "/");
-    return out;
+    s = trimStr(s);
+
+    // After dict replacement the string is a mixture of spaces and slashes,
+    // e.g. "1,0 /-3,0/ /3,3/ /0,-3/".
+    // Collapse every cluster of spaces/slashes into a single slash —
+    // matches the JS regex / ?\/( \/?)*/g → '/'.
+    std::string prev;
+    do {
+        prev = s;
+        s = replaceAll(s, " / ", "/");
+        s = replaceAll(s, "/ /", "/");
+        s = replaceAll(s, " /",  "/");
+        s = replaceAll(s, "/ ",  "/");
+        s = replaceAll(s, "//",  "/");
+    } while (s != prev);
+
+    // Convert any remaining spaces (between non-slash tokens) to slashes.
+    for (char& c : s) if (c == ' ') c = '/';
+
+    // Final collapse of any double-slashes introduced above.
+    do {
+        prev = s;
+        s = replaceAll(s, "//", "/");
+    } while (s != prev);
+
+    return s;
 }
 
-std::string replaceShorthands(const std::string &scrambleIn)
-{
-    // Fast path: if no alpha chars outside of numeric/slash context, skip
-    bool hasAlpha = false;
-    for (char c : scrambleIn)
-        if (std::isalpha((unsigned char)c))
-        {
-            hasAlpha = true;
-            break;
-        }
-    if (!hasAlpha)
-        return unkarnifyHelp(scrambleIn);
+// ---------------------------------------------------------------------------
+// replaceShorthands — resolve alignment-dependent shorthand tokens
+// (bjj, fv10, kk0-1, …) in a slash-separated string, tracking alignment
+// state to choose the correct alignment-suffixed key.
+// Mirrors karn.js replaceShorthands exactly, including the critical step of
+// converting slashes→spaces before the final unkarnifyHelp call so that
+// space-padded KARN_TO_WCA keys can match the expanded karn tokens.
+// ---------------------------------------------------------------------------
+std::string replaceShorthands(std::string scramble) {
+    // Split on '/' to iterate over individual move tokens.
+    std::vector<std::string> moves;
+    {
+        std::istringstream ss(scramble);
+        std::string tok;
+        while (std::getline(ss, tok, '/'))
+            moves.push_back(tok);
+    }
 
-    std::vector<std::string> moves = splitStr(scrambleIn, '/');
+    // Fast path: all tokens are already numeric or named karn moves in
+    // KARN_TO_WCA — no shorthand resolution needed.
+    bool allKnown = true;
+    for (const auto& m : moves) {
+        if (m.empty()) continue;
+        bool numeric = std::isdigit((unsigned char)m[0]) || m[0] == '-';
+        bool inDict  = KARN_TO_WCA.count(" " + m + " ") > 0;
+        if (!numeric && !inDict) { allKnown = false; break; }
+    }
+    if (allKnown) {
+        // Still need to run through unkarnifyHelp to expand any karn names.
+        // Convert slashes→spaces first so space-padded keys match.
+        std::string spaced = scramble;
+        for (char& c : spaced) if (c == '/') c = ' ';
+        std::string prev;
+        do { prev = spaced; spaced = replaceAll(spaced, "  ", " "); } while (spaced != prev);
+        return unkarnifyHelp(trimStr(spaced));
+    }
 
     bool topA = false, bottomA = false;
-    std::string result = scrambleIn;
 
-    for (const auto &move : moves)
-    {
-        std::string m = trimStr(move);
-        if (m.empty())
-            continue;
+    for (const auto& move : moves) {
+        if (move.empty()) continue;
 
-        if (m.find(',') != std::string::npos)
-        {
-            // Numeric turn — update alignment
-            auto c = m.find(',');
-            int t = 0;
-            try
-            {
-                t = std::stoi(m.substr(0, c));
-            }
-            catch (...)
-            {
-            }
-            int d = 0;
-            try
-            {
-                d = std::stoi(m.substr(c + 1));
-            }
-            catch (...)
-            {
-            }
-            if (t % 3 != 0)
-                topA = !topA;
-            if (d % 3 != 0)
-                bottomA = !bottomA;
-        }
-        else
-        {
-            // Shorthand token
-            std::string mLow = m;
-            for (char &ch : mLow)
-                ch = std::tolower((unsigned char)ch);
+        if (move.find(',') != std::string::npos) {
+            // Numeric turn — update alignment tracker.
+            size_t comma = move.find(',');
+            try {
+                int u = std::stoi(move.substr(0, comma));
+                int d = std::stoi(move.substr(comma + 1));
+                // Use sign-safe mod: only care whether divisible by 3.
+                if (((u % 3) + 3) % 3 != 0) topA    = !topA;
+                if (((d % 3) + 3) % 3 != 0) bottomA = !bottomA;
+            } catch (...) {}
+        } else {
+            // Shorthand token — look up in SHORTHAND_TO_KARN.
+            std::string lower = move;
+            for (char& c : lower) c = (char)std::tolower((unsigned char)c);
 
-            std::string key;
-            if (SHORTHAND_ALIGN_INDEPENDENT.count(mLow))
-                key = mLow;
-            else
-                key = mLow + getAlignment(topA, bottomA);
+            std::string key = SHORTHAND_ALIGN_INDEPENDENT.count(lower)
+                                  ? lower
+                                  : lower + getAlignment(topA, bottomA);
 
-            auto it = SHORTHAND_TO_KARN.find(key);
-            if (it == SHORTHAND_TO_KARN.end())
-            {
-                // Unknown shorthand — return as-is (runtime-safe)
-                return scrambleIn;
-            }
-            std::string repl = it->second;
-            result = replaceAll(result, m, repl);
+            if (!SHORTHAND_TO_KARN.count(key))
+                return scramble; // unknown shorthand — pass through unchanged
 
-            // Update alignment based on replacement expansion
-            std::string expanded = repl;
-            if (!expanded.empty() && expanded.front() == '/')
-                expanded = expanded.substr(1);
-            if (!expanded.empty() && expanded.back() == '/')
-                expanded.pop_back();
-            for (const auto &sub : splitStr(unkarnifyHelp(expanded), '/'))
-            {
-                if (sub.empty())
-                    continue;
-                auto c2 = sub.find(',');
-                if (c2 == std::string::npos)
-                    continue;
-                int t = 0, d = 0;
-                try
-                {
-                    t = std::stoi(sub.substr(0, c2));
-                }
-                catch (...)
-                {
-                }
-                try
-                {
-                    d = std::stoi(sub.substr(c2 + 1));
-                }
-                catch (...)
-                {
-                }
-                if (t % 3 != 0)
-                    topA = !topA;
-                if (d % 3 != 0)
-                    bottomA = !bottomA;
+            const std::string& repl = SHORTHAND_TO_KARN.at(key);
+
+            // Replace the move token in the working scramble string.
+            // repl looks like "/U' e D'/"; replacing "bJJ" with that gives
+            // "1,0//U' e D'/" which gets cleaned up at the end.
+            scramble = replaceAll(scramble, move, repl);
+
+            // Update alignment from what the replacement expands to.
+            // Strip the outer slashes from repl to get the inner sequence,
+            // expand it, then parse each numeric token to track alignment.
+            std::string inner = repl;
+            if (!inner.empty() && inner.front() == '/') inner = inner.substr(1);
+            if (!inner.empty() && inner.back()  == '/') inner.pop_back();
+            // inner is space-separated karn tokens (e.g. "U' e D'")
+            std::string expanded = unkarnifyHelp(inner); // → e.g. "-3,0/3,3/0,-3"
+            std::istringstream ss2(expanded);
+            std::string sub;
+            while (std::getline(ss2, sub, '/')) {
+                if (sub.empty()) continue;
+                size_t c2 = sub.find(',');
+                if (c2 == std::string::npos) continue;
+                try {
+                    int u2 = std::stoi(sub.substr(0, c2));
+                    int d2 = std::stoi(sub.substr(c2 + 1));
+                    if (((u2 % 3) + 3) % 3 != 0) topA    = !topA;
+                    if (((d2 % 3) + 3) % 3 != 0) bottomA = !bottomA;
+                } catch (...) {}
             }
         }
     }
 
-    // Collapse double-slashes introduced by replacements
-    result = replaceAll(result, " / ", "/");
-    result = replaceAll(result, "  ", "/");
-    while (result.find("//") != std::string::npos)
-        result = replaceAll(result, "//", "/");
-    return unkarnifyHelp(result);
+    // Collapse any double-slashes and stray spaces introduced by the
+    // string-replace substitutions above.
+    {
+        std::string prev;
+        do {
+            prev = scramble;
+            scramble = replaceAll(scramble, " /", "/");
+            scramble = replaceAll(scramble, "/ ", "/");
+            scramble = replaceAll(scramble, "//",  "/");
+        } while (scramble != prev);
+    }
+
+    // *** Critical: convert slashes → spaces so unkarnifyHelp's space-padded
+    // KARN_TO_WCA keys can match the karn tokens embedded in the expansion
+    // (e.g. "U'" in "/U' e D'/"). This mirrors the JS step:
+    //   scramble.replaceAll(/\//g, ' ')  →  unkarnifyHelp(scramble)
+    for (char& c : scramble) if (c == '/') c = ' ';
+    {
+        std::string prev;
+        do { prev = scramble; scramble = replaceAll(scramble, "  ", " "); } while (scramble != prev);
+    }
+
+    return unkarnifyHelp(trimStr(scramble));
 }
 
 std::pair<int, int> getOverwork(const std::vector<std::string> &moves)

@@ -41,6 +41,6 @@ std::vector<std::string> splitStr(const std::string &s, char delim);
 std::string addCommasToMove(const std::string &move);
 std::string getAlignment(bool topA, bool bottomA);
 std::string unkarnifyHelp(const std::string &scramble);
-std::string replaceShorthands(const std::string &scrambleIn);
+std::string replaceShorthands(std::string scramble);
 std::pair<int, int> getOverwork(const std::vector<std::string> &moves);
 int getMoveValue(bool startA, bool upslice, const std::string &move);
