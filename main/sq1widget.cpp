@@ -9,6 +9,8 @@ Sq1Widget::Sq1Widget(QWidget* parent) : QWidget(parent) {
     setFixedSize(W, H);
     setFocusPolicy(Qt::StrongFocus);
     setAttribute(Qt::WA_StyledBackground, true);
+    setMouseTracking(true);  // Enable mouseMoveEvent even when no buttons are pressed
+    hovered = -1;
     reset();
 }
 
@@ -86,7 +88,7 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
 void Sq1Widget::reset() {
     int defPos[] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
     for(int i=0;i<24;i++) { position[i]=defPos[i]; partiality[i]=0; }
-    middle=0; middle_partial=0; selected=-1;
+    middle=0; middle_partial=0; selected=-1; hovered=-1;
     update();
     emit positionChanged();
 }
@@ -97,7 +99,11 @@ QPointF Sq1Widget::polar(QPointF center, double angleDeg, double radius) {
     return { center.x() + qCos(rad)*radius, center.y() - qSin(rad)*radius };
 }
 
-void Sq1Widget::drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill) {
+void Sq1Widget::drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill, bool isHovered) {
+    if (isHovered) {
+        // Lighten the color by increasing lightness in HSL
+        fill = fill.lighter(115);  // 115% brightness = slightly lighter
+    }
     p.setBrush(fill);
     p.setPen(QPen(QColor(Theme::cubeBorder()), 1));
     p.drawPolygon(QPolygonF(pts));
@@ -116,6 +122,7 @@ void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, doubl
     for(int i=start; i<end; ) {
         int x = position[i];
         int pi = i;
+        bool isHov = (hovered == pi);
         if(x < 8) {
             // corner - occupies 60 degrees
             QPointF p1 = polar(center, angle,          MAIN_LEN);
@@ -125,10 +132,10 @@ void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, doubl
             QPointF p2x= polar(center, angle-30,       (MAIN_LEN+SUB_LEN)/CORNER_FACTOR);
             QPointF p3x= polar(center, angle-60,       MAIN_LEN+SUB_LEN);
             // top face
-            drawPoly(p, {center, p1, p2, p3}, partiality[i]>1 ? colors[6] : colors[x<4?0:1]);
+            drawPoly(p, {center, p1, p2, p3}, partiality[i]>1 ? colors[6] : colors[x<4?0:1], isHov);
             // side faces
-            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]]);
-            drawPoly(p, {p2, p2x, p3x, p3}, partiality[i]>0 ? colors[6] : colors[side_colors[x][1]]);
+            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]], isHov);
+            drawPoly(p, {p2, p2x, p3x, p3}, partiality[i]>0 ? colors[6] : colors[side_colors[x][1]], isHov);
             if(selected == pi) selPts = {center, p1x, p2x, p3x};
             i++; // skip duplicate corner slot
             angle -= 60;
@@ -139,9 +146,9 @@ void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, doubl
             QPointF p1x= polar(center, angle,    MAIN_LEN+SUB_LEN);
             QPointF p2x= polar(center, angle-30, MAIN_LEN+SUB_LEN);
             // top face
-            drawPoly(p, {center, p1, p2}, partiality[i]>1 ? colors[6] : colors[x<12?0:1]);
+            drawPoly(p, {center, p1, p2}, partiality[i]>1 ? colors[6] : colors[x<12?0:1], isHov);
             // side face
-            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]]);
+            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]], isHov);
             if(selected == pi) selPts = {center, p1x, p2x};
             angle -= 30;
         }
@@ -170,10 +177,10 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     double x2  = TOP_CX - r_len * 0.28;   // split: left strip is narrow
     double x3  = TOP_CX + r_len * 0.97;
     double x2b = TOP_CX + r_len * 0.28;   // kite end: mirrors left strip width
-    drawPoly(p, {{x1,MID_TOP},{x2,MID_TOP},{x2,MID_BOT},{x1,MID_BOT}}, colors[2]);
+    drawPoly(p, {{x1,MID_TOP},{x2,MID_TOP},{x2,MID_BOT},{x1,MID_BOT}}, colors[2], (hovered == -2));
     QColor rightColor = middle_partial > 0 ? colors[6] : colors[middle == 0 ? 2 : 4];
     double x_end = (middle == 0 || middle_partial > 0) ? x3 : x2b;
-    drawPoly(p, {{x2,MID_TOP},{x_end,MID_TOP},{x_end,MID_BOT},{x2,MID_BOT}}, rightColor);
+    drawPoly(p, {{x2,MID_TOP},{x_end,MID_TOP},{x_end,MID_BOT},{x2,MID_BOT}}, rightColor, (hovered == -2));
 }
 
 // ------- Hit testing -------
@@ -288,18 +295,46 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
 
 void Sq1Widget::mouseMoveEvent(QMouseEvent* event) {
     QPointF pt = event->position();
+    int hoveredPiece = -1;
     bool overPiece = false;
+    
     if (pt.y() < MID_TOP) {
-        overPiece = hitTestTop(pt) >= 0;
+        // Top layer: polygon hit test handles exact containment.
+        hoveredPiece = hitTestTop(pt);
+        overPiece = (hoveredPiece >= 0);
     } else if (pt.y() < MID_BOT) {
+        // Equator band: accept clicks within the drawn rectangle x-extent.
         constexpr double r_len = MAIN_LEN + SUB_LEN;
         double x1 = TOP_CX - r_len * 0.97;
         double x3 = TOP_CX + r_len * 0.97;
-        overPiece = (pt.x() >= x1 && pt.x() <= x3);
+        if (pt.x() >= x1 && pt.x() <= x3) {
+            overPiece = true;
+            // Middle band is one clickable element, but not a "piece" - use a sentinel value
+            hoveredPiece = -2;  // Special value: hovering middle, not a real piece index
+        }
     } else {
-        overPiece = hitTestBot(pt) >= 0;
+        // Bottom layer: polygon hit test handles exact containment.
+        hoveredPiece = hitTestBot(pt);
+        overPiece = (hoveredPiece >= 0);
     }
+    
+    // Update cursor
     setCursor(overPiece ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    
+    // Update hover state and repaint if changed
+    if (hovered != hoveredPiece) {
+        hovered = hoveredPiece;
+        update();
+    }
+}
+
+void Sq1Widget::leaveEvent(QEvent*) {
+    // Clear hover state when mouse leaves the widget
+    if (hovered != -1) {
+        hovered = -1;
+        update();
+    }
+    setCursor(Qt::ArrowCursor);
 }
 
 void Sq1Widget::swapSelected(int piece) {

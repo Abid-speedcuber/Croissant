@@ -31,6 +31,7 @@ protected:
     void paintEvent(QPaintEvent*) override;
     void mousePressEvent(QMouseEvent*) override;
     void mouseMoveEvent(QMouseEvent*) override;
+    void leaveEvent(QEvent*) override;
     void keyPressEvent(QKeyEvent*) override;
 
 private:
@@ -40,6 +41,7 @@ private:
     int middle;           // 0 = square, 1 = kite
     int middle_partial;   // 0 or 1
     int selected;         // index of selected piece, or -1
+    int hovered;          // index of hovered piece, or -1
 
     // --- Drawing constants ---
     static constexpr int W = 300, H = 500;
@@ -68,7 +70,7 @@ private:
 
     // --- Helpers ---
     QPointF polar(QPointF center, double angleDeg, double radius);
-    void drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill);
+    void drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill, bool isHovered = false);
     void drawSelection(QPainter& p, QVector<QPointF> pts);
 
     void drawLayer(QPainter& p, int start, int end, QPointF center, double startAngle);
