@@ -318,7 +318,7 @@ void MainWindow::buildUI()
         cubeWithReset->setObjectName("cubeWithReset");
         cubeWithReset->setAttribute(Qt::WA_StyledBackground, true);
         // Height: cube height + some padding for the reset button row at top
-        cubeWithReset->setFixedHeight(cubeWidget->height() + 20);
+        cubeWithReset->setFixedHeight(cubeWidget->height() + 18);
         // Width is NOT fixed — it will stretch to fill leftContainer
 
         // cubeWrapper is centered inside cubeWithReset via absolute positioning after layout
@@ -347,7 +347,7 @@ void MainWindow::buildUI()
             bool eventFilter(QObject *watched, QEvent *e) override {
                 if (e->type() == QEvent::Resize && watched == cubeWithReset) {
                     int cx = (cubeWithReset->width() - cubeWrapper->width()) / 2;
-                    cubeWrapper->move(cx, 20);
+                    cubeWrapper->move(cx, 9);
                     btnReset->move(cubeWithReset->width() - 58, 6);
                 }
                 return false;
@@ -357,13 +357,12 @@ void MainWindow::buildUI()
             new CubeResizeFilter(cubeWithReset, cubeWithReset, cubeWrapper, btnReset));
 
         // Initial position (will be corrected on first resize)
-        cubeWrapper->move((300 - cubeWidget->width()) / 2, 20);
+        cubeWrapper->move((300 - cubeWidget->width()) / 2, 9);
 
         QHBoxLayout *centerRow = new QHBoxLayout();
         centerRow->setContentsMargins(0, 0, 0, 0);
         centerRow->addWidget(cubeWithReset);  // stretches to fill
         leftCol->addLayout(centerRow);
-        leftCol->addSpacing(-20);
     }
 
     // Grid: U' | Slice (rowspan 2) | U
