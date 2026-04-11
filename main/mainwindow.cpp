@@ -52,6 +52,27 @@
 #include <set>
 
 // ============================================================
+// TightCheckBox — only shows tooltip when hovering over indicator+text
+// ============================================================
+class TightCheckBox : public QCheckBox {
+public:
+    using QCheckBox::QCheckBox;
+    bool event(QEvent *e) override {
+        if (e->type() == QEvent::ToolTip) {
+            QStyleOptionButton opt;
+            opt.initFrom(this);
+            QRect textRect = style()->subElementRect(QStyle::SE_CheckBoxContents, &opt, this);
+            QRect indRect  = style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, this);
+            QRect activeRect = textRect.united(indRect);
+            QHelpEvent *he = static_cast<QHelpEvent*>(e);
+            if (!activeRect.contains(he->pos()))
+                return true; // swallow
+        }
+        return QCheckBox::event(e);
+    }
+};
+
+// ============================================================
 // SelectableDelegate — makes table cells selectable by mouse drag
 // ============================================================
 class SelectableDelegate : public QStyledItemDelegate {
@@ -525,10 +546,10 @@ void MainWindow::buildUI()
     grid->setVerticalSpacing(2);
 
     // ── Widgets ──────────────────────────────────────────────────────────────
-    chkSlice = new QCheckBox("Slice metric");
+    chkSlice = new TightCheckBox("Slice metric");
     chkSlice->setToolTip("If selected, only slices count as \"moves\", else layer turns count too.");
 
-    chkAllOptimal = new QCheckBox("All optimal");
+    chkAllOptimal = new TightCheckBox("All optimal");
     chkAllOptimal->setToolTip("Find all the optimal solutions, not just the first one.");
 
     spnSuboptimal = new QSpinBox();
@@ -550,7 +571,7 @@ void MainWindow::buildUI()
     allOptLayout->addWidget(lblSuboptLabel);
     allOptLayout->addWidget(spnSuboptimal);
 
-    chkDepths = new QCheckBox("Specific depths:");
+    chkDepths = new TightCheckBox("Specific depths:");
     chkDepths->setToolTip("Search only the listed move depths instead of starting from 0 and going up.\n"
                           "Comma-separated, e.g.\"8,9\"");
 
@@ -562,33 +583,33 @@ void MainWindow::buildUI()
         QRegularExpression("[0-9,]*"), txtDepths));
     txtDepths->setToolTip("Comma-separated list of depths to search, e.g. \"8,9\"");
 
-    chkGenerator = new QCheckBox("Generator alg");
+    chkGenerator = new TightCheckBox("Generator alg");
     chkGenerator->setToolTip("If selected, generated algs will set up to the case from a solved cube,\n"
                              "else the algs will solve the case.");
 
-    chk2gen = new QCheckBox("2Gen  (top layer + slices only)");
+    chk2gen = new TightCheckBox("2Gen  (top layer + slices only)");
     chk2gen->setToolTip("Restrict to 2-gen moves: top-layer turns and slices only.\n"
                         "Requires the bottom left pieces to already be solved.\n"
                         "You cannot demand both 2-gen and stay-in-cubeshape.");
 
-    chkPseudo2gen = new QCheckBox("Pseudo 2Gen  (bottom: ±1 only)");
+    chkPseudo2gen = new TightCheckBox("Pseudo 2Gen  (bottom: ±1 only)");
     chkPseudo2gen->setToolTip("Restrict bottom-layer turns to ±1 only (2-gen with bottom 1 moves).\n");
 
-    chkCubeshape = new QCheckBox("Stay in cubeshape");
+    chkCubeshape = new TightCheckBox("Stay in cubeshape");
     chkCubeshape->setToolTip("Only generate algs that keep the puzzle in cubeshape throughout.");
 
-    chkIgnoreMid = new QCheckBox("Ignore middle layer");
+    chkIgnoreMid = new TightCheckBox("Ignore middle layer");
     chkIgnoreMid->setToolTip("Ignore bar states. Equivalent to clicking on the bar until it is gray.");
 
-    chkKarnotation = new QCheckBox("Karnotation output");
+    chkKarnotation = new TightCheckBox("Karnotation output");
     chkKarnotation->setToolTip("Display solutions in karnotation instead of WCA notation.");
 
-    chkSpecificAngle = new QCheckBox("Generate alg from this specific angle");
+    chkSpecificAngle = new TightCheckBox("Generate alg from this specific angle");
     chkSpecificAngle->setObjectName("chkSpecificAngle");
     chkSpecificAngle->setToolTip("Generate algs from this angle and this angle only.\n"
                                  "Essentially restricting the move before the first slice to 1 moves only.");
 
-    chkMaxX = new QCheckBox("Max top turn:");
+    chkMaxX = new TightCheckBox("Max top turn:");
     chkMaxX->setToolTip("Limit the maximum top-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"4\", that means algs can do -4 to 4 on top.");
     spnMaxX = new QSpinBox();
@@ -599,7 +620,7 @@ void MainWindow::buildUI()
     spnMaxX->setToolTip("Maximum top-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"4\", that means algs can do -4 to 4 on top.");
 
-    chkMaxY = new QCheckBox("Max bottom turn:");
+    chkMaxY = new TightCheckBox("Max bottom turn:");
     chkMaxY->setToolTip("Limit the maximum bottom-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"3\", that means algs can do -3 to 3 on bottom.");
     spnMaxY = new QSpinBox();
@@ -610,7 +631,7 @@ void MainWindow::buildUI()
     spnMaxY->setToolTip("Maximum bottom-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"3\", that means algs can do -3 to 3 on bottom.");
 
-    chkMaxTotal = new QCheckBox("Max total turn:");
+    chkMaxTotal = new TightCheckBox("Max total turn:");
     chkMaxTotal->setToolTip("Limit the maximum combined |top|+|bottom| turn per move pair (1–12).\n"
                             "e.g. if you put \"6\", (3,-3) is allowed in algs (3+3<=6),\n"
                             "but (-5,-2) is not (5+2>6).");
@@ -627,18 +648,31 @@ void MainWindow::buildUI()
     chkKarnotation->setChecked(true);
 
     // ── Grid layout ──────────────────────────────────────────────────────────
+    // Wrap full-width checkboxes in a container so they only occupy
+    // natural width — prevents tooltip firing on empty space to the right.
+    auto wrapCb = [](QCheckBox *cb) -> QWidget* {
+        QWidget *w = new QWidget();
+        w->setToolTip(""); // no tooltip on the spacer area
+        QHBoxLayout *l = new QHBoxLayout(w);
+        l->setContentsMargins(0,0,0,0);
+        l->setSpacing(0);
+        l->addWidget(cb);
+        l->addStretch();
+        return w;
+    };
+
     int row = 0;
-    grid->addWidget(chkSlice, row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chkSlice), row++, 0, 1, 2);
     grid->addWidget(allOptRow, row++, 0, 1, 2);
     grid->addWidget(chkDepths, row, 0);
     grid->addWidget(txtDepths, row++, 1);
-    grid->addWidget(chkGenerator, row++, 0, 1, 2);
-    grid->addWidget(chk2gen, row++, 0, 1, 2);
-    grid->addWidget(chkPseudo2gen, row++, 0, 1, 2);
-    grid->addWidget(chkCubeshape, row++, 0, 1, 2);
-    grid->addWidget(chkIgnoreMid, row++, 0, 1, 2);
-    grid->addWidget(chkKarnotation, row++, 0, 1, 2);
-    grid->addWidget(chkSpecificAngle, row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chkGenerator), row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chk2gen), row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chkPseudo2gen), row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chkCubeshape), row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chkIgnoreMid), row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chkKarnotation), row++, 0, 1, 2);
+    grid->addWidget(wrapCb(chkSpecificAngle), row++, 0, 1, 2);
     grid->addWidget(chkMaxX, row, 0);
     grid->addWidget(spnMaxX, row++, 1);
     grid->addWidget(chkMaxY, row, 0);
@@ -683,7 +717,7 @@ void MainWindow::buildUI()
     connect(chkMaxTotal, &QCheckBox::toggled, this, upd);
     connect(spnMaxTotal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
 
-    allOptRow->setToolTip(chkAllOptimal->toolTip());
+    allOptRow->setToolTip("");
 
     // ── Pack options/command/solve/progress into one hideable wrapper ─────────
     m_topSection = new QWidget();
@@ -1066,7 +1100,7 @@ void MainWindow::buildUI()
     outputWrapper->installEventFilter(this);
     rightCol->addWidget(outputWrapper, 1);
 
-    chkRankErgo = new QCheckBox("Roughly rank algs based on relative ergonomics");
+    chkRankErgo = new TightCheckBox("Roughly rank algs based on relative ergonomics");
     chkRankErgo->setEnabled(false);
     chkRankErgo->setObjectName("chkRankErgo");
     rightCol->addWidget(chkRankErgo);
@@ -3107,6 +3141,29 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // QTextEdit delivers QHelpEvent to its internal viewport, not to itself.
     if (event->type() == QEvent::ToolTip && txtOutput && watched == txtOutput->viewport())
         return true;
+
+    // ── Block tooltip events outside the actual text+indicator of checkboxes ──
+    if (event->type() == QEvent::ToolTip) {
+        QHelpEvent *he = static_cast<QHelpEvent*>(event);
+        // Walk up from the widget under the global cursor position
+        QWidget *under = QApplication::widgetAt(he->globalPos());
+        if (!under) return true;
+        // Find the first ancestor (or self) that has a tooltip
+        QWidget *tipWidget = under;
+        while (tipWidget && tipWidget->toolTip().isEmpty())
+            tipWidget = tipWidget->parentWidget();
+        if (!tipWidget) return true;
+        // If it's a checkbox, verify cursor is within indicator+text bounds
+        if (QCheckBox *cb = qobject_cast<QCheckBox*>(tipWidget)) {
+            QPoint localPos = cb->mapFromGlobal(he->globalPos());
+            QStyleOptionButton opt;
+            opt.initFrom(cb);
+            QRect activeRect = cb->style()->subElementRect(QStyle::SE_CheckBoxContents, &opt, cb)
+                               .united(cb->style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, cb));
+            if (!activeRect.contains(localPos))
+                return true; // cursor in empty space — eat the tooltip
+        }
+    }
 
     // ── IBeam cursor only over actual label text ──────────────────────────────
     if (event->type() == QEvent::MouseMove) {
