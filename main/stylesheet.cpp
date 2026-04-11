@@ -22,7 +22,6 @@ QString buildStyleSheet(bool lightTheme) {
     QString TEXT_ERROR      = b(Theme::TEXT_ERROR,        Theme::LIGHT_TEXT_ERROR);
     QString TEXT_CYAN       = b(Theme::TEXT_CYAN,         Theme::LIGHT_TEXT_CYAN);
     QString TEXT_TERMINAL   = b(Theme::TEXT_TERMINAL,     Theme::LIGHT_TEXT_TERMINAL);
-    QString TEXT_SOLUTION   = b(Theme::TEXT_SOLUTION,     Theme::LIGHT_TEXT_SOLUTION);
     QString BORDER_LIGHT    = b(Theme::BORDER_LIGHT,      Theme::LIGHT_BORDER_LIGHT);
     QString BORDER_DARK     = b(Theme::BORDER_DARK,       Theme::LIGHT_BORDER_DARK);
     QString BORDER_GROUP    = b(Theme::BORDER_GROUP,      Theme::LIGHT_BORDER_GROUP);
@@ -32,7 +31,6 @@ QString buildStyleSheet(bool lightTheme) {
     QString BUTTON_BG       = b(Theme::BUTTON_BG,         Theme::LIGHT_BUTTON_BG);
     QString BUTTON_BORDER   = b(Theme::BUTTON_BORDER,     Theme::LIGHT_BUTTON_BORDER);
     QString BUTTON_TEXT     = b(Theme::BUTTON_TEXT,       Theme::LIGHT_BUTTON_TEXT);
-    QString BUTTON_SEC_TEXT = b(Theme::BUTTON_SECONDARY_TEXT, Theme::LIGHT_TEXT_SECONDARY);
     QString SCROLLBAR_BG    = b(Theme::SCROLLBAR_BG,      Theme::LIGHT_SCROLLBAR_BG);
     QString SCROLLBAR_HANDLE= b(Theme::SCROLLBAR_HANDLE,  Theme::LIGHT_SCROLLBAR_HANDLE);
     QString SCROLLBAR_HOVER = b(Theme::SCROLLBAR_HOVER,   Theme::LIGHT_SCROLLBAR_HOVER);
@@ -80,11 +78,10 @@ QString buildStyleSheet(bool lightTheme) {
     QString UNDO_REDO_DISABLED_BG = b("#1e1e2a", Theme::LIGHT_DISABLED_BG);
     QString UNDO_REDO_DISABLED_BORDER = b("#333", Theme::LIGHT_BORDER_DARK);
     QString UNDO_REDO_DISABLED_TEXT   = b("#444", Theme::LIGHT_TEXT_DISABLED);
-    QString SPINBOX_ARROW_BG  = b("#3a3a5a", Theme::LIGHT_HOVER_BG);
-    QString SPINBOX_ARROW_HOVER = b("#5a5a8a", Theme::LIGHT_BORDER_LIGHT);
     QString INPUT_TEXT = b("#fff", Theme::LIGHT_TEXT_PRIMARY);
 
     return QString(R"(
+        /* ========== Main Window & Base Styling ========== */
         QMainWindow, QWidget { 
             background: %1; 
             color: %2; 
@@ -92,6 +89,7 @@ QString buildStyleSheet(bool lightTheme) {
             font-size: 13px; 
         }
 
+        /* ========== GroupBox ========== */
         QGroupBox { 
             border: 1px solid %3; 
             border-radius: 6px; 
@@ -106,6 +104,7 @@ QString buildStyleSheet(bool lightTheme) {
             padding: 0 4px; 
         }
 
+        /* ========== CheckBox ========== */
         QCheckBox { 
             spacing: 6px;
         }
@@ -136,6 +135,7 @@ QString buildStyleSheet(bool lightTheme) {
             background: %10;
         }
 
+        /* ========== Input Fields (LineEdit & SpinBox) ========== */
         QLineEdit { 
             background: %11;
             border: 1px solid %12;
@@ -195,6 +195,7 @@ QString buildStyleSheet(bool lightTheme) {
             height: 0;
         }
 
+        /* ========== TextEdit ========== */
         QTextEdit#txtOutput { 
             background: %17;
             border: 1px solid %3;
@@ -209,6 +210,7 @@ QString buildStyleSheet(bool lightTheme) {
             background: %17;
         }
 
+        /* ========== Buttons ========== */
         QPushButton { 
             background: %19;
             border: 1px solid %20;
@@ -396,15 +398,6 @@ QString buildStyleSheet(bool lightTheme) {
             border-color: %39;
         }
 
-        QLineEdit#txtScramble {
-            border-top-left-radius: 0;
-            border-bottom-left-radius: 0;
-        }
-
-        QLineEdit#txtScramble[hasError="true"] {
-            border-color: %39;
-        }
-
         QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
             background: %30;
             border: 1px solid %31;
@@ -424,6 +417,7 @@ QString buildStyleSheet(bool lightTheme) {
             background: %23;
         }
 
+        /* ========== ProgressBar ========== */
         QProgressBar { 
             border: none;
             background: %36;
@@ -435,6 +429,7 @@ QString buildStyleSheet(bool lightTheme) {
             border-radius: 3px;
         }
 
+        /* ========== Labels ========== */
         QLabel#lblStatus { 
             color: %38;
             font-size: 11px;
@@ -452,6 +447,7 @@ QString buildStyleSheet(bool lightTheme) {
             padding: 2px 2px;
         }
 
+        /* ========== ScrollBars ========== */
         QScrollBar:vertical { 
             background: %40;
             width: 8px;
@@ -504,6 +500,7 @@ QString buildStyleSheet(bool lightTheme) {
             background: none;
         }
 
+        /* ========== TableWidget ========== */
         QTableWidget#m_solutionTable {
             background: %43;
             border: 1px solid %44;
@@ -524,14 +521,12 @@ QString buildStyleSheet(bool lightTheme) {
             font-weight: bold;
         }
 
-        QTableWidget#m_solutionTable::item { 
-        }
-
         QTableWidget#m_solutionTable::item:selected {
             background: %48;
             color: %49;
         }
 
+        /* ========== TopBar ========== */
         QWidget#topBar {
             background: %50;
             border-bottom: 2px solid %51;
@@ -564,6 +559,7 @@ QString buildStyleSheet(bool lightTheme) {
             color: %57;
         }
 
+        /* ========== Tooltips ========== */
         QToolTip {
             background: %58;
             color: %59;
@@ -574,6 +570,7 @@ QString buildStyleSheet(bool lightTheme) {
             opacity: 230;
         }
 
+        /* ========== Cursor ========== */
         QPushButton, QCheckBox, QAbstractItemView::item {
             cursor: pointer;
         }
@@ -638,21 +635,19 @@ QString buildStyleSheet(bool lightTheme) {
         .arg(TOOLTIP_BG)          // %58
         .arg(TOOLTIP_TEXT)        // %59
         .arg(INPUT_TEXT)          // %60 input text color
-        .arg(SPINBOX_ARROW_BG)    // %61 spinbox button bg
-        .arg(SPINBOX_ARROW_HOVER) // %62 spinbox button hover
-        .arg(UNDO_REDO_DISABLED_BG)    // %63
-        .arg(UNDO_REDO_DISABLED_BORDER)// %64
-        .arg(UNDO_REDO_DISABLED_TEXT)  // %65
-        .arg(INPUT_MODE_BG)       // %66 input mode button bg
-        .arg(INPUT_MODE_BORDER)   // %67 input mode button border
-        .arg(INPUT_MODE_HOVER)    // %68 input mode button hover
-        .arg(INPUT_ARROW_BG)      // %69 input arrow button bg
-        .arg(INPUT_ARROW_BORDER)  // %70 input arrow button border
-        .arg(INPUT_ARROW_HOVER)   // %71 input arrow button hover
-        .arg(INPUT_APPLY_BG)      // %72 input apply button bg
-        .arg(INPUT_APPLY_BORDER)  // %73 input apply button border
-        .arg(INPUT_APPLY_HOVER)   // %74 input apply button hover
-        .arg(INPUT_FIELD_BORDER)  // %75 input field border
-        .arg(INPUT_FIELD_BG)      // %76 input field background
-        .arg(INPUT_FIELD_TEXT);   // %77 input field text color
+        .arg(UNDO_REDO_DISABLED_BG)    // %61
+        .arg(UNDO_REDO_DISABLED_BORDER)// %62
+        .arg(UNDO_REDO_DISABLED_TEXT)  // %63
+        .arg(INPUT_MODE_BG)       // %64 input mode button bg
+        .arg(INPUT_MODE_BORDER)   // %65 input mode button border
+        .arg(INPUT_MODE_HOVER)    // %66 input mode button hover
+        .arg(INPUT_ARROW_BG)      // %67 input arrow button bg
+        .arg(INPUT_ARROW_BORDER)  // %68 input arrow button border
+        .arg(INPUT_ARROW_HOVER)   // %69 input arrow button hover
+        .arg(INPUT_APPLY_BG)      // %70 input apply button bg
+        .arg(INPUT_APPLY_BORDER)  // %71 input apply button border
+        .arg(INPUT_APPLY_HOVER)   // %72 input apply button hover
+        .arg(INPUT_FIELD_BORDER)  // %73 input field border
+        .arg(INPUT_FIELD_BG)      // %74 input field background
+        .arg(INPUT_FIELD_TEXT);   // %75 input field text color
 }
