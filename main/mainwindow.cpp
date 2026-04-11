@@ -1103,11 +1103,13 @@ void MainWindow::buildUI() {
             pushUndoState();
             bool ok = cubeWidget->setPositionFromString(text);
             if (!ok) {
-                m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+                m_mainInput->setProperty("hasError", true);
+                style()->polish(m_mainInput);
                 m_undoStack.removeLast();
                 btnUndo->setEnabled(!m_undoStack.isEmpty());
             } else {
-                m_mainInput->setStyleSheet("");
+                m_mainInput->setProperty("hasError", false);
+                style()->polish(m_mainInput);
                 updateCommand();
             }
             return;
@@ -1168,7 +1170,8 @@ void MainWindow::buildUI() {
         }
 
         if (!ok) {
-            m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+            m_mainInput->setProperty("hasError", true);
+            style()->polish(m_mainInput);
             m_undoStack.removeLast();
             btnUndo->setEnabled(!m_undoStack.isEmpty());
             return;
@@ -1215,11 +1218,13 @@ void MainWindow::buildUI() {
 
         bool applied = cubeWidget->setPositionFromString(posStr);
         if (!applied) {
-            m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+            m_mainInput->setProperty("hasError", true);
+            style()->polish(m_mainInput);
             m_undoStack.removeLast();
             btnUndo->setEnabled(!m_undoStack.isEmpty());
         } else {
-            m_mainInput->setStyleSheet("");
+            m_mainInput->setProperty("hasError", false);
+            style()->polish(m_mainInput);
             updateCommand();
         }
     });
@@ -1259,10 +1264,15 @@ void MainWindow::buildUI() {
 
     connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
         lblScrambleError->setVisible(false);
-        m_mainInput->setStyleSheet("");
+        m_mainInput->setProperty("hasError", false);
+        style()->polish(m_mainInput);
         if (m_inputModeIndex == 2) {
             // Position mode: just validate border, no auto-apply
-            if (text.trimmed().isEmpty()) { m_mainInput->setStyleSheet(""); return; }
+            if (text.trimmed().isEmpty()) { 
+                m_mainInput->setProperty("hasError", false);
+                style()->polish(m_mainInput);
+                return; 
+            }
             // Peek validity without committing
             // (full apply only on Apply button press)
             return;
@@ -1325,7 +1335,8 @@ void MainWindow::buildUI() {
 
             if (!ok) {
                 // Soft error: just tint the border, don't pop anything
-                m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+                m_mainInput->setProperty("hasError", true);
+                style()->polish(m_mainInput);
                 cubeWidget->reset();
                 updateCommand();
                 return;
@@ -1372,7 +1383,8 @@ void MainWindow::buildUI() {
 
             bool applied = cubeWidget->setPositionFromString(posStr);
             if (!applied) {
-                m_mainInput->setStyleSheet("QLineEdit#txtMainInput { border-color: #ff5555; }");
+                m_mainInput->setProperty("hasError", true);
+                style()->polish(m_mainInput);
                 cubeWidget->reset();
             }
             updateCommand();
@@ -1811,147 +1823,465 @@ QString MainWindow::buildStyleSheet() {
     QString INPUT_TEXT = b("#fff", Theme::LIGHT_TEXT_PRIMARY);
 
     return QString(R"(
-        QMainWindow, QWidget { background: %1; color: %2; font-family: 'Segoe UI', Arial; font-size: 13px; }
-        QGroupBox { border: 1px solid %3; border-radius: 6px; margin-top: 8px; padding-top: 8px; color: %4; }
-        QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
-        QCheckBox { spacing: 6px; }
-        QCheckBox::indicator { width:14px; height:14px; border-radius:3px; border:1px solid %5; background:%6; }
-        QCheckBox::indicator:checked { background: %7; border-color: %7; }
-        QCheckBox#chkRankErgo::indicator:checked { background: %8; border-color: %8; }
-        QCheckBox:disabled { color: #4a4a5a; }
-        QCheckBox::indicator:disabled { border-color: %9; background: %10; }
-        QLineEdit { background: %11; border: 1px solid %12; border-radius: 4px; padding: 3px 6px; color: %60; }
-        QLineEdit:disabled { color: %13; background: %14; border-color: %15; }
-        QLineEdit#txtCommand { font-family: monospace; color: %16; font-size: 12px; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; border-right: none; }
+        QMainWindow, QWidget { 
+            background: %1; 
+            color: %2; 
+            font-family: 'Segoe UI', Arial; 
+            font-size: 13px; 
+        }
+
+        QGroupBox { 
+            border: 1px solid %3; 
+            border-radius: 6px; 
+            margin-top: 8px; 
+            padding-top: 8px; 
+            color: %4; 
+        }
+
+        QGroupBox::title { 
+            subcontrol-origin: margin; 
+            left: 8px; 
+            padding: 0 4px; 
+        }
+
+        QCheckBox { 
+            spacing: 6px;
+        }
+        QCheckBox::indicator { 
+            width:14px;
+            height:14px;
+            border-radius:3px;
+            border:1px solid %5;
+            background:%6;
+        }
+
+        QCheckBox::indicator:checked { 
+            background: %7;
+            border-color: %7;
+        }
+
+        QCheckBox#chkRankErgo::indicator:checked { 
+            background: %8;
+            border-color: %8;
+        }
+
+        QCheckBox:disabled { 
+            color: #4a4a5a;
+        }
+
+        QCheckBox::indicator:disabled { 
+            border-color: %9;
+            background: %10;
+        }
+
+        QLineEdit { 
+            background: %11;
+            border: 1px solid %12;
+            border-radius: 4px;
+            padding: 3px 6px;
+            color: %60;
+        }
+
+        QLineEdit:disabled { 
+            color: %13;
+            background: %14;
+            border-color: %15;
+        }
+
+        QLineEdit#txtCommand { 
+            font-family: monospace;
+            color: %16;
+            font-size: 12px;
+            border-radius: 0;
+            border-top-left-radius: 4px;
+            border-bottom-left-radius: 4px;
+            border-right: none;
+        }
+
         QSpinBox {
-            background: %11; border: 1px solid %12; border-radius: 4px;
-            padding: 2px 4px 2px 6px; color: %60;
+            background: %11;
+            border: 1px solid %12;
+            border-radius: 4px;
+            padding: 2px 4px 2px 6px;
+            color: %60;
             min-width: 48px;
         }
-        QSpinBox:disabled { color: %13; background: %14; border-color: %15; }
-        QSpinBox::up-button   { width: 0; border: none; }
-        QSpinBox::down-button { width: 0; border: none; }
-        QSpinBox::up-arrow    { width: 0; height: 0; }
-        QSpinBox::down-arrow  { width: 0; height: 0; }
-        QTextEdit#txtOutput { background: %17; border: 1px solid %3; border-radius: 4px;
-                              font-family: monospace; font-size: 12px; color: %18; padding: 4px; }
-        QTextEdit#txtOutput > QWidget { background: %17; }
-        QPushButton { background: %19; border: 1px solid %20; border-radius: 5px; padding: 5px 12px; color: %21; }
-        QPushButton:hover { background: %22; border-color: %20; }
-        QPushButton:pressed { background: %23; }
-        QPushButton#btnSolve { background: %24; border-color: %25; color: #fff; font-size: 13px; font-weight: bold; }
-        QPushButton#btnSolve:hover { background: %26; }
-        QPushButton#btnSolve:disabled { background: #333; border-color: #444; color: #666; }
-        QPushButton#btnCopy { background: %11; border: 1px solid %12; border-left: none; border-radius: 4px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; color: %4; font-size: 14px; padding: 0; margin-right: 5px;}
-        QPushButton#btnCopy:hover { background: %22; color: %21; }
+
+        QSpinBox:disabled { 
+            color: %13;
+            background: %14;
+            border-color: %15;
+        }
+
+        QSpinBox::up-button   { 
+            width: 0;
+            border: none;
+        }
+
+        QSpinBox::down-button { 
+            width: 0;
+            border: none;
+        }
+
+        QSpinBox::up-arrow    { 
+            width: 0;
+            height: 0;
+        }
+
+        QSpinBox::down-arrow  { 
+            width: 0;
+            height: 0;
+        }
+
+        QTextEdit#txtOutput { 
+            background: %17;
+            border: 1px solid %3;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            color: %18;
+            padding: 4px;
+        }
+
+        QTextEdit#txtOutput > QWidget { 
+            background: %17;
+        }
+
+        QPushButton { 
+            background: %19;
+            border: 1px solid %20;
+            border-radius: 5px;
+            padding: 5px 12px;
+            color: %21;
+        }
+
+        QPushButton:hover { 
+            background: %22;
+            border-color: %20;
+        }
+
+        QPushButton:pressed { 
+            background: %23;
+        }
+
+        QPushButton#btnSolve { 
+            background: %24;
+            border-color: %25;
+            color: #fff;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        QPushButton#btnSolve:hover { 
+            background: %26;
+        }
+
+        QPushButton#btnSolve:disabled { 
+            background: #333;
+            border-color: #444;
+            color: #666;
+        }
+
+        QPushButton#btnCopy { 
+            background: %11;
+            border: 1px solid %12;
+            border-left: none;
+            border-radius: 4px;
+            border-top-left-radius: 0px;
+            border-bottom-left-radius: 0px;
+            color: %4;
+            font-size: 14px;
+            padding: 0;
+            margin-right: 5px;
+        }
+
+        QPushButton#btnCopy:hover { 
+            background: %22;
+            color: %21;
+        }
+
         QPushButton#btnReset {
-            background: %27; border: 1px solid %28; border-radius: 26px;
-            color: %4; font-size: 11px; font-weight: bold; padding: 0;
+            background: %27;
+            border: 1px solid %28;
+            border-radius: 26px;
+            color: %4;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 0;
             letter-spacing: -0.5px;
         }
-        QPushButton#btnReset:hover { background: %29; border-color: %20; color: %21; }
+
+        QPushButton#btnReset:hover { 
+            background: %29;
+            border-color: %20;
+            color: %21;
+        }
+
         QPushButton#btnUndo, QPushButton#btnRedo {
-            background: %19; border-color: %20; color: %21;
+            background: %19;
+            border-color: %20;
+            color: %21;
         }
+
         QPushButton#btnUndo:hover, QPushButton#btnRedo:hover {
-            background: %22; border-color: %20;
+            background: %22;
+            border-color: %20;
         }
+
         QPushButton#btnUndo:pressed, QPushButton#btnRedo:pressed {
             background: %23;
         }
+
         QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled {
-            background: %63; border-color: %64; color: %65;
+            background: %63;
+            border-color: %64;
+            color: %65;
         }
+
         QPushButton#btnApplyScramble {
-            background: %11; border: 1px solid %12;
-            border-radius: 4px; color: %4; padding: 4px 8px;
+            background: %11;
+            border: 1px solid %12;
+            border-radius: 4px;
+            color: %4;
+            padding: 4px 8px;
         }
-        QPushButton#btnApplyScramble:hover { background: %22; border-color: %20; }
+
+        QPushButton#btnApplyScramble:hover { 
+            background: %22;
+            border-color: %20;
+        }
+
         QPushButton#btnScrambleMode {
-            background: #333350; border: 1px solid %12;
-            border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
-            border-right: none; color: #fff; padding: 0 6px; font-size: 11px;
+            background: #333350;
+            border: 1px solid %12;
+            border-radius: 0;
+            border-top-left-radius: 4px;
+            border-bottom-left-radius: 4px;
+            border-right: none;
+            color: #fff;
+            padding: 0 6px;
+            font-size: 11px;
         }
-        QPushButton#btnScrambleMode:checked { color: #fff; background: #333350; }
-        QPushButton#btnScrambleMode:hover { background: %22; }
-        QLineEdit#txtScramble {
-            border-top-left-radius: 0; border-bottom-left-radius: 0;
+
+        QPushButton#btnScrambleMode:checked { 
+            color: #fff;
+            background: #333350;
         }
+
+        QPushButton#btnScrambleMode:hover { 
+            background: %22;
+        }
+
         QPushButton#btnInputMode {
-            background: %66; border: 1px solid %67;
+            background: %66;
+            border: 1px solid %67;
             border-radius: 4px 0 0 4px;
-            border-right: none; color: #fff; padding: 0 10px; font-size: 11px; font-weight: bold;
+            border-right: none;
+            color: #fff;
+            padding: 0 10px;
+            font-size: 11px;
+            font-weight: bold;
         }
-        QPushButton#btnInputMode:hover { background: %68; border-color: %67; }
+
+        QPushButton#btnInputMode:hover { 
+            background: %68;
+            border-color: %67;
+        }
+
         QPushButton#btnInputModeArrow {
-            background: %69; border: 1px solid %70;
+            background: %69;
+            border: 1px solid %70;
             border-radius: 0 4px 4px 0;
             border-left: none;
-            color: #fff; padding: 0 6px; font-size: 11px;
+            color: #fff;
+            padding: 0 6px;
+            font-size: 11px;
         }
-        QPushButton#btnInputModeArrow:hover { background: %71; border-color: %70; }
+
+        QPushButton#btnInputModeArrow:hover { 
+            background: %71;
+            border-color: %70;
+        }
+
         QPushButton#btnApply {
-            background: %72; border: 1px solid %73;
-            border-radius: 4px; margin-left: 8px;
-            color: #fff; font-size: 11px; font-weight: bold; padding: 0 12px;
+            background: %72;
+            border: 1px solid %73;
+            border-radius: 4px;
+            margin-left: 8px;
+            color: #fff;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 0 12px;
             min-width: 52px;
         }
-        QPushButton#btnApply:hover { background: %74; border-color: %73; }
+
+        QPushButton#btnApply:hover { 
+            background: %74;
+            border-color: %73;
+        }
+
         QLineEdit#txtMainInput {
-            border-radius: 4px; border: 1px solid %75;
+            border-radius: 4px;
+            border: 1px solid %75;
             margin-left: 6px;
-            font-family: monospace; font-size: 12px;
-            background: %76; color: %77;
+            font-family: monospace;
+            font-size: 12px;
+            background: %76;
+            color: %77;
         }
+
+        QLineEdit#txtMainInput[hasError="true"] {
+            border-color: %39;
+        }
+
+        QLineEdit#txtScramble {
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        QLineEdit#txtScramble[hasError="true"] {
+            border-color: %39;
+        }
+
         QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
-            background: %30; border: 1px solid %31; border-radius: 4px;
-            color: %32; font-size: 13px; padding: 0;
+            background: %30;
+            border: 1px solid %31;
+            border-radius: 4px;
+            color: %32;
+            font-size: 13px;
+            padding: 0;
         }
+
         QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover, QPushButton#btnTableMode:hover {
-            background: %33; border-color: %34; color: %35;
+            background: %33;
+            border-color: %34;
+            color: %35;
         }
+
         QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#btnTableMode:pressed {
             background: %23;
         }
-        QProgressBar { border: none; background: %36; border-radius: 3px; }
-        QProgressBar::chunk { background: %37; border-radius: 3px; }
-        QLabel#lblStatus { color: %38; font-size: 11px; }
-        QLabel#lblScrambleError { color: %39; font-size: 11px; padding: 2px 2px; }
-        QLabel#lblCommandError  { color: %39; font-size: 11px; padding: 2px 2px; }
-        QScrollBar:vertical { background: %40; width: 8px; border-radius: 4px; margin: 0; }
-        QScrollBar::handle:vertical { background: %41; border-radius: 4px; min-height: 24px; }
-        QScrollBar::handle:vertical:hover { background: %42; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; border: 0; }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
-        QScrollBar:horizontal { background: %40; height: 8px; border-radius: 4px; margin: 0; }
-        QScrollBar::handle:horizontal { background: %41; border-radius: 4px; min-width: 24px; }
-        QScrollBar::handle:horizontal:hover { background: %42; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; border: 0; }
-        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
+
+        QProgressBar { 
+            border: none;
+            background: %36;
+            border-radius: 3px;
+        }
+
+        QProgressBar::chunk { 
+            background: %37;
+            border-radius: 3px;
+        }
+
+        QLabel#lblStatus { 
+            color: %38;
+            font-size: 11px;
+        }
+
+        QLabel#lblScrambleError { 
+            color: %39;
+            font-size: 11px;
+            padding: 2px 2px;
+        }
+
+        QLabel#lblCommandError  { 
+            color: %39;
+            font-size: 11px;
+            padding: 2px 2px;
+        }
+
+        QScrollBar:vertical { 
+            background: %40;
+            width: 8px;
+            border-radius: 4px;
+            margin: 0;
+        }
+
+        QScrollBar::handle:vertical { 
+            background: %41;
+            border-radius: 4px;
+            min-height: 24px;
+        }
+
+        QScrollBar::handle:vertical:hover { 
+            background: %42;
+        }
+
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { 
+            height: 0px;
+            border: 0;
+        }
+
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { 
+            background: none;
+        }
+
+        QScrollBar:horizontal { 
+            background: %40;
+            height: 8px;
+            border-radius: 4px;
+            margin: 0;
+        }
+
+        QScrollBar::handle:horizontal { 
+            background: %41;
+            border-radius: 4px;
+            min-width: 24px;
+        }
+
+        QScrollBar::handle:horizontal:hover { 
+            background: %42;
+        }
+
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { 
+            width: 0px;
+            border: 0;
+        }
+
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { 
+            background: none;
+        }
+
         QTableWidget#m_solutionTable {
-            background: %43; border: 1px solid %44;
-            border-radius: 4px; gridline-color: %45;
-            font-family: monospace; font-size: 12px; color: %2;
+            background: %43;
+            border: 1px solid %44;
+            border-radius: 4px;
+            gridline-color: %45;
+            font-family: monospace;
+            font-size: 12px;
+            color: %2;
         }
+
         QTableWidget#m_solutionTable QHeaderView::section {
-            background: %46; color: %47; border: none;
-            border-bottom: 1px solid %44; padding: 4px;
-            font-size: 11px; font-weight: bold;
+            background: %46;
+            color: %47;
+            border: none;
+            border-bottom: 1px solid %44;
+            padding: 4px
+            font-size: 11px;
+            font-weight: bold;
         }
-        QTableWidget#m_solutionTable::item { }
+
+        QTableWidget#m_solutionTable::item { 
+        }
+
         QTableWidget#m_solutionTable::item:selected {
-            background: %48; color: %49;
+            background: %48;
+            color: %49;
         }
+
         QWidget#topBar {
             background: %50;
             border-bottom: 2px solid %51;
             min-height: 52px;
             max-height: 52px;
         }
+
         QLabel#logoLabel {
             background: transparent;
             padding: 0;
         }
+
         QPushButton#btnAbout, QPushButton#btnHamburger {
             background: %52;
             border: 1px solid %53;
@@ -1965,11 +2295,13 @@ QString MainWindow::buildStyleSheet() {
             min-height: 30px;
             max-height: 30px;
         }
+
         QPushButton#btnAbout:hover, QPushButton#btnHamburger:hover {
             background: %55;
             border-color: %56;
             color: %57;
         }
+
         QToolTip {
             background: %58;
             color: %59;
@@ -1979,6 +2311,7 @@ QString MainWindow::buildStyleSheet() {
             font-size: 12px;
             opacity: 230;
         }
+
         QPushButton, QCheckBox, QAbstractItemView::item {
             cursor: pointer;
         }
@@ -2515,7 +2848,8 @@ void MainWindow::onApplyScramble() {
                           .arg(ctx).arg(approxPos);
         lblScrambleError->setText(msg);
         lblScrambleError->setVisible(true);
-        txtScramble->setStyleSheet("QLineEdit { border-color: #ff5555; }");
+        txtScramble->setProperty("hasError", true);
+        style()->polish(txtScramble);
         return;
     }
 
@@ -2550,12 +2884,14 @@ void MainWindow::onApplyScramble() {
     if (!applied) {
         lblScrambleError->setText("Resulting position is invalid — check your move sequence.");
         lblScrambleError->setVisible(true);
-        txtScramble->setStyleSheet("QLineEdit { border-color: #ff5555; }");
+        txtScramble->setProperty("hasError", true);
+        style()->polish(txtScramble);
         return;
     }
     // Clear any previous error
     lblScrambleError->setVisible(false);
-    txtScramble->setStyleSheet("");
+    txtScramble->setProperty("hasError", false);
+    style()->polish(txtScramble);
     updateCommand();
 }
 
