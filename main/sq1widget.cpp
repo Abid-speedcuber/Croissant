@@ -283,7 +283,7 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
                 selected = piece;
                 // no state change yet — undo pushed when swap completes
             } else {
-                emit userInteracted();
+                if(selected != piece) emit userInteracted();
                 swapSelected(piece);
             }
         }
@@ -341,6 +341,7 @@ void Sq1Widget::swapSelected(int piece) {
     bool selCorner = (selected<23 && position[selected]==position[selected+1]);
     bool pieCorner = (piece<23   && position[piece]  ==position[piece+1]);
     if(selCorner != pieCorner) { selected=-1; update(); return; }
+    if(selected == piece) { selected=-1; update(); return; }
 
     if(selCorner) {
         std::swap(position[selected+1],   position[piece+1]);
