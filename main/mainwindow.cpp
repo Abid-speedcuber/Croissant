@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "sq1widget.h"
+#include "sq1_logic.h"
 #include "karnotation.h"
 #include "theme.h"
 #include "stylesheet.h"
@@ -50,477 +51,21 @@
 #include <set>
 
 // ============================================================
-// Ergonomics Rating — pure C++ translation of alg_rater.html
-// Uses KARNOTATION from karnotation.h for unkarnify.
-// ============================================================
-
-// Helper removed: readTextFromFile consolidated into loadDocText
-
-static const std::map<int,int> CLOSEST_MAP = {
-    {-5,-6},{-4,-3},{-3,-3},{-2,-3},{-1,0},{0,0},
-    { 1, 0},{ 2, 3},{ 3, 3},{ 4, 3},{5, 6},{6, 6}
-};
-
-// MOVE_VALUES table from alg_rater.html.
-// Key format: "<A|a><slash|backslash><top>,<bot>"  or  "<slash|backslash><top>,<bot>"
-// A=aligned top (top%3==0), a=not. slash=upslice(odd), backslash=downslice(even).
-static const std::map<std::string,int> MOVE_VALUES = {
-    {"A/0,3",16},  {"a/0,3",5},   {"A\\0,3",17},  {"a\\0,3",5},
-    {"A/0,6",1},   {"a/0,6",5},   {"A\\0,6",1},   {"a\\0,6",5},
-    {"A/0,-3",18}, {"a/0,-3",12}, {"A\\0,-3",8},  {"a\\0,-3",5},
-    {"A/3,0",16},  {"a/3,0",17},  {"A\\3,0",6},   {"a\\3,0",16},
-    {"A/3,3",12},  {"a/3,3",10},  {"A\\3,3",14},  {"a\\3,3",11},
-    {"A/3,6",0},   {"a/3,6",5},   {"A\\3,6",1},   {"a\\3,6",4},
-    {"A/3,-3",13}, {"a/3,-3",7},  {"A\\3,-3",12}, {"a\\3,-3",6},
-    {"A/6,0",12},  {"a/6,0",4},   {"A\\6,0",14},  {"a\\6,0",4},
-    {"A/6,3",11},  {"a/6,3",2},   {"A\\6,3",11},  {"a\\6,3",2},
-    {"A/6,6",2},   {"a/6,6",0},   {"A\\6,6",5},   {"a\\6,6",0},
-    {"A/6,-3",12}, {"a/6,-3",3},  {"A\\6,-3",8},  {"a\\6,-3",1},
-    {"A/-3,0",9},  {"a/-3,0",18}, {"A\\-3,0",11}, {"a\\-3,0",15},
-    {"A/-3,3",13}, {"a/-3,3",12}, {"A\\-3,3",14}, {"a\\-3,3",10},
-    {"A/-3,6",4},  {"a/-3,6",7},  {"A\\-3,6",6},  {"a\\-3,6",2},
-    {"A/-3,-3",12},{"a/-3,-3",11},{"A\\-3,-3",9}, {"a\\-3,-3",5},
-    {"/1,-2",4},   {"\\1,-2",17}, {"/-1,2",15},   {"\\-1,2",14},
-    {"/1,-5",3},   {"\\1,-5",1},  {"/-1,5",8},    {"\\-1,5",3},
-    {"/1,4",7},    {"\\1,4",14},  {"/-1,-4",12},  {"\\-1,-4",9},
-    {"/1,1",11},   {"\\1,1",20},  {"/-1,-1",20},  {"\\-1,-1",10},
-    {"/2,-1",20},  {"\\2,-1",12}, {"/-2,1",14},   {"\\-2,1",18},
-    {"/2,2",12},   {"\\2,2",13},  {"/-2,-2",14},  {"\\-2,-2",8},
-    {"/2,5",5},    {"\\2,5",3},   {"/-2,-5",4},   {"\\-2,-5",3},
-    {"/2,-4",14},  {"\\2,-4",6},  {"/-2,4",13},   {"\\-2,4",13},
-    {"/4,4",5},    {"\\4,4",12},  {"/-4,-4",12},  {"\\-4,-4",4},
-    {"/4,1",6},    {"\\4,1",13},  {"/-4,-1",16},  {"\\-4,-1",6},
-    {"/4,-2",12},  {"\\4,-2",9},  {"/-4,2",16},   {"\\-4,2",13},
-    {"/4,-5",2},   {"\\4,-5",5},  {"/-4,5",13},   {"\\-4,5",3},
-    {"/5,5",1},    {"\\5,5",4},   {"/-5,-5",2},   {"\\-5,-5",0},
-    {"/5,2",6},    {"\\5,2",10},  {"/-5,-2",12},  {"\\-5,-2",13},
-    {"/5,-1",11},  {"\\5,-1",7},  {"/-5,1",14},   {"\\-5,1",15},
-    {"/5,-4",2},   {"\\5,-4",2},  {"/-5,4",12},   {"\\-5,4",14}
-};
-
-static int getMoveValue(bool startA, bool upslice, const std::string& move) {
-    std::string key;
-    auto comma = move.find(',');
-    int topVal = std::stoi(move.substr(0, comma));
-    if (topVal % 3 == 0) {
-        key = (startA ? "A" : "a");
-        key += (upslice ? "/" : "\\");
-        key += move;
-    } else {
-        key = (upslice ? "/" : "\\");
-        key += move;
-    }
-    auto it = MOVE_VALUES.find(key);
-    return (it != MOVE_VALUES.end()) ? it->second : 5;
-}
-
-static std::vector<std::string> splitStr(const std::string& s, char delim) {
-    std::vector<std::string> out;
-    std::string cur;
-    for (char c : s) {
-        if (c == delim) { out.push_back(cur); cur.clear(); }
-        else cur += c;
-    }
-    out.push_back(cur);
-    return out;
-}
-
-static std::string addCommasToMove(const std::string& move) {
-    if (move.empty()) return move;
-    for (char c : move)
-        if (c != '-' && !std::isdigit((unsigned char)c)) return move;
-    switch (move.size()) {
-        case 1: return move + ",0";
-        case 2: return move[0] == '-' ? move + ",0"
-                                      : std::string(1, move[0]) + "," + std::string(1, move[1]);
-        case 3: return move[0] == '-' ? move.substr(0,2) + "," + std::string(1, move[2])
-                                      : std::string(1, move[0]) + "," + move.substr(1);
-        case 4: return move.substr(0,2) + "," + move.substr(2);
-        default: return move;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// getAlignment — returns "00","10","0-1","1-1" suffix for shorthand lookup
-// ---------------------------------------------------------------------------
-static std::string getAlignment(bool topA, bool bottomA) {
-    return (topA ? "1" : "0") + std::string(bottomA ? "-1" : "0");
-}
-
-// ---------------------------------------------------------------------------
-// unkarnifyHelp — apply KARN_TO_WCA dict, collapse consecutive slashes
-// ---------------------------------------------------------------------------
-static std::string unkarnifyHelp(const std::string& scramble) {
-    std::string s = dictReplace(" " + scramble + " ", KARN_TO_WCA);
-    // trim
-    size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos) return "";
-    size_t b = s.find_last_not_of(" \t\r\n");
-    s = s.substr(a, b - a + 1);
-    // collapse consecutive slashes and spaces-around-slashes
-    // replace runs of "/ /" or " /" etc. → single "/"
-    // simple approach: replace multiple-slash runs
-    std::string out;
-    for (size_t i = 0; i < s.size(); ) {
-        bool isSlashOrSpace = (s[i] == '/' || s[i] == ' ');
-        if (isSlashOrSpace) {
-            // scan ahead for the whole run
-            size_t j = i;
-            bool sawSlash = false;
-            while (j < s.size() && (s[j] == '/' || s[j] == ' ')) {
-                if (s[j] == '/') sawSlash = true;
-                j++;
-            }
-            if (sawSlash) out += '/';
-            else out += ' ';
-            i = j;
-        } else {
-            out += s[i++];
-        }
-    }
-    // replace remaining spaces with '/'
-    for (char& c : out) if (c == ' ') c = '/';
-    // collapse double slashes
-    while (out.find("//") != std::string::npos)
-        out = replaceAll(out, "//", "/");
-    return out;
-}
-
-// ---------------------------------------------------------------------------
-// replaceShorthands — resolve shorthand names (bjj, fv, kk, …) tracking
-// alignment state to pick the correct alignment-suffixed key.
-// ---------------------------------------------------------------------------
-static std::string replaceShorthands(const std::string& scrambleIn) {
-    // Fast path: if no alpha chars outside of numeric/slash context, skip
-    bool hasAlpha = false;
-    for (char c : scrambleIn)
-        if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
-    if (!hasAlpha) return unkarnifyHelp(scrambleIn);
-
-    std::vector<std::string> moves = splitStr(scrambleIn, '/');
-
-    bool topA = false, bottomA = false;
-    std::string result = scrambleIn;
-
-    for (const auto& move : moves) {
-        std::string m = trimStr(move);
-        if (m.empty()) continue;
-
-        if (m.find(',') != std::string::npos) {
-            // Numeric turn — update alignment
-            auto c = m.find(',');
-            int t = 0;
-            try { t = std::stoi(m.substr(0, c)); } catch (...) {}
-            int d = 0;
-            try { d = std::stoi(m.substr(c+1)); } catch (...) {}
-            if (t % 3 != 0) topA    = !topA;
-            if (d % 3 != 0) bottomA = !bottomA;
-        } else {
-            // Shorthand token
-            std::string mLow = m;
-            for (char& ch : mLow) ch = std::tolower((unsigned char)ch);
-
-            std::string key;
-            if (SHORTHAND_ALIGN_INDEPENDENT.count(mLow))
-                key = mLow;
-            else
-                key = mLow + getAlignment(topA, bottomA);
-
-            auto it = SHORTHAND_TO_KARN.find(key);
-            if (it == SHORTHAND_TO_KARN.end()) {
-                // Unknown shorthand — return as-is (runtime-safe)
-                return scrambleIn;
-            }
-            std::string repl = it->second;
-            result = replaceAll(result, m, repl);
-
-            // Update alignment based on replacement expansion
-            std::string expanded = repl;
-            if (!expanded.empty() && expanded.front() == '/') expanded = expanded.substr(1);
-            if (!expanded.empty() && expanded.back()  == '/') expanded.pop_back();
-            for (const auto& sub : splitStr(unkarnifyHelp(expanded), '/')) {
-                if (sub.empty()) continue;
-                auto c2 = sub.find(',');
-                if (c2 == std::string::npos) continue;
-                int t = 0, d = 0;
-                try { t = std::stoi(sub.substr(0, c2)); } catch (...) {}
-                try { d = std::stoi(sub.substr(c2+1));  } catch (...) {}
-                if (t % 3 != 0) topA    = !topA;
-                if (d % 3 != 0) bottomA = !bottomA;
-            }
-        }
-    }
-
-    // Collapse double-slashes introduced by replacements
-    result = replaceAll(result, " / ", "/");
-    result = replaceAll(result, "  ", "/");
-    while (result.find("//") != std::string::npos)
-        result = replaceAll(result, "//", "/");
-    return unkarnifyHelp(result);
-}
-
-// ---------------------------------------------------------------------------
-// unkarnify — master Karnotation → numeric WCA conversion
-// Matches karn.js unkarnify() pipeline.
-// ---------------------------------------------------------------------------
-static std::string unkarnify(const std::string& algIn) {
-    std::string s = algIn;
-
-    // Easter egg passthrough
-    if (s.find("meow") != std::string::npos) return s;
-
-    // Legacy single-char substitutions (compact notation)
-    s = replaceAll(s, "&", "-1");
-    s = replaceAll(s, "^", "-2");
-    s = replaceAll(s, "9", "-3");
-    s = replaceAll(s, "8", "-4");
-    s = replaceAll(s, "7", "-5");
-
-    // Detect leading/trailing slice
-    bool firstSlice = (!s.empty() && (s[0] == '/' || s[0] == '\\'));
-    if (!firstSlice) {
-        // Check if first token is a karn name that maps to something starting with /
-        std::istringstream iss(s);
-        std::string tok;
-        if (iss >> tok) {
-            auto it = KARN_TO_WCA.find(" " + tok + " ");
-            if (it != KARN_TO_WCA.end()) firstSlice = true;
-        }
-    }
-    bool lastSlice = false;
-    {
-        std::istringstream iss(s);
-        std::string last, tok;
-        while (iss >> tok) last = tok;
-        if (!last.empty()) {
-            auto it = KARN_TO_WCA.find(" " + last + " ");
-            if (it != KARN_TO_WCA.end()) lastSlice = true;
-        }
-    }
-
-    // Normalise separators
-    for (char& c : s) if (c == '\\' || c == '/') c = ' ';
-    // collapse parens
-    s = replaceAll(s, "(", "");
-    s = replaceAll(s, ")", "");
-    // collapse multiple spaces
-    {
-        std::string tmp;
-        bool sp = false;
-        for (char c : s) {
-            if (c == ' ') { if (!sp) { tmp += ' '; sp = true; } }
-            else { tmp += c; sp = false; }
-        }
-        s = trimStr(tmp);
-    }
-
-    // addCommas to each space-separated token
-    {
-        std::vector<std::string> tokens;
-        std::istringstream iss(s);
-        std::string tok;
-        while (iss >> tok) tokens.push_back(tok);
-        s.clear();
-        for (size_t i = 0; i < tokens.size(); i++) {
-            if (i) s += ' ';
-            s += addCommasToMove(tokens[i]);
-        }
-    }
-
-    // replaceShorthands then full dict-replace
-    std::string final_ = replaceShorthands(unkarnifyHelp(s));
-
-    // Re-attach leading/trailing slices
-    if (firstSlice && (final_.empty() || final_[0] != '/'))
-        final_ = "/" + final_;
-    if (lastSlice && (final_.empty() || final_.back() != '/'))
-        final_ = final_ + "/";
-    // collapse double slashes
-    while (final_.find("//") != std::string::npos)
-        final_ = replaceAll(final_, "//", "/");
-
-    // addCommas pass on each slash-segment
-    auto parts = splitStr(final_, '/');
-    final_.clear();
-    for (size_t i = 0; i < parts.size(); ++i) {
-        if (i) final_ += "/";
-        final_ += addCommasToMove(parts[i]);
-    }
-
-    return final_;
-}
-
-static std::pair<int,int> getOverwork(const std::vector<std::string>& moves) {
-    std::vector<int> top, bot;
-    for (auto& m : moves) {
-        auto c = m.find(',');
-        if (c == std::string::npos) { top.push_back(0); bot.push_back(0); continue; }
-        try { top.push_back(std::stoi(m.substr(0,c))); } catch(...) { top.push_back(0); }
-        try { bot.push_back(std::stoi(m.substr(c+1))); } catch(...) { bot.push_back(0); }
-    }
-
-    int movement = 0, bonus = 0;
-    int streak = 0, closestMovement = 0, buffer = 0;
-    for (int t : top) {
-        bool isLeft = (t == 6 || t < 0);
-        if (isLeft) {
-            streak++;
-            auto it = CLOSEST_MAP.find(t);
-            closestMovement += std::abs(it != CLOSEST_MAP.end() ? it->second : 0);
-            buffer += std::abs(t);
-            if (streak > 1 && closestMovement > 3) { movement += buffer; buffer = 0; }
-        } else { streak = 0; closestMovement = 0; buffer = 0; }
-    }
-    streak = 0; closestMovement = 0; buffer = 0;
-    for (int b : bot) {
-        bool isLeft = (b > 0);
-        if (isLeft) {
-            streak++;
-            auto it = CLOSEST_MAP.find(b);
-            closestMovement += std::abs(it != CLOSEST_MAP.end() ? it->second : 0);
-            buffer += std::abs(b);
-            if (streak > 1 && closestMovement > 3) { movement += buffer; buffer = 0; }
-        } else { streak = 0; closestMovement = 0; buffer = 0; }
-    }
-    for (size_t i = 0; i + 1 < top.size(); i++) {
-        if (top[i] + top[i+1] != 0) bonus++;
-        if (bot[i] + bot[i+1] != 0) bonus++;
-    }
-    return {movement, bonus};
-}
-
-struct AlgRating {
-    double FINAL;
-    std::string sliceStart;
-};
-
-static AlgRating rateAlg(const std::string& algRaw, bool initial_top_A,
-                         double W1, double W2, double W3, double W4, double W5)
-{
-    std::string a = algRaw;
-    { size_t lb = a.find('['); if (lb != std::string::npos) a = a.substr(0, lb); }
-    a = trimStr(a);
-    bool isKarnAlg = false;
-    for (char ch : a) if (std::isalpha(ch)) { isKarnAlg = true; break; }
-    std::string numeric = isKarnAlg ? unkarnify(a) : replaceAll(a, " ", "");
-    auto rawParts = splitStr(numeric, '/');
-    std::vector<std::string> r;
-    for (size_t i = 0; i < rawParts.size(); i++) {
-        std::string pt = trimStr(rawParts[i]);
-        if (i == 0 || !pt.empty()) r.push_back(pt);
-    }
-    if (r.size() < 2) return {W4, ""};
-
-    int sliceCount = (int)r.size() - 1;
-    if (sliceCount <= 0) return {W4, ""};
-
-    double ergo_up = 0, ergo_down = 0;
-    bool is_top_A = false, odd_slice = true;
-    for (int i = 0; i < (int)r.size() - 1; i++) {
-        if (i == 0) {
-            auto c = r[i].find(',');
-            int t = 0;
-            if (c != std::string::npos) try { t = std::stoi(r[i].substr(0,c)); } catch(...) {}
-            is_top_A = (initial_top_A != (t % 3 != 0));
-            odd_slice = true;
-            continue;
-        }
-        int vu = getMoveValue(is_top_A,  odd_slice, r[i]);
-        int vd = getMoveValue(is_top_A, !odd_slice, r[i]);
-        ergo_up   += vu;
-        ergo_down += vd;
-        auto c = r[i].find(',');
-        int t = 0;
-        if (c != std::string::npos) try { t = std::stoi(r[i].substr(0,c)); } catch(...) {}
-        is_top_A  = (is_top_A != (t % 3 != 0));
-        odd_slice = !odd_slice;
-    }
-    double PHASE1 = W1 * std::max(ergo_up, ergo_down) / sliceCount;
-    std::string sliceStart;
-    if ((std::abs(ergo_up - ergo_down) / sliceCount) > 2) {
-        sliceStart = (ergo_up > ergo_down) ? "/" : "\\";
-    } else sliceStart = " ";
-
-    double PHASE2 = W2 * sliceCount;
-    auto moves = std::vector<std::string>(r.begin() + 1, r.end() - 1);
-    auto [movement, bonus] = getOverwork(moves);
-    double PHASE3 = W3 * movement / sliceCount;
-    double PHASE4 = bonus * W5 / sliceCount;
-
-    double FINAL = PHASE1 - PHASE2 - PHASE3 + PHASE4 + W4;
-    return {FINAL, sliceStart};
-}
-
-static std::vector<std::pair<QString, double>>
-rateAndSort(const QStringList& solutionLines, const QString& posHex, bool useKarnotation) {
-    Q_UNUSED(useKarnotation);
-    bool initial_top_A = false;
-    if (!posHex.isEmpty()) {
-        QChar first = posHex[0];
-        initial_top_A = first.isDigit() ||
-                        first == 'X' || first == 'Y' || first == 'Z';
-    }
-
-    const double W1=34, W2=100, W3=38, W4=500, W5=10;
-    std::vector<std::pair<QString, double>> results;
-
-    for (const QString& lineIn : solutionLines) {
-        QString line = lineIn;
-        std::string algStr = line.toStdString();
-        auto bracket = algStr.find('[');
-        std::string algOnly = bracket != std::string::npos
-                                  ? trimStr(algStr.substr(0, bracket))
-                                  : trimStr(algStr);
-        double score = W4;
-        AlgRating rating;
-        bool rated = false;
-        try {
-            // Always convert to numeric for rating
-            std::string numericAlg = algOnly;
-            bool isKarn = false;
-            for (char ch : algOnly) if (std::isalpha((unsigned char)ch)) { isKarn = true; break; }
-            if (isKarn) numericAlg = unkarnify(algOnly);
-
-            rating = rateAlg(numericAlg, initial_top_A, W1, W2, W3, W4, W5);
-            score = rating.FINAL;
-            rated = true;
-        } catch (...) {}
-
-        // Inject slice start indicator into display line
-        if (rated) {
-            QString sliceStr = QString::fromStdString(rating.sliceStart);
-            if (sliceStr == "/" || sliceStr == "\\") {
-                // Find the first '/' in the line (can only be in the alg part)
-                int slashPos = line.indexOf('/');
-                if (slashPos >= 0)
-                    line = line.left(slashPos) + sliceStr + line.mid(slashPos + 1);
-                else {
-                    int spacePos = line.indexOf(' ');
-                    if (spacePos >= 0)
-                        line = line.left(spacePos) + sliceStr + line.mid(spacePos + 1);
-                }
-            }
-        }
-
-        results.push_back({line, score});
-    }
-    std::sort(results.begin(), results.end(),
-              [](const auto& a, const auto& b){ return a.second > b.second; });
-    return results;
-}
-
-// ============================================================
 // FastTipStyle — QProxyStyle that makes tooltips appear instantly.
 // Also extends the fall-asleep delay so tooltips linger naturally.
 // ============================================================
-class FastTipStyle : public QProxyStyle {
+class FastTipStyle : public QProxyStyle
+{
 public:
     using QProxyStyle::QProxyStyle;
-    int styleHint(StyleHint hint, const QStyleOption* opt = nullptr,
-                  const QWidget* widget = nullptr,
-                  QStyleHintReturn* ret = nullptr) const override {
-        if (hint == QStyle::SH_ToolTip_WakeUpDelay)    return 0;     // instant
-        if (hint == QStyle::SH_ToolTip_FallAsleepDelay) return 8000; // linger 8 s
+    int styleHint(StyleHint hint, const QStyleOption *opt = nullptr,
+                  const QWidget *widget = nullptr,
+                  QStyleHintReturn *ret = nullptr) const override
+    {
+        if (hint == QStyle::SH_ToolTip_WakeUpDelay)
+            return 0; // instant
+        if (hint == QStyle::SH_ToolTip_FallAsleepDelay)
+            return 8000; // linger 8 s
         return QProxyStyle::styleHint(hint, opt, widget, ret);
     }
 };
@@ -528,13 +73,16 @@ public:
 // -------------------------------------------------------
 // SolverWorker
 // -------------------------------------------------------
-void SolverWorker::requestStop() {
+void SolverWorker::requestStop()
+{
     // Safe to call from any thread: m_proc is atomic.
-    QProcess* p = m_proc.load();
-    if (p) p->kill();
+    QProcess *p = m_proc.load();
+    if (p)
+        p->kill();
 }
 
-void SolverWorker::run() {
+void SolverWorker::run()
+{
     QString exePath = QCoreApplication::applicationDirPath() + "/sq1opt";
 #ifdef Q_OS_WIN
     exePath += ".exe";
@@ -550,7 +98,8 @@ void SolverWorker::run() {
     args.append(flags);
     args << positionStr;
     proc.start(exePath, args);
-    if (!proc.waitForStarted(3000)) {
+    if (!proc.waitForStarted(3000))
+    {
         m_proc.store(nullptr);
         emit lineReady("ERROR: Could not start sq1opt. Make sure sq1opt is in the same folder.");
         emit finished(-1);
@@ -558,25 +107,32 @@ void SolverWorker::run() {
     }
 
     QByteArray buf;
-    auto drainLines = [&]() {
+    auto drainLines = [&]()
+    {
         int nl;
-        while ((nl = buf.indexOf('\n')) != -1) {
+        while ((nl = buf.indexOf('\n')) != -1)
+        {
             QString line = QString::fromUtf8(buf.left(nl)).trimmed();
             buf.remove(0, nl + 1);
-            if (!line.isEmpty()) emit lineReady(line);
+            if (!line.isEmpty())
+                emit lineReady(line);
         }
     };
 
-    while (true) {
+    while (true)
+    {
         bool gotData = proc.waitForReadyRead(200);
-        if (gotData) buf += proc.readAll();
+        if (gotData)
+            buf += proc.readAll();
         drainLines();
-        if (!gotData && proc.state() == QProcess::NotRunning) break;
+        if (!gotData && proc.state() == QProcess::NotRunning)
+            break;
     }
     buf += proc.readAll();
     drainLines();
     buf = buf.trimmed();
-    if (!buf.isEmpty()) emit lineReady(QString::fromUtf8(buf));
+    if (!buf.isEmpty())
+        emit lineReady(QString::fromUtf8(buf));
 
     // Null the pointer BEFORE proc is destroyed so requestStop can't fire on a dead object.
     m_proc.store(nullptr);
@@ -587,7 +143,8 @@ void SolverWorker::run() {
 // -------------------------------------------------------
 // MainWindow
 // -------------------------------------------------------
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
+{
     setWindowTitle("Solve-A-Squan");
     setMinimumSize(720, 560);
     resize(860, 700);
@@ -609,7 +166,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     m_sliceTimer = new QTimer(this);
     m_sliceTimer->setSingleShot(true);
-    connect(m_sliceTimer, &QTimer::timeout, this, [this]{
+    connect(m_sliceTimer, &QTimer::timeout, this, [this]
+            {
         int saves = (m_sliceCount % 2 == 0) ? 2 : 1;
         m_undoStack.append(m_slicePending.first());
         if (saves == 2 && m_slicePending.size() >= 2)
@@ -619,62 +177,79 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         m_redoStack.clear();
         btnRedo->setEnabled(false);
         m_sliceCount = 0;
-        m_slicePending.clear();
-    });
+        m_slicePending.clear(); });
 }
 
-static QString invertScrambleStr(const QString& str) {
-    if (str.trimmed().isEmpty()) return str;
+static QString invertScrambleStr(const QString &str)
+{
+    if (str.trimmed().isEmpty())
+        return str;
     QStringList parts = str.trimmed().split('/');
     std::reverse(parts.begin(), parts.end());
     QStringList result;
-    for (QString part : parts) {
+    for (QString part : parts)
+    {
         part = part.trimmed();
         QString inner = part;
-        inner.remove('('); inner.remove(')');
+        inner.remove('(');
+        inner.remove(')');
         inner = inner.trimmed();
-        if (inner.contains(',')) {
+        if (inner.contains(','))
+        {
             QStringList nums = inner.split(',');
-            if (nums.size() == 2) {
+            if (nums.size() == 2)
+            {
                 bool ok1, ok2;
                 int a = nums[0].trimmed().toInt(&ok1);
                 int b = nums[1].trimmed().toInt(&ok2);
-                if (ok1 && ok2) { result << QString("%1,%2").arg(-a).arg(-b); continue; }
+                if (ok1 && ok2)
+                {
+                    result << QString("%1,%2").arg(-a).arg(-b);
+                    continue;
+                }
             }
-        } else if (!inner.isEmpty()) {
+        }
+        else if (!inner.isEmpty())
+        {
             bool ok1;
             int a = inner.toInt(&ok1);
-            if (ok1) { result << QString::number(-a); continue; }
+            if (ok1)
+            {
+                result << QString::number(-a);
+                continue;
+            }
         }
         result << part;
     }
     return result.join("/");
 }
 
-void MainWindow::buildUI() {
-    QWidget* central = new QWidget(this);
+void MainWindow::buildUI()
+{
+    QWidget *central = new QWidget(this);
     setCentralWidget(central);
 
-    QWidget* outerWidget = new QWidget(this);
-    QVBoxLayout* outerLayout = new QVBoxLayout(outerWidget);
-    outerLayout->setContentsMargins(0,0,0,0);
+    QWidget *outerWidget = new QWidget(this);
+    QVBoxLayout *outerLayout = new QVBoxLayout(outerWidget);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->setSpacing(0);
     setCentralWidget(outerWidget);
 
     // ── Top bar ───────────────────────────────────────────────────────────────
-    QWidget* topBar = new QWidget();
+    QWidget *topBar = new QWidget();
     topBar->setObjectName("topBar");
     topBar->setFixedHeight(52);
-    QHBoxLayout* topBarLayout = new QHBoxLayout(topBar);
+    QHBoxLayout *topBarLayout = new QHBoxLayout(topBar);
     topBarLayout->setContentsMargins(16, 0, 16, 0);
 
-    QLabel* logoLabel = new QLabel();
-    auto updateLogo = [this, logoLabel]() {
+    QLabel *logoLabel = new QLabel();
+    auto updateLogo = [this, logoLabel]()
+    {
         QString primary = m_lightTheme ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
-        QString muted   = m_lightTheme ? Theme::LIGHT_TEXT_MUTED   : Theme::TEXT_MUTED;
+        QString muted = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
         logoLabel->setText(QString("<span style='font-size:17px;font-weight:bold;color:%1;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
-                           "<br><span style='font-size:10px;color:%2;'>by Abid and Matt</span>")
-            .arg(primary, muted));
+                                   "<br><span style='font-size:10px;color:%2;'>by Abid and Matt</span>")
+                               .arg(primary, muted));
     };
     updateLogo();
     m_updateLogo = updateLogo;
@@ -693,19 +268,19 @@ void MainWindow::buildUI() {
     outerLayout->addWidget(topBar);
 
     // ── Full-width input bar ──────────────────────────────────────────────────
-    QWidget* inputBarOuter = new QWidget();
+    QWidget *inputBarOuter = new QWidget();
     inputBarOuter->setObjectName("inputBarOuter");
     m_inputBarOuter = inputBarOuter;
     inputBarOuter->setStyleSheet(QString(
-        "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
-        .arg(Theme::DARK_BG, Theme::BORDER_BOTTOM));
-    QHBoxLayout* inputBarOuterLay = new QHBoxLayout(inputBarOuter);
+                                     "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
+                                     .arg(Theme::DARK_BG, Theme::BORDER_BOTTOM));
+    QHBoxLayout *inputBarOuterLay = new QHBoxLayout(inputBarOuter);
     inputBarOuterLay->setContentsMargins(12, 6, 12, 6);
     inputBarOuterLay->setSpacing(0);
 
-    QWidget* inputBarInner = new QWidget();
+    QWidget *inputBarInner = new QWidget();
     inputBarInner->setMaximumWidth(1400);
-    QHBoxLayout* inputBarLay = new QHBoxLayout(inputBarInner);
+    QHBoxLayout *inputBarLay = new QHBoxLayout(inputBarInner);
     inputBarLay->setContentsMargins(0, 0, 0, 0);
     inputBarLay->setSpacing(0);
 
@@ -738,29 +313,29 @@ void MainWindow::buildUI() {
 
     outerLayout->addWidget(inputBarOuter);
 
-    QWidget* contentWidget = new QWidget();
+    QWidget *contentWidget = new QWidget();
     outerLayout->addWidget(contentWidget, 1);
 
-    QHBoxLayout* root = new QHBoxLayout(contentWidget);
+    QHBoxLayout *root = new QHBoxLayout(contentWidget);
     root->setSpacing(12);
-    root->setContentsMargins(12,12,12,12);
+    root->setContentsMargins(12, 12, 12, 12);
 
     // ---- LEFT: cube widget + move buttons ----
-    QWidget* leftContainer = new QWidget();
+    QWidget *leftContainer = new QWidget();
     leftContainer->setMinimumWidth(316);
-    QVBoxLayout* leftCol = new QVBoxLayout(leftContainer);
+    QVBoxLayout *leftCol = new QVBoxLayout(leftContainer);
     leftCol->setContentsMargins(0, 0, 0, 0);
     leftCol->setSpacing(4);
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
-    connect(cubeWidget, &Sq1Widget::userInteracted,  this, &MainWindow::pushUndoState);
+    connect(cubeWidget, &Sq1Widget::userInteracted, this, &MainWindow::pushUndoState);
     {
-        QWidget* cubeWrapper = new QWidget();
+        QWidget *cubeWrapper = new QWidget();
         cubeWrapper->setFixedSize(cubeWidget->width(), cubeWidget->height());
         cubeWidget->setParent(cubeWrapper);
         cubeWidget->move(0, 0);
 
-        QWidget* cubeWithReset = new QWidget();
+        QWidget *cubeWithReset = new QWidget();
         cubeWithReset->setFixedSize(cubeWrapper->width(), cubeWrapper->height());
         cubeWrapper->setParent(cubeWithReset);
         cubeWrapper->move(0, 0);
@@ -772,8 +347,8 @@ void MainWindow::buildUI() {
         btnReset->move(cubeWithReset->width() - 52 - 6, 6);
         btnReset->raise();
 
-        QHBoxLayout* centerRow = new QHBoxLayout();
-        centerRow->setContentsMargins(0,0,0,0);
+        QHBoxLayout *centerRow = new QHBoxLayout();
+        centerRow->setContentsMargins(0, 0, 0, 0);
         centerRow->addStretch();
         centerRow->addWidget(cubeWithReset);
         centerRow->addStretch();
@@ -782,22 +357,22 @@ void MainWindow::buildUI() {
 
     // Grid: U' | Slice (rowspan 2) | U
     //        D |                   | D'
-    QGridLayout* moveGrid = new QGridLayout();
+    QGridLayout *moveGrid = new QGridLayout();
     moveGrid->setSpacing(4);
 
-    QPushButton* btnUP    = new QPushButton("U'");
-    QPushButton* btnU     = new QPushButton("U");
-    QPushButton* btnD     = new QPushButton("D");
-    QPushButton* btnDP    = new QPushButton("D'");
-    QPushButton* btnSlice = new QPushButton();
+    QPushButton *btnUP = new QPushButton("U'");
+    QPushButton *btnU = new QPushButton("U");
+    QPushButton *btnD = new QPushButton("D");
+    QPushButton *btnDP = new QPushButton("D'");
+    QPushButton *btnSlice = new QPushButton();
     btnSlice->setText("Slice [I/K]");
     btnSlice->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    moveGrid->addWidget(btnUP,    0, 0);
+    moveGrid->addWidget(btnUP, 0, 0);
     moveGrid->addWidget(btnSlice, 0, 1, 2, 1); // rowspan=2
-    moveGrid->addWidget(btnU,     0, 2);
-    moveGrid->addWidget(btnD,     1, 0);
-    moveGrid->addWidget(btnDP,    1, 2);
+    moveGrid->addWidget(btnU, 0, 2);
+    moveGrid->addWidget(btnD, 1, 0);
+    moveGrid->addWidget(btnDP, 1, 2);
 
     moveGrid->setColumnStretch(0, 1);
     moveGrid->setColumnStretch(1, 1);
@@ -808,7 +383,7 @@ void MainWindow::buildUI() {
     leftCol->addLayout(moveGrid);
 
     // Row 3: Undo | Redo
-    QHBoxLayout* undoResetRedoRow = new QHBoxLayout();
+    QHBoxLayout *undoResetRedoRow = new QHBoxLayout();
     undoResetRedoRow->setSpacing(4);
     btnUndo = new QPushButton("Undo (Z)");
     btnUndo->setObjectName("btnUndo");
@@ -828,9 +403,12 @@ void MainWindow::buildUI() {
     leftCol->addWidget(btnSolve);
 
     // Stub out old scramble widgets so references don't break
-    btnScrambleMode = new QPushButton(); btnScrambleMode->setVisible(false);
-    txtScramble = new QLineEdit();       txtScramble->setVisible(false);
-    btnApplyScramble = new QPushButton(); btnApplyScramble->setVisible(false);
+    btnScrambleMode = new QPushButton();
+    btnScrambleMode->setVisible(false);
+    txtScramble = new QLineEdit();
+    txtScramble->setVisible(false);
+    btnApplyScramble = new QPushButton();
+    btnApplyScramble->setVisible(false);
     lblScrambleError = new QLabel("");
     lblScrambleError->setObjectName("lblScrambleError");
     lblScrambleError->setWordWrap(true);
@@ -847,9 +425,12 @@ void MainWindow::buildUI() {
     leftScroll->setMinimumWidth(320);
     leftScroll->setMaximumWidth(380);
 
-    connect(btnU,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_J,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnUP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_F,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]{
+    connect(btnU, &QPushButton::clicked, cubeWidget, [this]
+            { pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_J,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnUP, &QPushButton::clicked, cubeWidget, [this]
+            { pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_F,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnSlice, &QPushButton::clicked, cubeWidget, [this]
+            {
         cubeWidget->setFocus();
         m_sliceCount++;
 
@@ -857,11 +438,13 @@ void MainWindow::buildUI() {
         m_slicePending.append({cubeWidget->getPositionString()});
         QKeyEvent e(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier);
         QApplication::sendEvent(cubeWidget, &e);
-        m_sliceTimer->start(600);
-    });
-    connect(btnD,     &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnDP,    &QPushButton::clicked, cubeWidget, [this]{ pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
-    connect(btnReset, &QPushButton::clicked, this, [this]{
+        m_sliceTimer->start(600); });
+    connect(btnD, &QPushButton::clicked, cubeWidget, [this]
+            { pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnDP, &QPushButton::clicked, cubeWidget, [this]
+            { pushUndoState(); cubeWidget->setFocus(); QKeyEvent e(QEvent::KeyPress,Qt::Key_L,Qt::NoModifier); QApplication::sendEvent(cubeWidget,&e); });
+    connect(btnReset, &QPushButton::clicked, this, [this]
+            {
         QString before = cubeWidget->getPositionString();
         cubeWidget->reset();
         QString after = cubeWidget->getPositionString();
@@ -872,9 +455,9 @@ void MainWindow::buildUI() {
             m_redoStack.clear();
             btnRedo->setEnabled(false);
         }
-        onReset();
-    });
-    connect(btnUndo, &QPushButton::clicked, this, [this]{
+        onReset(); });
+    connect(btnUndo, &QPushButton::clicked, this, [this]
+            {
         if (m_undoStack.isEmpty()) return;
         m_redoStack.append({cubeWidget->getPositionString()});
         if (m_redoStack.size() > 64) m_redoStack.removeFirst();
@@ -882,9 +465,9 @@ void MainWindow::buildUI() {
         CubeSnapshot snap = m_undoStack.takeLast();
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
-        btnUndo->setEnabled(!m_undoStack.isEmpty());
-    });
-    connect(btnRedo, &QPushButton::clicked, this, [this]{
+        btnUndo->setEnabled(!m_undoStack.isEmpty()); });
+    connect(btnRedo, &QPushButton::clicked, this, [this]
+            {
         if (m_redoStack.isEmpty()) return;
         m_undoStack.append({cubeWidget->getPositionString()});
         if (m_undoStack.size() > 64) m_undoStack.removeFirst();
@@ -892,20 +475,19 @@ void MainWindow::buildUI() {
         CubeSnapshot snap = m_redoStack.takeLast();
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
-        btnRedo->setEnabled(!m_redoStack.isEmpty());
-    });
+        btnRedo->setEnabled(!m_redoStack.isEmpty()); });
 
     root->addWidget(leftScroll);
 
     // ---- RIGHT: options + output ----
-    QVBoxLayout* rightCol = new QVBoxLayout();
+    QVBoxLayout *rightCol = new QVBoxLayout();
     rightCol->setSpacing(6);
 
-    QGroupBox* grpOptions = new QGroupBox("Options");
+    QGroupBox *grpOptions = new QGroupBox("Options");
     grpOptions->setMinimumHeight(200);
 
-    QWidget* optionsInner = new QWidget();
-    QGridLayout* grid = new QGridLayout(optionsInner);
+    QWidget *optionsInner = new QWidget();
+    QGridLayout *grid = new QGridLayout(optionsInner);
     grid->setVerticalSpacing(2);
 
     // ── Widgets ──────────────────────────────────────────────────────────────
@@ -923,14 +505,14 @@ void MainWindow::buildUI() {
     spnSuboptimal->setToolTip("Extra moves beyond optimal to *also* find (0 = optimal only).");
 
     // Container for the All-optimal row
-    QWidget* allOptRow = new QWidget();
+    QWidget *allOptRow = new QWidget();
     allOptRow->setFixedHeight(28);
-    QHBoxLayout* allOptLayout = new QHBoxLayout(allOptRow);
+    QHBoxLayout *allOptLayout = new QHBoxLayout(allOptRow);
     allOptLayout->setContentsMargins(0, 0, 0, 0);
     allOptLayout->setSpacing(4);
     allOptLayout->addWidget(chkAllOptimal);
     allOptLayout->addStretch(1);
-    QLabel* lblSuboptLabel = new QLabel("+suboptimal:");
+    QLabel *lblSuboptLabel = new QLabel("+suboptimal:");
     lblSuboptLabel->setObjectName("lblSuboptLabel");
     allOptLayout->addWidget(lblSuboptLabel);
     allOptLayout->addWidget(spnSuboptimal);
@@ -950,7 +532,7 @@ void MainWindow::buildUI() {
 
     chkGenerator = new QCheckBox("Generator alg");
     chkGenerator->setToolTip("If selected, generated algs will set up to the case from a solved cube,\n"
-                            "else the algs will solve the case.");
+                             "else the algs will solve the case.");
 
     chk2gen = new QCheckBox("2Gen  (top layer + slices only)");
     chk2gen->setToolTip("Restrict to 2-gen moves: top-layer turns and slices only.\n"
@@ -972,7 +554,7 @@ void MainWindow::buildUI() {
     chkSpecificAngle = new QCheckBox("Generate alg from this specific angle");
     chkSpecificAngle->setObjectName("chkSpecificAngle");
     chkSpecificAngle->setToolTip("Generate algs from this angle and this angle only.\n"
-                                "Essentially restricting the move before the first slice to 1 moves only.");
+                                 "Essentially restricting the move before the first slice to 1 moves only.");
 
     chkMaxX = new QCheckBox("Max top turn:");
     chkMaxX->setToolTip("Limit the maximum top-layer turn in either direction (0–6).\n"
@@ -1014,25 +596,29 @@ void MainWindow::buildUI() {
 
     // ── Grid layout ──────────────────────────────────────────────────────────
     int row = 0;
-    grid->addWidget(chkSlice,      row++, 0, 1, 2);
-    grid->addWidget(allOptRow,     row++, 0, 1, 2);
-    grid->addWidget(chkDepths,     row,   0);
-    grid->addWidget(txtDepths,     row++, 1);
-    grid->addWidget(chkGenerator,  row++, 0, 1, 2);
-    grid->addWidget(chk2gen,       row++, 0, 1, 2);
+    grid->addWidget(chkSlice, row++, 0, 1, 2);
+    grid->addWidget(allOptRow, row++, 0, 1, 2);
+    grid->addWidget(chkDepths, row, 0);
+    grid->addWidget(txtDepths, row++, 1);
+    grid->addWidget(chkGenerator, row++, 0, 1, 2);
+    grid->addWidget(chk2gen, row++, 0, 1, 2);
     grid->addWidget(chkPseudo2gen, row++, 0, 1, 2);
-    grid->addWidget(chkCubeshape,  row++, 0, 1, 2);
-    grid->addWidget(chkIgnoreMid,  row++, 0, 1, 2);
-    grid->addWidget(chkKarnotation,row++, 0, 1, 2);
-    grid->addWidget(chkSpecificAngle, row++, 0,1,2);
-    grid->addWidget(chkMaxX,       row,   0); grid->addWidget(spnMaxX,    row++, 1);
-    grid->addWidget(chkMaxY,       row,   0); grid->addWidget(spnMaxY,    row++, 1);
-    grid->addWidget(chkMaxTotal,   row,   0); grid->addWidget(spnMaxTotal,row++, 1);
+    grid->addWidget(chkCubeshape, row++, 0, 1, 2);
+    grid->addWidget(chkIgnoreMid, row++, 0, 1, 2);
+    grid->addWidget(chkKarnotation, row++, 0, 1, 2);
+    grid->addWidget(chkSpecificAngle, row++, 0, 1, 2);
+    grid->addWidget(chkMaxX, row, 0);
+    grid->addWidget(spnMaxX, row++, 1);
+    grid->addWidget(chkMaxY, row, 0);
+    grid->addWidget(spnMaxY, row++, 1);
+    grid->addWidget(chkMaxTotal, row, 0);
+    grid->addWidget(spnMaxTotal, row++, 1);
 
     // Uniform row height — set after all rows are populated.
-    for (int r = 0; r < row; r++) grid->setRowMinimumHeight(r, 28);
+    for (int r = 0; r < row; r++)
+        grid->setRowMinimumHeight(r, 28);
 
-    QScrollArea* optionsScroll = new QScrollArea();
+    QScrollArea *optionsScroll = new QScrollArea();
     optionsScroll->setWidget(optionsInner);
     optionsScroll->setWidgetResizable(true);
     optionsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -1044,33 +630,34 @@ void MainWindow::buildUI() {
     grpOptions->layout()->addWidget(optionsScroll);
 
     // ── Connections ──────────────────────────────────────────────────────────
-    auto upd = [this]{ updateConstraints(); updateCommand(); };
+    auto upd = [this]
+    { updateConstraints(); updateCommand(); };
 
-    connect(chkSlice,      &QCheckBox::toggled, this, upd);
+    connect(chkSlice, &QCheckBox::toggled, this, upd);
     connect(chkAllOptimal, &QCheckBox::toggled, this, upd);
     connect(spnSuboptimal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
-    connect(chkDepths,     &QCheckBox::toggled, this, upd);
-    connect(txtDepths,     &QLineEdit::textChanged, this, upd);
-    connect(chkGenerator,  &QCheckBox::toggled, this, upd);
-    connect(chk2gen,       &QCheckBox::toggled, this, upd);
+    connect(chkDepths, &QCheckBox::toggled, this, upd);
+    connect(txtDepths, &QLineEdit::textChanged, this, upd);
+    connect(chkGenerator, &QCheckBox::toggled, this, upd);
+    connect(chk2gen, &QCheckBox::toggled, this, upd);
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
-    connect(chkCubeshape,  &QCheckBox::toggled, this, upd);
-    connect(chkIgnoreMid,  &QCheckBox::toggled, this, upd);
-    connect(chkKarnotation,&QCheckBox::toggled, this, upd);
-    connect(chkSpecificAngle,&QCheckBox::toggled,this,upd);
-    connect(chkMaxX,       &QCheckBox::toggled, this, upd);
-    connect(spnMaxX,       QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
-    connect(chkMaxY,       &QCheckBox::toggled, this, upd);
-    connect(spnMaxY,       QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
-    connect(chkMaxTotal,   &QCheckBox::toggled, this, upd);
-    connect(spnMaxTotal,   QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
+    connect(chkCubeshape, &QCheckBox::toggled, this, upd);
+    connect(chkIgnoreMid, &QCheckBox::toggled, this, upd);
+    connect(chkKarnotation, &QCheckBox::toggled, this, upd);
+    connect(chkSpecificAngle, &QCheckBox::toggled, this, upd);
+    connect(chkMaxX, &QCheckBox::toggled, this, upd);
+    connect(spnMaxX, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
+    connect(chkMaxY, &QCheckBox::toggled, this, upd);
+    connect(spnMaxY, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
+    connect(chkMaxTotal, &QCheckBox::toggled, this, upd);
+    connect(spnMaxTotal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
 
     // fix #2: propagate tooltip to the whole allOptRow so right-side hover works
     allOptRow->setToolTip(chkAllOptimal->toolTip());
 
     // ── Pack options/command/solve/progress into one hideable wrapper ─────────
     m_topSection = new QWidget();
-    QVBoxLayout* topLay = new QVBoxLayout(m_topSection);
+    QVBoxLayout *topLay = new QVBoxLayout(m_topSection);
     topLay->setContentsMargins(0, 0, 0, 0);
     topLay->setSpacing(6);
     topLay->addWidget(grpOptions);
@@ -1089,13 +676,13 @@ void MainWindow::buildUI() {
     btnCopy->setVisible(false);
 
     // Apply button
-    connect(m_mainInput, &QLineEdit::returnPressed, this, [this]{
-        btnApply->click();
-    });
+    connect(m_mainInput, &QLineEdit::returnPressed, this, [this]
+            { btnApply->click(); });
 
     m_mainInput->installEventFilter(this);
 
-    connect(btnApply, &QPushButton::clicked, this, [this]{
+    connect(btnApply, &QPushButton::clicked, this, [this]
+            {
         const QString text = m_mainInput->text().trimmed();
         if (text.isEmpty()) return;
 
@@ -1227,22 +814,22 @@ void MainWindow::buildUI() {
             m_mainInput->setProperty("hasError", false);
             style()->polish(m_mainInput);
             updateCommand();
-        }
-    });
+        } });
 
     // Mode toggle button: cycles SCRAMBLE → ALG → POSITION
-    connect(m_inputMode, &QPushButton::clicked, this, [this]{
+    connect(m_inputMode, &QPushButton::clicked, this, [this]
+            {
         qDebug() << "inputMode clicked, new index:" << ((m_inputModeIndex + 1) % 3);
         m_inputModeIndex = (m_inputModeIndex + 1) % 3;
         if (m_inputModeIndex == 0) { m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
         else if (m_inputModeIndex == 1) { m_inputMode->setText("ALG");  m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
         else                           { m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-"); }
         m_mainInput->clear();
-        lblScrambleError->setVisible(false);
-    });
+        lblScrambleError->setVisible(false); });
 
     // Arrow button: opens dropdown menu
-    connect(m_inputModeArrow, &QPushButton::clicked, this, [this]{
+    connect(m_inputModeArrow, &QPushButton::clicked, this, [this]
+            {
         qDebug() << "inputModeArrow clicked";
         QMenu* menu = new QMenu(this);
         menu->setStyleSheet(
@@ -1260,10 +847,10 @@ void MainWindow::buildUI() {
         connect(aScram, &QAction::triggered, this, [this]{ m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
         connect(aAlg,   &QAction::triggered, this, [this]{ m_inputModeIndex = 1; m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
         connect(aPos,   &QAction::triggered, this, [this]{ m_inputModeIndex = 2; m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-");                        m_mainInput->clear(); lblScrambleError->setVisible(false); });
-        menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height())));
-    });
+        menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height()))); });
 
-    connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString& text){
+    connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString &text)
+            {
         lblScrambleError->setVisible(false);
         m_mainInput->setProperty("hasError", false);
         style()->polish(m_mainInput);
@@ -1390,8 +977,7 @@ void MainWindow::buildUI() {
             }
             updateCommand();
             } }
-        }
-    });
+        } });
 
     lblCommandError = new QLabel("");
     lblCommandError->setObjectName("lblCommandError");
@@ -1408,10 +994,10 @@ void MainWindow::buildUI() {
     rightCol->addWidget(m_topSection);
 
     // Output stack wrapper with floating buttons
-    QWidget* outputWrapper = new QWidget();
+    QWidget *outputWrapper = new QWidget();
     outputWrapper->setMinimumHeight(120);
-    QVBoxLayout* outputWrapperLay = new QVBoxLayout(outputWrapper);
-    outputWrapperLay->setContentsMargins(0,0,0,0);
+    QVBoxLayout *outputWrapperLay = new QVBoxLayout(outputWrapper);
+    outputWrapperLay->setContentsMargins(0, 0, 0, 0);
     outputWrapperLay->setSpacing(0);
 
     txtOutput = new QTextEdit(outputWrapper);
@@ -1447,8 +1033,8 @@ void MainWindow::buildUI() {
     m_tableContainer = new QWidget();
     m_tableContainer->setVisible(false);
     m_tableContainer->setMinimumHeight(120);
-    QVBoxLayout* tableLay = new QVBoxLayout(m_tableContainer);
-    tableLay->setContentsMargins(0,0,0,0);
+    QVBoxLayout *tableLay = new QVBoxLayout(m_tableContainer);
+    tableLay->setContentsMargins(0, 0, 0, 0);
     tableLay->setSpacing(4);
 
     m_solutionTable = new QTableWidget();
@@ -1467,7 +1053,8 @@ void MainWindow::buildUI() {
     m_solutionTable->setAlternatingRowColors(false); // we do it manually
     m_solutionTable->setTextElideMode(Qt::ElideNone);
     m_solutionTable->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_solutionTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint& pos){
+    connect(m_solutionTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint &pos)
+            {
         int row = m_solutionTable->rowAt(pos.y());
         if (row < 0) return;
         QMenu menu(this);
@@ -1488,8 +1075,7 @@ void MainWindow::buildUI() {
                 QApplication::clipboard()->setText(it->text());
                 appendStatusLine("Algorithm copied to clipboard.");
             }
-        }
-    });
+        } });
     tableLay->addWidget(m_solutionTable, 1);
 
     outputWrapperLay->addWidget(m_tableContainer);
@@ -1511,14 +1097,15 @@ void MainWindow::buildUI() {
     root->addLayout(rightCol, 1);
 
     // ── Button connections ────────────────────────────────────────────────────
-    connect(btnSolve,        &QPushButton::clicked,  this, &MainWindow::onSolveButtonClicked);
-    connect(btnCopy,         &QPushButton::clicked,  this, &MainWindow::onCopy);
-    connect(btnExpand,       &QPushButton::clicked,  this, &MainWindow::toggleExpand);
-    connect(btnCopyTerminal, &QPushButton::clicked,  this, [this]{
+    connect(btnSolve, &QPushButton::clicked, this, &MainWindow::onSolveButtonClicked);
+    connect(btnCopy, &QPushButton::clicked, this, &MainWindow::onCopy);
+    connect(btnExpand, &QPushButton::clicked, this, &MainWindow::toggleExpand);
+    connect(btnCopyTerminal, &QPushButton::clicked, this, [this]
+            {
         QApplication::clipboard()->setText(txtOutput->toPlainText());
-        appendStatusLine("Terminal copied to clipboard!");
-    });
-    connect(btnTableMode, &QPushButton::clicked, this, [this]{
+        appendStatusLine("Terminal copied to clipboard!"); });
+    connect(btnTableMode, &QPushButton::clicked, this, [this]
+            {
         m_tableVisible = !m_tableVisible;
         txtOutput->setVisible(!m_tableVisible);
         m_tableContainer->setVisible(m_tableVisible);
@@ -1526,10 +1113,10 @@ void MainWindow::buildUI() {
         btnTableMode->setToolTip(m_tableVisible ? "Switch to terminal view" : "Switch to table view");
         if (m_tableVisible) rebuildTable();
         else if (chkRankErgo->isChecked()) onRankErgoToggled(true);
-        else rebuildTerminalView();
-    });
-    connect(chkRankErgo, &QCheckBox::toggled,    this, &MainWindow::onRankErgoToggled);
-    connect(txtCommand, &QLineEdit::textEdited, this, [this](const QString& text){
+        else rebuildTerminalView(); });
+    connect(chkRankErgo, &QCheckBox::toggled, this, &MainWindow::onRankErgoToggled);
+    connect(txtCommand, &QLineEdit::textEdited, this, [this](const QString &text)
+            {
         auto showCmdError = [this](const QString& msg) {
             lblCommandError->setText(msg);
             lblCommandError->setVisible(true);
@@ -1582,24 +1169,25 @@ void MainWindow::buildUI() {
             return;
         }
         clearCmdError();
-        syncFlagsFromCommand(text);
-    });
+        syncFlagsFromCommand(text); });
 
     // Initial floating button positions (will be corrected on first resize)
-    QTimer::singleShot(0, this, [this]{
+    QTimer::singleShot(0, this, [this]
+                       {
         int w = m_outputWrapper->width();
         int margin = 6; int bw = 22;
         btnExpand->move(w - margin - bw, margin);
         btnTableMode->move(w - margin - bw*2 - 4, margin);
         btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
-        btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise();
-    });
+        btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise(); });
 
     // Hand cursor on all clickable widgets
-    const auto allBtns = findChildren<QPushButton*>();
-    for (auto* b : allBtns) b->setCursor(Qt::PointingHandCursor);
-    const auto allChks = findChildren<QCheckBox*>();
-    for (auto* c : allChks) c->setCursor(Qt::PointingHandCursor);
+    const auto allBtns = findChildren<QPushButton *>();
+    for (auto *b : allBtns)
+        b->setCursor(Qt::PointingHandCursor);
+    const auto allChks = findChildren<QCheckBox *>();
+    for (auto *c : allChks)
+        c->setCursor(Qt::PointingHandCursor);
     m_solutionTable->setCursor(Qt::PointingHandCursor);
 
     updateConstraints();
@@ -1609,14 +1197,18 @@ void MainWindow::buildUI() {
 // -------------------------------------------------------
 // toggleExpand — expand / shrink the output terminal
 // -------------------------------------------------------
-void MainWindow::toggleExpand() {
+void MainWindow::toggleExpand()
+{
     m_expanded = !m_expanded;
     m_topSection->setVisible(!m_expanded);
     m_leftPanel->setVisible(!m_expanded);
-    if (m_expanded) {
+    if (m_expanded)
+    {
         btnExpand->setText("⤡");
         btnExpand->setToolTip("Shrink terminal");
-    } else {
+    }
+    else
+    {
         btnExpand->setText("⤢");
         btnExpand->setToolTip("Expand terminal");
     }
@@ -1629,9 +1221,11 @@ void MainWindow::toggleExpand() {
         rebuildTerminalView();
 }
 
-void MainWindow::rebuildTerminalView() {
+void MainWindow::rebuildTerminalView()
+{
     txtOutput->clear();
-    if (m_rawLines.isEmpty()) {
+    if (m_rawLines.isEmpty())
+    {
         QTextCursor cur(txtOutput->document());
         QTextCharFormat fmt;
         fmt.setForeground(QColor(m_lightTheme ? "#888899" : "#2a2a3a"));
@@ -1643,15 +1237,18 @@ void MainWindow::rebuildTerminalView() {
     }
     QTextCursor cur(txtOutput->document());
     int solIdx = 0;
-    for (const QString& line : std::as_const(m_rawLines)) {
+    for (const QString &line : std::as_const(m_rawLines))
+    {
         bool isSol = line.contains('[') && line.contains(']');
-        if (!cur.atStart()) cur.insertBlock();
+        if (!cur.atStart())
+            cur.insertBlock();
         QTextCharFormat fmt;
-        if (isSol) {
+        if (isSol)
+        {
             bool isAlt = (solIdx % 2 == 1);
             QString col = m_lightTheme
-                ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+                              ? (isAlt ? "#2a6a2a" : "#1a4a8a")
+                              : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
@@ -1659,7 +1256,9 @@ void MainWindow::rebuildTerminalView() {
             blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
             cur.setBlockFormat(blkFmt);
             solIdx++;
-        } else {
+        }
+        else
+        {
             QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(QFont::Normal);
@@ -1676,55 +1275,70 @@ void MainWindow::rebuildTerminalView() {
 // -------------------------------------------------------
 // updateConstraints
 // -------------------------------------------------------
-void MainWindow::updateConstraints() {
-    const bool is2gen    = chk2gen->isChecked();
-    const bool isPseudo  = chkPseudo2gen->isChecked();
-    const bool isAllOpt  = chkAllOptimal->isChecked();
-    const bool isDepths  = chkDepths->isChecked();
+void MainWindow::updateConstraints()
+{
+    const bool is2gen = chk2gen->isChecked();
+    const bool isPseudo = chkPseudo2gen->isChecked();
+    const bool isAllOpt = chkAllOptimal->isChecked();
+    const bool isDepths = chkDepths->isChecked();
 
     // Auto-deselect "Specific depths" when the input field is cleared.
-    if (isDepths && txtDepths->text().trimmed().isEmpty()) {
+    if (isDepths && txtDepths->text().trimmed().isEmpty())
+    {
         chkDepths->blockSignals(true);
         chkDepths->setChecked(false);
         chkDepths->blockSignals(false);
     }
     const bool isDepthsNow = chkDepths->isChecked(); // re-read after possible uncheck
 
-    auto disableCheck = [](QCheckBox* cb) {
+    auto disableCheck = [](QCheckBox *cb)
+    {
         cb->setEnabled(false);
-        if (cb->isChecked()) {
+        if (cb->isChecked())
+        {
             cb->blockSignals(true);
             cb->setChecked(false);
             cb->blockSignals(false);
         }
     };
 
-    if (is2gen)   disableCheck(chkCubeshape);
-    else          chkCubeshape->setEnabled(true);
+    if (is2gen)
+        disableCheck(chkCubeshape);
+    else
+        chkCubeshape->setEnabled(true);
 
-    if (chkCubeshape->isChecked()) disableCheck(chk2gen);
-    else if (!is2gen)              chk2gen->setEnabled(true);
+    if (chkCubeshape->isChecked())
+        disableCheck(chk2gen);
+    else if (!is2gen)
+        chk2gen->setEnabled(true);
 
-    if (is2gen)  disableCheck(chkPseudo2gen);
-    else         chkPseudo2gen->setEnabled(true);
+    if (is2gen)
+        disableCheck(chkPseudo2gen);
+    else
+        chkPseudo2gen->setEnabled(true);
 
-    if (isPseudo) disableCheck(chk2gen);
-    else if (!chkCubeshape->isChecked()) chk2gen->setEnabled(true);
+    if (isPseudo)
+        disableCheck(chk2gen);
+    else if (!chkCubeshape->isChecked())
+        chk2gen->setEnabled(true);
 
     spnSuboptimal->setVisible(isAllOpt && !isDepthsNow);
-    if (QLabel* lbl = findChild<QLabel*>("lblSuboptLabel"))
+    if (QLabel *lbl = findChild<QLabel *>("lblSuboptLabel"))
         lbl->setVisible(isAllOpt && !isDepthsNow);
 
     // txtDepths is always enabled so the user can click into it and activate the option.
     // Style it to look inactive when the checkbox is off.
-    if (isDepthsNow) {
-        txtDepths->setStyleSheet("");  // revert to global style
-    } else {
+    if (isDepthsNow)
+    {
+        txtDepths->setStyleSheet(""); // revert to global style
+    }
+    else
+    {
         txtDepths->setStyleSheet(QString(
-            "QLineEdit { color: %1; background: %2; border-color: %3; }")
-            .arg(m_lightTheme ? "#aaa" : "#666",
-                 m_lightTheme ? Theme::LIGHT_DISABLED_BG : "#1e1e30",
-                 m_lightTheme ? Theme::LIGHT_BORDER_DARK : "#3a3a4e"));
+                                     "QLineEdit { color: %1; background: %2; border-color: %3; }")
+                                     .arg(m_lightTheme ? "#aaa" : "#666",
+                                          m_lightTheme ? Theme::LIGHT_DISABLED_BG : "#1e1e30",
+                                          m_lightTheme ? Theme::LIGHT_BORDER_DARK : "#3a3a4e"));
     }
 
     spnMaxX->setEnabled(chkMaxX->isChecked());
@@ -1737,87 +1351,143 @@ void MainWindow::updateConstraints() {
 // -------------------------------------------------------
 // buildStyles
 // -------------------------------------------------------
-void MainWindow::buildStyles() {
+void MainWindow::buildStyles()
+{
     setStyleSheet(buildStyleSheet());
 }
 
-QString MainWindow::buildStyleSheet() {
+QString MainWindow::buildStyleSheet()
+{
     return ::buildStyleSheet(m_lightTheme);
 }
 
 // -------------------------------------------------------
 // buildArgList
 // -------------------------------------------------------
-QStringList MainWindow::buildArgList() {
+QStringList MainWindow::buildArgList()
+{
     QStringList args;
 
-    if (chkSlice->isChecked()) args << "-w";
+    if (chkSlice->isChecked())
+        args << "-w";
 
-    if (chkAllOptimal->isChecked()) {
+    if (chkAllOptimal->isChecked())
+    {
         const bool useNumber = !chkDepths->isChecked() && spnSuboptimal->value() > 0;
         args << (useNumber ? QString("-a%1").arg(spnSuboptimal->value()) : QString("-a"));
     }
 
-    if (chkDepths->isChecked()) {
+    if (chkDepths->isChecked())
+    {
         QString dv = txtDepths->text().trimmed().remove(' ');
-        if (!dv.isEmpty()) args << QString("-d%1").arg(dv);
+        if (!dv.isEmpty())
+            args << QString("-d%1").arg(dv);
     }
 
-    if (chkGenerator->isChecked())  args << "-g";
-    if (chk2gen->isChecked())       args << "-2";
-    if (chkPseudo2gen->isChecked()) args << "-p";
-    if (chkCubeshape->isChecked())  args << "-c";
-    if (chkIgnoreMid->isChecked())  args << "-m";
-    if (chkKarnotation->isChecked())args << "-k";
-    if (chkSpecificAngle->isChecked())args<<"-n";
+    if (chkGenerator->isChecked())
+        args << "-g";
+    if (chk2gen->isChecked())
+        args << "-2";
+    if (chkPseudo2gen->isChecked())
+        args << "-p";
+    if (chkCubeshape->isChecked())
+        args << "-c";
+    if (chkIgnoreMid->isChecked())
+        args << "-m";
+    if (chkKarnotation->isChecked())
+        args << "-k";
+    if (chkSpecificAngle->isChecked())
+        args << "-n";
 
-    if (chkMaxX->isChecked())     args << QString("-X%1").arg(spnMaxX->value());
-    if (chkMaxY->isChecked())     args << QString("-Y%1").arg(spnMaxY->value());
-    if (chkMaxTotal->isChecked()) args << QString("-Z%1").arg(spnMaxTotal->value());
+    if (chkMaxX->isChecked())
+        args << QString("-X%1").arg(spnMaxX->value());
+    if (chkMaxY->isChecked())
+        args << QString("-Y%1").arg(spnMaxY->value());
+    if (chkMaxTotal->isChecked())
+        args << QString("-Z%1").arg(spnMaxTotal->value());
 
     return args;
 }
 
-void MainWindow::syncFlagsFromCommand(const QString& text) {
+void MainWindow::syncFlagsFromCommand(const QString &text)
+{
     QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
     // Remove the executable name and position string (first and last tokens)
-    if (parts.size() >= 1 && parts[0] == "sq1opt") parts.removeFirst();
-    if (!parts.isEmpty() && !parts.last().startsWith('-')) parts.removeLast();
+    if (parts.size() >= 1 && parts[0] == "sq1opt")
+        parts.removeFirst();
+    if (!parts.isEmpty() && !parts.last().startsWith('-'))
+        parts.removeLast();
 
-    auto has = [&](const QString& flag) {
+    auto has = [&](const QString &flag)
+    {
         return parts.contains(flag);
     };
-    auto hasPrefix = [&](const QString& prefix) -> QString {
-        for (const QString& p : std::as_const(parts))
+    auto hasPrefix = [&](const QString &prefix) -> QString
+    {
+        for (const QString &p : std::as_const(parts))
             if (p.startsWith(prefix) && p.length() > prefix.length())
                 return p.mid(prefix.length());
         return QString();
     };
 
     // Block all signals while we sync so updateCommand isn't re-triggered
-    auto block = [](QObject* o, bool b){ o->blockSignals(b); };
+    auto block = [](QObject *o, bool b)
+    { o->blockSignals(b); };
 
-    block(chkSlice,        true); chkSlice->setChecked(has("-w"));        block(chkSlice,        false);
-    block(chkGenerator,    true); chkGenerator->setChecked(has("-g"));    block(chkGenerator,    false);
-    block(chk2gen,         true); chk2gen->setChecked(has("-2"));         block(chk2gen,         false);
-    block(chkPseudo2gen,   true); chkPseudo2gen->setChecked(has("-p"));   block(chkPseudo2gen,   false);
-    block(chkCubeshape,    true); chkCubeshape->setChecked(has("-c"));    block(chkCubeshape,    false);
-    block(chkIgnoreMid,    true); chkIgnoreMid->setChecked(has("-m"));    block(chkIgnoreMid,    false);
-    block(chkKarnotation,  true); chkKarnotation->setChecked(has("-k"));  block(chkKarnotation,  false);
-    block(chkSpecificAngle,true); chkSpecificAngle->setChecked(has("-n"));block(chkSpecificAngle,false);
+    block(chkSlice, true);
+    chkSlice->setChecked(has("-w"));
+    block(chkSlice, false);
+    block(chkGenerator, true);
+    chkGenerator->setChecked(has("-g"));
+    block(chkGenerator, false);
+    block(chk2gen, true);
+    chk2gen->setChecked(has("-2"));
+    block(chk2gen, false);
+    block(chkPseudo2gen, true);
+    chkPseudo2gen->setChecked(has("-p"));
+    block(chkPseudo2gen, false);
+    block(chkCubeshape, true);
+    chkCubeshape->setChecked(has("-c"));
+    block(chkCubeshape, false);
+    block(chkIgnoreMid, true);
+    chkIgnoreMid->setChecked(has("-m"));
+    block(chkIgnoreMid, false);
+    block(chkKarnotation, true);
+    chkKarnotation->setChecked(has("-k"));
+    block(chkKarnotation, false);
+    block(chkSpecificAngle, true);
+    chkSpecificAngle->setChecked(has("-n"));
+    block(chkSpecificAngle, false);
 
     // -a / -a<n>
     bool hasA = false;
     int subopt = 0;
-    for (const QString& p : std::as_const(parts)) {
-        if (p == "-a") { hasA = true; subopt = 0; break; }
-        if (p.startsWith("-a") && p.length() > 2) {
-            bool ok; int v = p.sliced(2).toInt(&ok);
-            if (ok) { hasA = true; subopt = v; break; }
+    for (const QString &p : std::as_const(parts))
+    {
+        if (p == "-a")
+        {
+            hasA = true;
+            subopt = 0;
+            break;
+        }
+        if (p.startsWith("-a") && p.length() > 2)
+        {
+            bool ok;
+            int v = p.sliced(2).toInt(&ok);
+            if (ok)
+            {
+                hasA = true;
+                subopt = v;
+                break;
+            }
         }
     }
-    block(chkAllOptimal,  true); chkAllOptimal->setChecked(hasA);  block(chkAllOptimal,  false);
-    block(spnSuboptimal,  true); spnSuboptimal->setValue(subopt);  block(spnSuboptimal,  false);
+    block(chkAllOptimal, true);
+    chkAllOptimal->setChecked(hasA);
+    block(chkAllOptimal, false);
+    block(spnSuboptimal, true);
+    spnSuboptimal->setValue(subopt);
+    block(spnSuboptimal, false);
 
     // -d<list>
     QString dval = hasPrefix("-d");
@@ -1830,23 +1500,48 @@ void MainWindow::syncFlagsFromCommand(const QString& text) {
 
     // -X -Y -Z
     QString xv = hasPrefix("-X"), yv = hasPrefix("-Y"), zv = hasPrefix("-Z");
-    block(chkMaxX,    true); block(spnMaxX,    true);
-    block(chkMaxY,    true); block(spnMaxY,    true);
-    block(chkMaxTotal,true); block(spnMaxTotal,true);
+    block(chkMaxX, true);
+    block(spnMaxX, true);
+    block(chkMaxY, true);
+    block(spnMaxY, true);
+    block(chkMaxTotal, true);
+    block(spnMaxTotal, true);
     chkMaxX->setChecked(!xv.isEmpty());
-    if (!xv.isEmpty()) { bool ok; int v = xv.toInt(&ok); if (ok) spnMaxX->setValue(v); }
+    if (!xv.isEmpty())
+    {
+        bool ok;
+        int v = xv.toInt(&ok);
+        if (ok)
+            spnMaxX->setValue(v);
+    }
     chkMaxY->setChecked(!yv.isEmpty());
-    if (!yv.isEmpty()) { bool ok; int v = yv.toInt(&ok); if (ok) spnMaxY->setValue(v); }
+    if (!yv.isEmpty())
+    {
+        bool ok;
+        int v = yv.toInt(&ok);
+        if (ok)
+            spnMaxY->setValue(v);
+    }
     chkMaxTotal->setChecked(!zv.isEmpty());
-    if (!zv.isEmpty()) { bool ok; int v = zv.toInt(&ok); if (ok) spnMaxTotal->setValue(v); }
-    block(chkMaxX,    false); block(spnMaxX,    false);
-    block(chkMaxY,    false); block(spnMaxY,    false);
-    block(chkMaxTotal,false); block(spnMaxTotal,false);
+    if (!zv.isEmpty())
+    {
+        bool ok;
+        int v = zv.toInt(&ok);
+        if (ok)
+            spnMaxTotal->setValue(v);
+    }
+    block(chkMaxX, false);
+    block(spnMaxX, false);
+    block(chkMaxY, false);
+    block(spnMaxY, false);
+    block(chkMaxTotal, false);
+    block(spnMaxTotal, false);
 
     updateConstraints();
 }
 
-void MainWindow::updateCommand() {
+void MainWindow::updateCommand()
+{
     QString pos = cubeWidget->getPositionString();
     QStringList args = buildArgList();
     txtCommand->setText("sq1opt " + args.join(" ") + " " + pos);
@@ -1858,7 +1553,8 @@ void MainWindow::updateCommand() {
 // -------------------------------------------------------
 // onSolveButtonClicked — single entry-point for the Solve/Stop button
 // -------------------------------------------------------
-void MainWindow::onSolveButtonClicked() {
+void MainWindow::onSolveButtonClicked()
+{
     if (worker && worker->isRunning())
         stopSolver();
     else
@@ -1868,8 +1564,10 @@ void MainWindow::onSolveButtonClicked() {
 // -------------------------------------------------------
 // onSolve
 // -------------------------------------------------------
-void MainWindow::onSolve() {
-    if (worker && worker->isRunning()) return;
+void MainWindow::onSolve()
+{
+    if (worker && worker->isRunning())
+        return;
 
     m_stopped = false;
     txtOutput->clear();
@@ -1893,11 +1591,11 @@ void MainWindow::onSolve() {
     // Swap Solve → Stop appearance (muted dark red, not alarming).
     btnSolve->setText("■  Stop");
     btnSolve->setStyleSheet(QString(
-        "QPushButton#btnSolve {"
-        "  background: %1; border: 1px solid %2; padding-top: 0px; padding-bottom: 0px;"
-        "  color: %3; font-size: 12px; font-weight: bold; }"
-        "QPushButton#btnSolve:hover { background: %4; }")
-        .arg(Theme::BUTTON_STOP_BG, Theme::BUTTON_STOP_BORDER, Theme::BUTTON_STOP_TEXT, Theme::BUTTON_STOP_HOVER));
+                                "QPushButton#btnSolve {"
+                                "  background: %1; border: 1px solid %2; padding-top: 0px; padding-bottom: 0px;"
+                                "  color: %3; font-size: 12px; font-weight: bold; }"
+                                "QPushButton#btnSolve:hover { background: %4; }")
+                                .arg(Theme::BUTTON_STOP_BG, Theme::BUTTON_STOP_BORDER, Theme::BUTTON_STOP_TEXT, Theme::BUTTON_STOP_HOVER));
 
     progressBar->setVisible(true);
 
@@ -1907,8 +1605,8 @@ void MainWindow::onSolve() {
     worker->flags = buildArgList();
     m_cubeshapeWasActive = chkCubeshape->isChecked();
     connect(worker, &SolverWorker::lineReady, this, &MainWindow::onSolverLine, Qt::QueuedConnection);
-    connect(worker, &SolverWorker::finished,  this, &MainWindow::onSolverDone, Qt::QueuedConnection);
-    connect(worker, &SolverWorker::finished,  worker, &QObject::deleteLater);
+    connect(worker, &SolverWorker::finished, this, &MainWindow::onSolverDone, Qt::QueuedConnection);
+    connect(worker, &SolverWorker::finished, worker, &QObject::deleteLater);
     m_solveStartMs = QDateTime::currentMSecsSinceEpoch();
     m_firstSolutionMs = 0;
     m_hadFirstSolution = false;
@@ -1918,7 +1616,8 @@ void MainWindow::onSolve() {
 // -------------------------------------------------------
 // stopSolver — kill the running process and flag m_stopped
 // -------------------------------------------------------
-void MainWindow::stopSolver() {
+void MainWindow::stopSolver()
+{
     m_stopped = true;
     if (worker && worker->isRunning())
         worker->requestStop();
@@ -1927,18 +1626,23 @@ void MainWindow::stopSolver() {
 // -------------------------------------------------------
 // onSolverLine
 // -------------------------------------------------------
-void MainWindow::onSolverLine(QString line) {
+void MainWindow::onSolverLine(QString line)
+{
     bool isSolution = line.contains('[') && line.contains(']');
-    if (isSolution) {
+    if (isSolution)
+    {
         int bracketPos = line.indexOf('[');
         QString algKey = (bracketPos >= 0) ? line.left(bracketPos).trimmed() : line.trimmed();
-        if (m_seenSolutions.contains(algKey)) return;
+        if (m_seenSolutions.contains(algKey))
+            return;
         m_seenSolutions.insert(algKey);
     }
     m_rawLines.append(line);
-    if (isSolution) {
+    if (isSolution)
+    {
         m_solutionLines.append(line);
-        if (!m_hadFirstSolution) {
+        if (!m_hadFirstSolution)
+        {
             m_hadFirstSolution = true;
             m_firstSolutionMs = QDateTime::currentMSecsSinceEpoch();
         }
@@ -1949,11 +1653,12 @@ void MainWindow::onSolverLine(QString line) {
         {
             bool isAlt = (m_solutionLines.size() % 2 == 0);
             QString col = m_lightTheme
-                ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+                              ? (isAlt ? "#2a6a2a" : "#1a4a8a")
+                              : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
             QTextCursor cur = txtOutput->textCursor();
             cur.movePosition(QTextCursor::End);
-            if (!txtOutput->document()->isEmpty()) cur.insertBlock();
+            if (!txtOutput->document()->isEmpty())
+                cur.insertBlock();
             QTextBlockFormat blkFmt;
             blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
             cur.setBlockFormat(blkFmt);
@@ -1964,11 +1669,14 @@ void MainWindow::onSolverLine(QString line) {
             cur.insertText(line, fmt);
             txtOutput->setTextCursor(cur);
         }
-    } else {
+    }
+    else
+    {
         QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
         QTextCursor cur = txtOutput->textCursor();
         cur.movePosition(QTextCursor::End);
-        if (!txtOutput->document()->isEmpty()) cur.insertBlock();
+        if (!txtOutput->document()->isEmpty())
+            cur.insertBlock();
         QTextBlockFormat blkFmt;
         blkFmt.setLineHeight(m_expanded ? 150 : 120, QTextBlockFormat::ProportionalHeight);
         cur.setBlockFormat(blkFmt);
@@ -1983,7 +1691,8 @@ void MainWindow::onSolverLine(QString line) {
 // -------------------------------------------------------
 // onSolverDone
 // -------------------------------------------------------
-void MainWindow::onSolverDone(int code) {
+void MainWindow::onSolverDone(int code)
+{
     progressBar->setVisible(false);
 
     // Restore Solve button appearance.
@@ -1994,41 +1703,53 @@ void MainWindow::onSolverDone(int code) {
     double secs = (QDateTime::currentMSecsSinceEpoch() - m_solveStartMs) / 1000.0;
     QString secsStr = QString::number(secs, 'f', 2);
 
-    if (m_stopped) {
+    if (m_stopped)
+    {
         QString summary = QString("Stopped — %1 solution%2 found in %3s.")
-                              .arg(n).arg(n == 1 ? "" : "s").arg(secsStr);
+                              .arg(n)
+                              .arg(n == 1 ? "" : "s")
+                              .arg(secsStr);
         appendStatusLine(summary);
-    } else if (code == 0) {
+    }
+    else if (code == 0)
+    {
         QString summary = QString("Done — %1 solution%2 found in %3s.")
-                              .arg(n).arg(n == 1 ? "" : "s").arg(secsStr);
+                              .arg(n)
+                              .arg(n == 1 ? "" : "s")
+                              .arg(secsStr);
         appendStatusLine(summary);
-    } else {
+    }
+    else
+    {
         appendStatusLine("Error (code " + QString::number(code) + ")");
     }
 
     updateRankErgoState();
-    if (!m_solutionLines.isEmpty()) {
+    if (!m_solutionLines.isEmpty())
+    {
         qint64 elapsed = m_hadFirstSolution
-            ? (QDateTime::currentMSecsSinceEpoch() - m_firstSolutionMs)
-            : 3000;
+                             ? (QDateTime::currentMSecsSinceEpoch() - m_firstSolutionMs)
+                             : 3000;
         int delay = (elapsed < 3000) ? 400 : 0;
-        QTimer::singleShot(delay, this, [this]{
+        QTimer::singleShot(delay, this, [this]
+                           {
             m_tableVisible = true;
             txtOutput->setVisible(false);
             m_tableContainer->setVisible(true);
             btnTableMode->setText("▤");
             btnTableMode->setToolTip("Switch to terminal view");
-            rebuildTable();
-        });
+            rebuildTable(); });
     }
 }
 
 // -------------------------------------------------------
 // pushUndoState
 // -------------------------------------------------------
-void MainWindow::pushUndoState() {
+void MainWindow::pushUndoState()
+{
     m_undoStack.append({cubeWidget->getPositionString()});
-    if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+    if (m_undoStack.size() > 64)
+        m_undoStack.removeFirst();
     btnUndo->setEnabled(true);
     m_redoStack.clear();
     btnRedo->setEnabled(false);
@@ -2037,7 +1758,8 @@ void MainWindow::pushUndoState() {
 // -------------------------------------------------------
 // onReset
 // -------------------------------------------------------
-void MainWindow::onReset() {
+void MainWindow::onReset()
+{
     updateRankErgoState();
     updateCommand();
 }
@@ -2046,17 +1768,21 @@ void MainWindow::onReset() {
 // keyPressEvent — the global eventFilter handles all routing;
 // this is kept only as a fallback for events that slip through.
 // -------------------------------------------------------
-void MainWindow::onApplyScramble() {
+void MainWindow::onApplyScramble()
+{
     QString raw = txtScramble->text().trimmed();
 
     // Empty input = reset to solved
-    if (raw.isEmpty()) {
+    if (raw.isEmpty())
+    {
         QString before = cubeWidget->getPositionString();
         cubeWidget->reset();
         QString after = cubeWidget->getPositionString();
-        if (before != after) {
+        if (before != after)
+        {
             m_undoStack.append({before});
-            if (m_undoStack.size() > 64) m_undoStack.removeFirst();
+            if (m_undoStack.size() > 64)
+                m_undoStack.removeFirst();
             btnUndo->setEnabled(true);
             m_redoStack.clear();
             btnRedo->setEnabled(false);
@@ -2076,55 +1802,95 @@ void MainWindow::onApplyScramble() {
         int j = 0;
         int nextPartialCorner = -3;
         int nextPartialEdge = 18;
-        for (int i = 0; i < 16 && j < 24; i++) {
+        for (int i = 0; i < 16 && j < 24; i++)
+        {
             int k = (unsigned char)s[i];
-            if (k >= 'a' && k <= 'z') k += ('A' - 'a');
-            if      (k >= 'A' && k <= 'H') k -= 'A';
-            else if (k >= '1' && k <= '8') k -= ('1' - 8);
-            else if (k == 'U') { k = nextPartialCorner; nextPartialCorner -= 3; }
-            else if (k == 'V') { k = nextPartialCorner; nextPartialCorner -= 3; }
-            else if (k == 'W') { k = nextPartialCorner; nextPartialCorner -= 3; }
-            else if (k == 'X') { k = nextPartialEdge;   nextPartialEdge += 3; }
-            else if (k == 'Y') { k = nextPartialEdge;   nextPartialEdge += 3; }
-            else if (k == 'Z') { k = nextPartialEdge;   nextPartialEdge += 3; }
+            if (k >= 'a' && k <= 'z')
+                k += ('A' - 'a');
+            if (k >= 'A' && k <= 'H')
+                k -= 'A';
+            else if (k >= '1' && k <= '8')
+                k -= ('1' - 8);
+            else if (k == 'U')
+            {
+                k = nextPartialCorner;
+                nextPartialCorner -= 3;
+            }
+            else if (k == 'V')
+            {
+                k = nextPartialCorner;
+                nextPartialCorner -= 3;
+            }
+            else if (k == 'W')
+            {
+                k = nextPartialCorner;
+                nextPartialCorner -= 3;
+            }
+            else if (k == 'X')
+            {
+                k = nextPartialEdge;
+                nextPartialEdge += 3;
+            }
+            else if (k == 'Y')
+            {
+                k = nextPartialEdge;
+                nextPartialEdge += 3;
+            }
+            else if (k == 'Z')
+            {
+                k = nextPartialEdge;
+                nextPartialEdge += 3;
+            }
             pos[j++] = k;
-            if (k >= 0 && k < 8) pos[j++] = k; // corner occupies two slots
+            if (k >= 0 && k < 8)
+                pos[j++] = k; // corner occupies two slots
         }
         if (s.size() >= 17)
             mid = (s[16] == '/') ? 1 : 0;
         else if (s.size() == 16)
             mid = (s.back() == '/') ? 1 : 0;
         // for position strings without trailing char, mid stays 0
-        if (s.size() < 16) {
+        if (s.size() < 16)
+        {
             // fallback: check last char of the 15/16 char string
             char last = s.back();
             mid = (last == '/') ? 1 : 0;
         }
     }
 
-    auto doTop = [&](int m) {
+    auto doTop = [&](int m)
+    {
         m = ((m % 12) + 12) % 12;
-        for (int moves = 0; moves < m; moves++) {
+        for (int moves = 0; moves < m; moves++)
+        {
             int c = pos[11];
-            for (int i = 11; i > 0; i--) pos[i] = pos[i-1];
+            for (int i = 11; i > 0; i--)
+                pos[i] = pos[i - 1];
             pos[0] = c;
         }
     };
-    auto doBot = [&](int m) {
+    auto doBot = [&](int m)
+    {
         m = ((m % 12) + 12) % 12;
-        for (int moves = 0; moves < m; moves++) {
+        for (int moves = 0; moves < m; moves++)
+        {
             int c = pos[23];
-            for (int i = 23; i > 12; i--) pos[i] = pos[i-1];
+            for (int i = 23; i > 12; i--)
+                pos[i] = pos[i - 1];
             pos[12] = c;
         }
     };
-    auto isSliceable = [&]() {
-        return pos[0]!=pos[11] && pos[5]!=pos[6] &&
-               pos[12]!=pos[23] && pos[17]!=pos[18];
+    auto isSliceable = [&]()
+    {
+        return pos[0] != pos[11] && pos[5] != pos[6] &&
+               pos[12] != pos[23] && pos[17] != pos[18];
     };
-    auto doSlice = [&]() {
-        if (!isSliceable()) return;
-        for (int i = 6; i < 12; i++) std::swap(pos[i], pos[i+6]);
+    auto doSlice = [&]()
+    {
+        if (!isSliceable())
+            return;
+        for (int i = 6; i < 12; i++)
+            std::swap(pos[i], pos[i + 6]);
         mid = 1 - mid;
     };
 
@@ -2140,7 +1906,11 @@ void MainWindow::onApplyScramble() {
     // Algorithm: scan character by character, collecting turn tokens and
     // counting '/' separators explicitly so leading/trailing slashes are preserved.
 
-    struct Move { bool isSlice; int x, y; };
+    struct Move
+    {
+        bool isSlice;
+        int x, y;
+    };
     QVector<Move> moves;
 
     QString s = raw;
@@ -2152,50 +1922,99 @@ void MainWindow::onApplyScramble() {
     //   [optional leading /] (turn /) * [optional trailing turn]
     // We do a character-level parse.
 
-    while (idx < s.size() && ok) {
+    while (idx < s.size() && ok)
+    {
         // Skip whitespace
-        while (idx < s.size() && s[idx].isSpace()) idx++;
-        if (idx >= s.size()) break;
+        while (idx < s.size() && s[idx].isSpace())
+            idx++;
+        if (idx >= s.size())
+            break;
 
-        if (s[idx] == '/') {
+        if (s[idx] == '/')
+        {
             // Slash = slice
             moves.append({true, 0, 0});
             idx++;
-        } else if (s[idx] == '(' || s[idx].isDigit() || s[idx] == '-') {
+        }
+        else if (s[idx] == '(' || s[idx].isDigit() || s[idx] == '-')
+        {
             // Turn: optional '(' x ',' y optional ')'
-            if (s[idx] == '(') idx++;
+            if (s[idx] == '(')
+                idx++;
             // parse x
-            while (idx < s.size() && s[idx].isSpace()) idx++;
+            while (idx < s.size() && s[idx].isSpace())
+                idx++;
             int sign = 1;
-            if (idx < s.size() && s[idx] == '-') { sign = -1; idx++; }
-            int num = 0; bool hasDigit = false;
-            while (idx < s.size() && s[idx].isDigit()) { num = num*10+(s[idx].toLatin1()-'0'); idx++; hasDigit = true; }
-            if (!hasDigit) { ok = false; break; }
+            if (idx < s.size() && s[idx] == '-')
+            {
+                sign = -1;
+                idx++;
+            }
+            int num = 0;
+            bool hasDigit = false;
+            while (idx < s.size() && s[idx].isDigit())
+            {
+                num = num * 10 + (s[idx].toLatin1() - '0');
+                idx++;
+                hasDigit = true;
+            }
+            if (!hasDigit)
+            {
+                ok = false;
+                break;
+            }
             int x = sign * num;
-            while (idx < s.size() && s[idx].isSpace()) idx++;
-            if (idx >= s.size() || s[idx] != ',') { ok = false; break; }
+            while (idx < s.size() && s[idx].isSpace())
+                idx++;
+            if (idx >= s.size() || s[idx] != ',')
+            {
+                ok = false;
+                break;
+            }
             idx++; // skip ','
             // parse y
-            while (idx < s.size() && s[idx].isSpace()) idx++;
+            while (idx < s.size() && s[idx].isSpace())
+                idx++;
             sign = 1;
-            if (idx < s.size() && s[idx] == '-') { sign = -1; idx++; }
-            num = 0; hasDigit = false;
-            while (idx < s.size() && s[idx].isDigit()) { num = num*10+(s[idx].toLatin1()-'0'); idx++; hasDigit = true; }
-            if (!hasDigit) { ok = false; break; }
+            if (idx < s.size() && s[idx] == '-')
+            {
+                sign = -1;
+                idx++;
+            }
+            num = 0;
+            hasDigit = false;
+            while (idx < s.size() && s[idx].isDigit())
+            {
+                num = num * 10 + (s[idx].toLatin1() - '0');
+                idx++;
+                hasDigit = true;
+            }
+            if (!hasDigit)
+            {
+                ok = false;
+                break;
+            }
             int y = sign * num;
-            while (idx < s.size() && s[idx].isSpace()) idx++;
-            if (idx < s.size() && s[idx] == ')') idx++;
+            while (idx < s.size() && s[idx].isSpace())
+                idx++;
+            if (idx < s.size() && s[idx] == ')')
+                idx++;
             moves.append({false, x, y});
-        } else {
-            ok = false; break;
+        }
+        else
+        {
+            ok = false;
+            break;
         }
     }
 
-    if (!ok) {
+    if (!ok)
+    {
         int approxPos = idx;
-        QString ctx = raw.mid(qMax(0, approxPos-6), 12).trimmed();
+        QString ctx = raw.mid(qMax(0, approxPos - 6), 12).trimmed();
         QString msg = QString("Parse error near \"%1\" (col %2) — expected (x,y) or /.")
-                          .arg(ctx).arg(approxPos);
+                          .arg(ctx)
+                          .arg(approxPos);
         lblScrambleError->setText(msg);
         lblScrambleError->setVisible(true);
         txtScramble->setProperty("hasError", true);
@@ -2204,34 +2023,49 @@ void MainWindow::onApplyScramble() {
     }
 
     // ── Optionally invert if "Input algorithm" mode ───────────────────────────
-    if (m_scrambleIsAlg) {
+    if (m_scrambleIsAlg)
+    {
         // Invert: reverse the move list and negate all turns
         QVector<Move> inv;
-        for (int i = moves.size()-1; i >= 0; i--) {
+        for (int i = moves.size() - 1; i >= 0; i--)
+        {
             Move mv = moves[i];
-            if (!mv.isSlice) { mv.x = -mv.x; mv.y = -mv.y; }
+            if (!mv.isSlice)
+            {
+                mv.x = -mv.x;
+                mv.y = -mv.y;
+            }
             inv.append(mv);
         }
         moves = inv;
     }
 
     // ── Apply moves ───────────────────────────────────────────────────────────
-    for (const Move& mv : std::as_const(moves)) {
-        if (mv.isSlice) doSlice();
-        else { doTop(mv.x); doBot(mv.y); }
+    for (const Move &mv : std::as_const(moves))
+    {
+        if (mv.isSlice)
+            doSlice();
+        else
+        {
+            doTop(mv.x);
+            doBot(mv.y);
+        }
     }
 
     // Build position string
     const QString pieceChars = "ABCDEFGH12345678";
     QString posStr;
-    for (int i = 0; i < 24; i++) {
+    for (int i = 0; i < 24; i++)
+    {
         posStr += pieceChars[pos[i]];
-        if (pos[i] < 8) i++;
+        if (pos[i] < 8)
+            i++;
     }
     posStr += (mid == 0 ? '-' : '/');
 
     bool applied = cubeWidget->setPositionFromString(posStr);
-    if (!applied) {
+    if (!applied)
+    {
         lblScrambleError->setText("Resulting position is invalid — check your move sequence.");
         lblScrambleError->setVisible(true);
         txtScramble->setProperty("hasError", true);
@@ -2245,11 +2079,13 @@ void MainWindow::onApplyScramble() {
     updateCommand();
 }
 
-void MainWindow::appendStatusLine(const QString& msg) {
+void MainWindow::appendStatusLine(const QString &msg)
+{
     QString col = m_lightTheme ? Theme::LIGHT_TEXT_TERMINAL : "#6a9ab8";
     QTextCursor cur = txtOutput->textCursor();
     cur.movePosition(QTextCursor::End);
-    if (!txtOutput->document()->isEmpty()) cur.insertBlock();
+    if (!txtOutput->document()->isEmpty())
+        cur.insertBlock();
     QTextCharFormat fmt;
     fmt.setForeground(QColor(col));
     fmt.setFontItalic(true);
@@ -2261,9 +2097,10 @@ void MainWindow::appendStatusLine(const QString& msg) {
     txtOutput->setTextCursor(cur);
 }
 
-void MainWindow::rebuildTable() {
+void MainWindow::rebuildTable()
+{
     const bool ergo = chkRankErgo->isChecked();
-    const bool showErgo = m_cubeshapeWasActive;  // captured at solve time, not current checkbox
+    const bool showErgo = m_cubeshapeWasActive; // captured at solve time, not current checkbox
     m_solutionTable->setColumnCount(showErgo ? 5 : 4);
     m_solutionTable->setHorizontalHeaderLabels(
         showErgo ? QStringList{"#", "Solution", "Moves", "Slices", "Ergo"}
@@ -2275,76 +2112,98 @@ void MainWindow::rebuildTable() {
     if (showErgo)
         m_solutionTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_solutionTable->setRowCount(0);
-    if (m_solutionLines.isEmpty()) return;
+    if (m_solutionLines.isEmpty())
+        return;
 
     // Parse move count and slice count from bracket annotation e.g. "[7|14]"
-    auto parseCounts = [](const QString& line, int& moves, int& slices){
-        moves = 0; slices = 0;
+    auto parseCounts = [](const QString &line, int &moves, int &slices)
+    {
+        moves = 0;
+        slices = 0;
         int lb = line.lastIndexOf('[');
         int rb = line.lastIndexOf(']');
-        if (lb < 0 || rb < 0) return;
-        QString bracket = line.mid(lb+1, rb-lb-1); // e.g. "7|14"
+        if (lb < 0 || rb < 0)
+            return;
+        QString bracket = line.mid(lb + 1, rb - lb - 1); // e.g. "7|14"
         QStringList parts = bracket.split('|');
-        if (parts.size() >= 2) {
+        if (parts.size() >= 2)
+        {
             slices = parts[0].trimmed().toInt();
-            moves  = parts[1].trimmed().toInt();
+            moves = parts[1].trimmed().toInt();
         }
     };
 
     // Strip bracket annotation from display
-    auto stripBracket = [](const QString& line) -> QString {
+    auto stripBracket = [](const QString &line) -> QString
+    {
         int lb = line.lastIndexOf('[');
         return lb > 0 ? line.left(lb).trimmed() : line.trimmed();
     };
 
-    struct Row { QString alg; int moves; int slices; double ergo; };
+    struct Row
+    {
+        QString alg;
+        int moves;
+        int slices;
+        double ergo;
+    };
     QVector<Row> rows;
 
     bool useKarn = chkKarnotation->isChecked(); // showErgo already declared above
     auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
     // rated[i].first is the full line with slice indicator injected (bracket still attached).
     // Build rows directly from rated so the display alg already has the indicator.
-    for (auto& [line, score] : rated) {
+    for (auto &[line, score] : rated)
+    {
         int mv, sl;
         parseCounts(line, mv, sl);
         QString displayAlg = stripBracket(line);
         rows.append({displayAlg, mv, sl, score});
     }
 
-    if (ergo && showErgo) {
+    if (ergo && showErgo)
+    {
         std::stable_sort(rows.begin(), rows.end(),
-            [](const Row& a, const Row& b){ return a.ergo > b.ergo; });
-    } else {
+                         [](const Row &a, const Row &b)
+                         { return a.ergo > b.ergo; });
+    }
+    else
+    {
         std::stable_sort(rows.begin(), rows.end(),
-            [](const Row& a, const Row& b){
-                if (a.slices != b.slices) return a.slices < b.slices;
-                return a.moves < b.moves;
-            });
+                         [](const Row &a, const Row &b)
+                         {
+                             if (a.slices != b.slices)
+                                 return a.slices < b.slices;
+                             return a.moves < b.moves;
+                         });
     }
 
     const QColor rowA = QColor(m_lightTheme ? Theme::LIGHT_TABLE_BG : Theme::ROW_ALT_DARK);
     const QColor rowB = m_lightTheme ? rowA : QColor(Theme::ROW_ALT_LIGHT);
     // Dark mode: row A gets blue text, row B gets white text (alternating)
-    const QColor textCol    = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor(Theme::TEXT_SOLUTION);
-        const QColor textColAlt = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor("#cbcbcb");
+    const QColor textCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor(Theme::TEXT_SOLUTION);
+    const QColor textColAlt = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor("#cbcbcb");
     const QColor metaCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SECONDARY) : QColor(154, 172, 190);
     const QColor metaColAlt = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SECONDARY) : QColor(150, 150, 150, 238);
     const int rowH = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
     m_solutionTable->setRowCount(rows.size());
-    for (int i = 0; i < rows.size(); i++) {
-        const Row& r = rows[i];
+    for (int i = 0; i < rows.size(); i++)
+    {
+        const Row &r = rows[i];
         QColor bg = (i % 2 == 0) ? rowA : rowB;
 
         bool isAltRow = (i % 2 == 1);
-        auto cell = [&](int col, const QString& txt, bool isMeta = false) {
-            QTableWidgetItem* item = new QTableWidgetItem(txt);
+        auto cell = [&](int col, const QString &txt, bool isMeta = false)
+        {
+            QTableWidgetItem *item = new QTableWidgetItem(txt);
             item->setBackground(bg);
             QColor c = isMeta ? (isAltRow ? metaColAlt : metaCol)
-                               : (isAltRow ? textColAlt : textCol);
+                              : (isAltRow ? textColAlt : textCol);
             item->setForeground(c);
-            if (m_expanded) {
+            if (m_expanded)
+            {
                 QFont f = item->font();
                 f.setPointSize(fontSize);
                 item->setFont(f);
@@ -2353,7 +2212,7 @@ void MainWindow::rebuildTable() {
             m_solutionTable->setItem(i, col, item);
         };
 
-        QTableWidgetItem* numItem = new QTableWidgetItem(QString::number(i+1));
+        QTableWidgetItem *numItem = new QTableWidgetItem(QString::number(i + 1));
         numItem->setBackground(bg);
         numItem->setForeground(isAltRow ? metaColAlt : metaCol);
         numItem->setTextAlignment(Qt::AlignCenter);
@@ -2365,11 +2224,12 @@ void MainWindow::rebuildTable() {
         }
         m_solutionTable->setItem(i, 0, numItem);
         // Solution column: left-aligned
-        QTableWidgetItem* algItem = new QTableWidgetItem(r.alg);
+        QTableWidgetItem *algItem = new QTableWidgetItem(r.alg);
         algItem->setBackground(bg);
         algItem->setForeground(isAltRow ? textColAlt : textCol);
         algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-        if (m_expanded) {
+        if (m_expanded)
+        {
             QFont f = algItem->font();
             f.setPointSize(fontSize);
             algItem->setFont(f);
@@ -2383,25 +2243,27 @@ void MainWindow::rebuildTable() {
     }
 }
 
-
-void MainWindow::resizeEvent(QResizeEvent* event) {
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
     QMainWindow::resizeEvent(event);
     int w = event->size().width();
     // Scale left panel: 320px base, grow a little above 1000px, cap at 400px
     int leftW = qBound(320, 320 + (w - 860) / 6, 400);
     leftScroll->setFixedWidth(leftW);
-    if (auto* lc = leftScroll->widget())
+    if (auto *lc = leftScroll->widget())
         lc->setFixedWidth(leftW - 4);
 }
 
-void MainWindow::keyPressEvent(QKeyEvent* event) {
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
     QMainWindow::keyPressEvent(event);
 }
 
 // -------------------------------------------------------
 // onCopy
 // -------------------------------------------------------
-void MainWindow::onCopy() {
+void MainWindow::onCopy()
+{
     QApplication::clipboard()->setText(txtCommand->text());
     appendStatusLine("Copied to clipboard!");
 }
@@ -2409,14 +2271,18 @@ void MainWindow::onCopy() {
 // -------------------------------------------------------
 // onRankErgoToggled
 // -------------------------------------------------------
-void MainWindow::onRankErgoToggled(bool checked) {
-    if (!checked) {
+void MainWindow::onRankErgoToggled(bool checked)
+{
+    if (!checked)
+    {
         rebuildTerminalView();
         appendStatusLine("Done.");
-        if (m_tableVisible) rebuildTable();
+        if (m_tableVisible)
+            rebuildTable();
         return;
     }
-    if (m_solutionLines.isEmpty()) return;
+    if (m_solutionLines.isEmpty())
+        return;
     lblStatus->setText("Rating algorithms…");
 
     auto rated = rateAndSort(m_solutionLines, m_posHex, true); // always use karn for rating
@@ -2424,8 +2290,10 @@ void MainWindow::onRankErgoToggled(bool checked) {
     txtOutput->clear();
     QTextCursor cur(txtOutput->document());
     bool firstBlock = true;
-    auto insertLine = [&](const QString& text, const QString& color, bool bold, int ptSize, int lineH) {
-        if (!firstBlock) cur.insertBlock();
+    auto insertLine = [&](const QString &text, const QString &color, bool bold, int ptSize, int lineH)
+    {
+        if (!firstBlock)
+            cur.insertBlock();
         firstBlock = false;
         QTextBlockFormat blkFmt;
         blkFmt.setLineHeight(lineH, QTextBlockFormat::ProportionalHeight);
@@ -2436,26 +2304,30 @@ void MainWindow::onRankErgoToggled(bool checked) {
         fmt.setFontPointSize(ptSize);
         cur.insertText(text, fmt);
     };
-    for (const QString& line : std::as_const(m_rawLines)) {
+    for (const QString &line : std::as_const(m_rawLines))
+    {
         bool isSol = line.contains('[') && line.contains(']');
-        if (!isSol) {
+        if (!isSol)
+        {
             QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
             insertLine(line, col, false, m_expanded ? 11 : 10, m_expanded ? 150 : 120);
         }
     }
     int solIdx = 0;
-    for (auto& [line, score] : rated) {
+    for (auto &[line, score] : rated)
+    {
         bool isAlt = (solIdx % 2 == 1);
         QString col = m_lightTheme
-            ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-            : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+                          ? (isAlt ? "#2a6a2a" : "#1a4a8a")
+                          : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
         QString display = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
         insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         solIdx++;
     }
     appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
     txtOutput->verticalScrollBar()->setValue(0);
-    if (m_tableVisible) rebuildTable();
+    if (m_tableVisible)
+        rebuildTable();
 }
 
 // -------------------------------------------------------
@@ -2463,11 +2335,12 @@ void MainWindow::onRankErgoToggled(bool checked) {
 // Decides whether chkRankErgo should be enabled, and sets
 // a context-sensitive tooltip explaining why it's grayed out.
 // -------------------------------------------------------
-void MainWindow::updateRankErgoState() {
+void MainWindow::updateRankErgoState()
+{
     const bool cubeshapeActive = m_solutionLines.isEmpty() ? chkCubeshape->isChecked() : m_cubeshapeWasActive;
-    const bool hasSolutions    = !m_solutionLines.isEmpty();
-    const bool solving         = worker && worker->isRunning();
-    const bool canRank         = cubeshapeActive && hasSolutions && !solving;
+    const bool hasSolutions = !m_solutionLines.isEmpty();
+    const bool solving = worker && worker->isRunning();
+    const bool canRank = cubeshapeActive && hasSolutions && !solving;
 
     chkRankErgo->setEnabled(canRank);
 
@@ -2481,7 +2354,8 @@ void MainWindow::updateRankErgoState() {
 
     // If the checkbox was checked but the eligibility just dropped, uncheck and
     // restore the plain output so the user doesn't see a stale ranked view.
-    if (!canRank && chkRankErgo->isChecked()) {
+    if (!canRank && chkRankErgo->isChecked())
+    {
         chkRankErgo->blockSignals(true);
         chkRankErgo->setChecked(false);
         chkRankErgo->blockSignals(false);
@@ -2497,70 +2371,71 @@ void MainWindow::updateRankErgoState() {
 //   2. Cube letter shortcuts → route to cubeWidget from any focus.
 //   3. txtDepths digit → auto-enable "Specific depths" checkbox.
 // -------------------------------------------------------
-void MainWindow::showAboutModal() {
-    QWidget* central = this->centralWidget();
+void MainWindow::showAboutModal()
+{
+    QWidget *central = this->centralWidget();
 
-    QWidget* overlay = new QWidget(central);
+    QWidget *overlay = new QWidget(central);
     overlay->setGeometry(central->rect());
     overlay->setStyleSheet("background:rgba(0,0,0,160);");
     overlay->show();
     overlay->raise();
 
     bool L = m_lightTheme;
-    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG  : Theme::MODAL_BG;
+    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
     QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
-    QWidget* card = new QWidget(overlay);
+    QWidget *card = new QWidget(overlay);
     card->setObjectName("aboutCard");
     card->setFixedWidth(480);
     card->setStyleSheet(QString(
-        "QWidget#aboutCard { background:%1; border:1px solid %2; border-radius:10px; }"
-    ).arg(modalBg, modalBorder));
+                            "QWidget#aboutCard { background:%1; border:1px solid %2; border-radius:10px; }")
+                            .arg(modalBg, modalBorder));
 
-    QVBoxLayout* lay = new QVBoxLayout(card);
+    QVBoxLayout *lay = new QVBoxLayout(card);
     lay->setContentsMargins(28, 24, 28, 24);
     lay->setSpacing(10);
 
-    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY   : "#e0e0e0";
-    QString textBody    = L ? Theme::LIGHT_TEXT_SECONDARY : "#b0b0c8";
-    QLabel* title = new QLabel("About Solve-A-Squan");
+    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : "#e0e0e0";
+    QString textBody = L ? Theme::LIGHT_TEXT_SECONDARY : "#b0b0c8";
+    QLabel *title = new QLabel("About Solve-A-Squan");
     title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
     // Build the about body content with proper string building
-    QLabel* body = new QLabel();
+    QLabel *body = new QLabel();
     body->setWordWrap(true);
     body->setTextFormat(Qt::RichText);
     body->setStyleSheet("background:transparent;");
     QString aboutBody = QString(
-        "<span style='color:%1;font-size:12px;line-height:1.7;'>"
-        "This program stemmed from the optimal Square-1 solver by "
-        "<a href='https://www.jaapsch.net/puzzles/' style='color:#7abfe8;'>Jaap Scherphuis</a>."
-        "<br><br>"
-        "v2 was created by Michael Gottlieb "
-        "(<a href='https://github.com/qqwref' style='color:#7abfe8;'>GitHub</a>, "
-        "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:#7abfe8;'>WCA</a>), "
-        "who rewrote the solver with significant improvements and optimisations."
-        "<br><br>Read the old documentations <a href='read_old_docs'>here</a>. Note that it is largely not applicable within v3."
-        "<br><br>This is the official <b style='color:#e0e0e0;'>v3</b>. New in v3:"
-        "<ul style='margin:4px 0 4px 16px;padding:0;color:#b0b0c8;'>"
-        "<li>Actual graphical UI</li>"
-        "<li>Ability to generate a solution from a specific angle</li>"
-        "<li>Improved karnotation support</li>"
-        "<li>Algorithm ergonomics rater</li>"
-        "</ul>"
-        "v3 is created by "
-        "<a href='https://www.worldcubeassociation.org/persons/2024ASHR02' style='color:#7abfe8;'>Abid Ibn Ashraf</a>"
-        " and "
-        "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:#7abfe8;'>Matt Mao</a>."
-        "</span>"
-    ).arg(textBody);
+                            "<span style='color:%1;font-size:12px;line-height:1.7;'>"
+                            "This program stemmed from the optimal Square-1 solver by "
+                            "<a href='https://www.jaapsch.net/puzzles/' style='color:#7abfe8;'>Jaap Scherphuis</a>."
+                            "<br><br>"
+                            "v2 was created by Michael Gottlieb "
+                            "(<a href='https://github.com/qqwref' style='color:#7abfe8;'>GitHub</a>, "
+                            "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:#7abfe8;'>WCA</a>), "
+                            "who rewrote the solver with significant improvements and optimisations."
+                            "<br><br>Read the old documentations <a href='read_old_docs'>here</a>. Note that it is largely not applicable within v3."
+                            "<br><br>This is the official <b style='color:#e0e0e0;'>v3</b>. New in v3:"
+                            "<ul style='margin:4px 0 4px 16px;padding:0;color:#b0b0c8;'>"
+                            "<li>Actual graphical UI</li>"
+                            "<li>Ability to generate a solution from a specific angle</li>"
+                            "<li>Improved karnotation support</li>"
+                            "<li>Algorithm ergonomics rater</li>"
+                            "</ul>"
+                            "v3 is created by "
+                            "<a href='https://www.worldcubeassociation.org/persons/2024ASHR02' style='color:#7abfe8;'>Abid Ibn Ashraf</a>"
+                            " and "
+                            "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:#7abfe8;'>Matt Mao</a>."
+                            "</span>")
+                            .arg(textBody);
     body->setText(aboutBody);
     // Enable clicking the in-text link to open the ReadDocs popup
-    connect(body, &QLabel::linkActivated, this, [this](const QString& link){
+    connect(body, &QLabel::linkActivated, this, [this](const QString &link)
+            {
         if (link == "read_old_docs") {
             showReadDocsPopup();
         } else {
             QDesktopServices::openUrl(QUrl(link));
-        }
-    });
+        } });
 
     lay->addWidget(title);
     lay->addWidget(body);
@@ -2568,9 +2443,10 @@ void MainWindow::showAboutModal() {
     card->show();
     card->adjustSize();
 
-    auto centerCard = [overlay, card]() {
+    auto centerCard = [overlay, card]()
+    {
         overlay->setGeometry(overlay->parentWidget()->rect());
-        int cx = (overlay->width()  - card->width())  / 2;
+        int cx = (overlay->width() - card->width()) / 2;
         int cy = (overlay->height() - card->height()) / 2;
         card->move(cx, cy);
     };
@@ -2578,19 +2454,25 @@ void MainWindow::showAboutModal() {
     card->raise();
 
     // Watch the centralWidget for resize events
-    struct Filter : public QObject {
-        QWidget* overlay; QWidget* card;
+    struct Filter : public QObject
+    {
+        QWidget *overlay;
+        QWidget *card;
         std::function<void()> center;
-        Filter(QWidget* o, QWidget* c, std::function<void()> fn)
+        Filter(QWidget *o, QWidget *c, std::function<void()> fn)
             : QObject(o), overlay(o), card(c), center(fn) {}
-        bool eventFilter(QObject* watched, QEvent* e) override {
-            if (e->type() == QEvent::Resize && watched == overlay->parentWidget()) {
+        bool eventFilter(QObject *watched, QEvent *e) override
+        {
+            if (e->type() == QEvent::Resize && watched == overlay->parentWidget())
+            {
                 center();
                 return false;
             }
-            if (e->type() == QEvent::MouseButtonPress && watched == overlay) {
-                QMouseEvent* me = static_cast<QMouseEvent*>(e);
-                if (!card->geometry().contains(me->pos())) {
+            if (e->type() == QEvent::MouseButtonPress && watched == overlay)
+            {
+                QMouseEvent *me = static_cast<QMouseEvent *>(e);
+                if (!card->geometry().contains(me->pos()))
+                {
                     overlay->deleteLater();
                     return true;
                 }
@@ -2599,17 +2481,21 @@ void MainWindow::showAboutModal() {
         }
     };
 
-    Filter* f = new Filter(overlay, card, centerCard);
-    central->installEventFilter(f);   // watches parent for resize
-    overlay->installEventFilter(f);   // watches overlay for click-outside
+    Filter *f = new Filter(overlay, card, centerCard);
+    central->installEventFilter(f); // watches parent for resize
+    overlay->installEventFilter(f); // watches overlay for click-outside
 }
 
 // Load a document from docs/ directory, searching appDir first then CWD
-QString MainWindow::loadDocText(const QString& fileName) {
-    auto readPath = [](const QString& p)->QString {
+QString MainWindow::loadDocText(const QString &fileName)
+{
+    auto readPath = [](const QString &p) -> QString
+    {
         QFile f(p);
-        if (!f.exists()) return QString();
-        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+        if (!f.exists())
+            return QString();
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            return QString();
         QString s = QString::fromUtf8(f.readAll());
         f.close();
         return s;
@@ -2624,72 +2510,82 @@ QString MainWindow::loadDocText(const QString& fileName) {
     candidates << appDir + "/../docs/" + fileName;
     // ascend from current dir up to 6 levels looking for docs/
     QDir d = cwd;
-    for (int i = 0; i < 6; ++i) {
-        if (!d.cdUp()) break;
+    for (int i = 0; i < 6; ++i)
+    {
+        if (!d.cdUp())
+            break;
         candidates << d.filePath("docs/" + fileName);
     }
 
-    for (const QString& p : candidates) {
+    for (const QString &p : candidates)
+    {
         QString s = readPath(p);
-        if (!s.isEmpty()) return s;
+        if (!s.isEmpty())
+            return s;
     }
     // Final hard fallback: root/docs if present
     QString rootLike = QDir::rootPath() + "/docs/" + fileName;
     QString s = readPath(rootLike);
-    if (!s.isEmpty()) return s;
+    if (!s.isEmpty())
+        return s;
     return QString();
 }
 
 // Read documents popup – shows sq1opt.txt with an inline link to the old-doc
-void MainWindow::showReadDocsPopup() {
-    QWidget* central = this->centralWidget();
-    QWidget* overlay = new QWidget(central);
+void MainWindow::showReadDocsPopup()
+{
+    QWidget *central = this->centralWidget();
+    QWidget *overlay = new QWidget(central);
     overlay->setObjectName("docsOverlay");
     overlay->setProperty("isDocsOverlay", true);
     overlay->setGeometry(central->rect());
     overlay->setStyleSheet("background:rgba(0,0,0,160);");
-    overlay->show(); overlay->raise();
+    overlay->show();
+    overlay->raise();
 
     bool L = m_lightTheme;
-    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
-    QString textColor   = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
-    QString titleColor  = L ? Theme::LIGHT_TEXT_PRIMARY   : Theme::TEXT_PRIMARY;
+    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
+    QString textColor = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
+    QString titleColor = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
 
-    QWidget* card = new QWidget(overlay);
+    QWidget *card = new QWidget(overlay);
     card->setObjectName("docsCard");
     card->setStyleSheet(QString(
-        "QWidget#docsCard { background:%1; border:1px solid %2; border-radius:10px; }"
-    ).arg(modalBg, modalBorder));
+                            "QWidget#docsCard { background:%1; border:1px solid %2; border-radius:10px; }")
+                            .arg(modalBg, modalBorder));
 
-    QVBoxLayout* lay = new QVBoxLayout(card);
+    QVBoxLayout *lay = new QVBoxLayout(card);
     lay->setContentsMargins(24, 16, 24, 16);
     lay->setSpacing(6);
 
-    QLabel* titleLbl = new QLabel("Sq1opt v2 Documentation");
+    QLabel *titleLbl = new QLabel("Sq1opt v2 Documentation");
     titleLbl->setStyleSheet(QString(
-        "font-size:14px;font-weight:bold;color:%1;background:transparent;"
-    ).arg(titleColor));
+                                "font-size:14px;font-weight:bold;color:%1;background:transparent;")
+                                .arg(titleColor));
     lay->addWidget(titleLbl);
 
     QString content = loadDocText("sq1opt.txt");
-    if (content.isEmpty()) content = "Could not load sq1opt.txt";
+    if (content.isEmpty())
+        content = "Could not load sq1opt.txt";
 
     // Build HTML line by line so text reflows to card width (no horizontal
     // scroll) while preserving leading-space indentation via &nbsp;.
     QString html;
-    for (const QString& line : content.split('\n')) {
+    for (const QString &line : content.split('\n'))
+    {
         QString esc = line.toHtmlEscaped();
         int spaces = 0;
-        while (spaces < esc.size() && esc[spaces] == ' ') ++spaces;
+        while (spaces < esc.size() && esc[spaces] == ' ')
+            ++spaces;
         if (spaces > 0)
             esc = QString("&nbsp;").repeated(spaces) + esc.mid(spaces);
         esc.replace("sq1opt_old.txt",
-            "<a href='open_old_docs' style='color:#7abfe8;'>sq1opt_old.txt</a>");
+                    "<a href='open_old_docs' style='color:#7abfe8;'>sq1opt_old.txt</a>");
         html += "<p style='margin:0;padding:0;'>" + esc + "</p>";
     }
 
-    QTextBrowser* tb = new QTextBrowser(card);
+    QTextBrowser *tb = new QTextBrowser(card);
     tb->setReadOnly(true);
     tb->setFrameShape(QFrame::NoFrame);
     tb->setOpenLinks(false);
@@ -2697,22 +2593,24 @@ void MainWindow::showReadDocsPopup() {
     tb->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     tb->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
     tb->setStyleSheet(QString(
-        "QTextBrowser { background:transparent; border:none; color:%1; }"
-    ).arg(textColor));
+                          "QTextBrowser { background:transparent; border:none; color:%1; }")
+                          .arg(textColor));
     tb->document()->setDefaultStyleSheet(
         QString("body, p { font-family:monospace; font-size:12px; color:%1; line-height:1.4; }"
-                "a { color:#7abfe8; }").arg(textColor));
+                "a { color:#7abfe8; }")
+            .arg(textColor));
     tb->setHtml("<body>" + html + "</body>");
 
-    connect(tb, &QTextBrowser::anchorClicked, this, [this](const QUrl& url){
+    connect(tb, &QTextBrowser::anchorClicked, this, [this](const QUrl &url)
+            {
         if (url.toString() == "open_old_docs") showOldDocsPopup();
-        else QDesktopServices::openUrl(url);
-    });
+        else QDesktopServices::openUrl(url); });
 
     lay->addWidget(tb, 1);
 
     card->show();
-    auto centerCard = [overlay, card, central](){
+    auto centerCard = [overlay, card, central]()
+    {
         overlay->setGeometry(overlay->parentWidget()->rect());
         int cw = qMin(640, central->width() - 40);
         int ch = qMin(520, central->height() - 40);
@@ -2720,21 +2618,29 @@ void MainWindow::showReadDocsPopup() {
         card->move((overlay->width() - card->width()) / 2,
                    (overlay->height() - card->height()) / 2);
     };
-    centerCard(); card->raise();
+    centerCard();
+    card->raise();
 
     // Event filter: resize re-centres the card; click OUTSIDE the card closes
     // all docs modals. The card-geometry check is critical — without it any
     // click that bubbles up from a non-interactive child would close the modal.
-    struct F : public QObject {
-        QWidget* overlay; QWidget* card; std::function<void()> fn;
-        F(QWidget* o, QWidget* c, std::function<void()> f)
+    struct F : public QObject
+    {
+        QWidget *overlay;
+        QWidget *card;
+        std::function<void()> fn;
+        F(QWidget *o, QWidget *c, std::function<void()> f)
             : QObject(o), overlay(o), card(c), fn(f) {}
-        bool eventFilter(QObject* w, QEvent* e) override {
-            if (e->type() == QEvent::Resize && w == overlay->parentWidget()) {
-                fn(); return false;
+        bool eventFilter(QObject *w, QEvent *e) override
+        {
+            if (e->type() == QEvent::Resize && w == overlay->parentWidget())
+            {
+                fn();
+                return false;
             }
-            if (e->type() == QEvent::MouseButtonPress && w == overlay) {
-                QMouseEvent* me = static_cast<QMouseEvent*>(e);
+            if (e->type() == QEvent::MouseButtonPress && w == overlay)
+            {
+                QMouseEvent *me = static_cast<QMouseEvent *>(e);
                 if (!card->geometry().contains(me->pos()))
                     overlay->deleteLater();
                 return true;
@@ -2742,62 +2648,67 @@ void MainWindow::showReadDocsPopup() {
             return false;
         }
     };
-    F* f = new F(overlay, card, centerCard);
-    central->installEventFilter(f);   // watches parent for resize
-    overlay->installEventFilter(f);   // watches overlay for click-outside
+    F *f = new F(overlay, card, centerCard);
+    central->installEventFilter(f); // watches parent for resize
+    overlay->installEventFilter(f); // watches overlay for click-outside
 }
 
 // Old docs popup – shows sq1opt_old.txt
-void MainWindow::showOldDocsPopup() {
-    QWidget* central = this->centralWidget();
-    QWidget* overlay = new QWidget(central);
+void MainWindow::showOldDocsPopup()
+{
+    QWidget *central = this->centralWidget();
+    QWidget *overlay = new QWidget(central);
     overlay->setObjectName("docsOverlay");
     overlay->setProperty("isDocsOverlay", true);
     overlay->setGeometry(central->rect());
     overlay->setStyleSheet("background:rgba(0,0,0,160);");
-    overlay->show(); overlay->raise();
+    overlay->show();
+    overlay->raise();
 
     bool L = m_lightTheme;
-    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
-    QString textColor   = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
-    QString titleColor  = L ? Theme::LIGHT_TEXT_PRIMARY   : Theme::TEXT_PRIMARY;
+    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
+    QString textColor = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
+    QString titleColor = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
 
-    QWidget* card = new QWidget(overlay);
+    QWidget *card = new QWidget(overlay);
     card->setObjectName("docsOldCard");
     card->setStyleSheet(QString(
-        "QWidget#docsOldCard { background:%1; border:1px solid %2; border-radius:10px; }"
-    ).arg(modalBg, modalBorder));
+                            "QWidget#docsOldCard { background:%1; border:1px solid %2; border-radius:10px; }")
+                            .arg(modalBg, modalBorder));
 
-    QVBoxLayout* lay = new QVBoxLayout(card);
+    QVBoxLayout *lay = new QVBoxLayout(card);
     lay->setContentsMargins(24, 16, 24, 16);
     lay->setSpacing(6);
 
-    QLabel* titleLbl = new QLabel("Sq1opt v1 Documentation");
+    QLabel *titleLbl = new QLabel("Sq1opt v1 Documentation");
     titleLbl->setStyleSheet(QString(
-        "font-size:14px;font-weight:bold;color:%1;background:transparent;"
-    ).arg(titleColor));
+                                "font-size:14px;font-weight:bold;color:%1;background:transparent;")
+                                .arg(titleColor));
     lay->addWidget(titleLbl);
 
-    QTextBrowser* tb = new QTextBrowser(card);
+    QTextBrowser *tb = new QTextBrowser(card);
     tb->setReadOnly(true);
     tb->setFrameShape(QFrame::NoFrame);
     tb->setOpenLinks(false);
     tb->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
     tb->setStyleSheet(QString(
-        "QTextBrowser { background:transparent; border:none; color:%1; }"
-    ).arg(textColor));
+                          "QTextBrowser { background:transparent; border:none; color:%1; }")
+                          .arg(textColor));
     tb->document()->setDefaultStyleSheet(
         QString("body, pre { font-family:monospace; font-size:12px; color:%1; }").arg(textColor));
 
     QString oldContent = loadDocText("sq1opt_old.txt");
-    if (oldContent.isEmpty()) tb->setPlainText("Could not load sq1opt_old.txt");
-    else tb->setPlainText(oldContent);
+    if (oldContent.isEmpty())
+        tb->setPlainText("Could not load sq1opt_old.txt");
+    else
+        tb->setPlainText(oldContent);
 
     lay->addWidget(tb, 1);
 
     card->show();
-    auto centerCard = [overlay, card, central](){
+    auto centerCard = [overlay, card, central]()
+    {
         overlay->setGeometry(overlay->parentWidget()->rect());
         int cw = qMin(640, central->width() - 40);
         int ch = qMin(520, central->height() - 40);
@@ -2805,18 +2716,26 @@ void MainWindow::showOldDocsPopup() {
         card->move((overlay->width() - card->width()) / 2,
                    (overlay->height() - card->height()) / 2);
     };
-    centerCard(); card->raise();
+    centerCard();
+    card->raise();
 
-    struct F : public QObject {
-        QWidget* overlay; QWidget* card; std::function<void()> fn;
-        F(QWidget* o, QWidget* c, std::function<void()> f)
+    struct F : public QObject
+    {
+        QWidget *overlay;
+        QWidget *card;
+        std::function<void()> fn;
+        F(QWidget *o, QWidget *c, std::function<void()> f)
             : QObject(o), overlay(o), card(c), fn(f) {}
-        bool eventFilter(QObject* w, QEvent* e) override {
-            if (e->type() == QEvent::Resize && w == overlay->parentWidget()) {
-                fn(); return false;
+        bool eventFilter(QObject *w, QEvent *e) override
+        {
+            if (e->type() == QEvent::Resize && w == overlay->parentWidget())
+            {
+                fn();
+                return false;
             }
-            if (e->type() == QEvent::MouseButtonPress && w == overlay) {
-                QMouseEvent* me = static_cast<QMouseEvent*>(e);
+            if (e->type() == QEvent::MouseButtonPress && w == overlay)
+            {
+                QMouseEvent *me = static_cast<QMouseEvent *>(e);
                 if (!card->geometry().contains(me->pos()))
                     overlay->deleteLater();
                 return true;
@@ -2824,48 +2743,58 @@ void MainWindow::showOldDocsPopup() {
             return false;
         }
     };
-    F* f = new F(overlay, card, centerCard);
-    central->installEventFilter(f);   // watches parent for resize
-    overlay->installEventFilter(f);   // watches overlay for click-outside
+    F *f = new F(overlay, card, centerCard);
+    central->installEventFilter(f); // watches parent for resize
+    overlay->installEventFilter(f); // watches overlay for click-outside
 }
 
-void MainWindow::applyTheme() {
+void MainWindow::applyTheme()
+{
     setStyleSheet(buildStyleSheet());
-    if (m_updateLogo) m_updateLogo();
+    if (m_updateLogo)
+        m_updateLogo();
     updateConstraints();
     QString termBg = m_lightTheme ? Theme::LIGHT_SECONDARY_BG : "#000000";
     txtOutput->setStyleSheet(QString("QTextEdit { background: %1; }").arg(termBg));
     txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
-    if (!m_rawLines.isEmpty()) {
-        if (chkRankErgo->isChecked()) onRankErgoToggled(true);
-        else rebuildTerminalView();
+    if (!m_rawLines.isEmpty())
+    {
+        if (chkRankErgo->isChecked())
+            onRankErgoToggled(true);
+        else
+            rebuildTerminalView();
     }
-    if (m_tableVisible) rebuildTable();
+    if (m_tableVisible)
+        rebuildTable();
     // Repaint the cube widget with the right canvas bg
     QString canvasBg = m_lightTheme ? Theme::LIGHT_CANVAS_BG : Theme::PRIMARY_BG;
     cubeWidget->setStyleSheet(QString("background: %1;").arg(canvasBg));
     // Update command line color
     QString cyan = m_lightTheme ? Theme::LIGHT_TEXT_CYAN : Theme::TEXT_CYAN;
     txtCommand->setStyleSheet(QString(
-        "QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px;"
-        " border-right: none; border-radius: 0; border-top-left-radius: 4px;"
-        " border-bottom-left-radius: 4px; }").arg(cyan));
+                                  "QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px;"
+                                  " border-right: none; border-radius: 0; border-top-left-radius: 4px;"
+                                  " border-bottom-left-radius: 4px; }")
+                                  .arg(cyan));
 
     // Input bar background
-    if (m_inputBarOuter) {
-        QString barBg     = m_lightTheme ? Theme::LIGHT_DARK_BG   : Theme::DARK_BG;
+    if (m_inputBarOuter)
+    {
+        QString barBg = m_lightTheme ? Theme::LIGHT_DARK_BG : Theme::DARK_BG;
         QString barBorder = m_lightTheme ? Theme::LIGHT_BORDER_BOTTOM : Theme::BORDER_BOTTOM;
         m_inputBarOuter->setStyleSheet(QString(
-            "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
-            .arg(barBg, barBorder));
+                                           "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
+                                           .arg(barBg, barBorder));
     }
 }
 
-void MainWindow::openSidebar() {
-    if (m_sidebarOpen) return;
+void MainWindow::openSidebar()
+{
+    if (m_sidebarOpen)
+        return;
     m_sidebarOpen = true;
 
-    QWidget* central = this->centralWidget();
+    QWidget *central = this->centralWidget();
 
     m_sidebarOverlay = new QWidget(central);
     m_sidebarOverlay->setGeometry(central->rect());
@@ -2874,39 +2803,39 @@ void MainWindow::openSidebar() {
     m_sidebarOverlay->raise();
 
     bool L = m_lightTheme;
-    QString sidebarBg     = L ? Theme::LIGHT_SIDEBAR_BG     : Theme::SIDEBAR_BG;
-    QString sidebarBorder = L ? Theme::LIGHT_SIDEBAR_BORDER  : Theme::SIDEBAR_BORDER;
-    QString textPrimary   = L ? Theme::LIGHT_TEXT_PRIMARY    : Theme::TEXT_PRIMARY;
-    QString textMuted     = L ? Theme::LIGHT_TEXT_MUTED      : Theme::TEXT_MUTED;
-    QString hoverBg       = L ? Theme::LIGHT_HOVER_BG        : Theme::HOVER_BG;
-    QString btnBg         = L ? Theme::LIGHT_BUTTON_BG       : Theme::BUTTON_BG;
-    QString btnBorder     = L ? Theme::LIGHT_BUTTON_BORDER   : Theme::BUTTON_BORDER;
+    QString sidebarBg = L ? Theme::LIGHT_SIDEBAR_BG : Theme::SIDEBAR_BG;
+    QString sidebarBorder = L ? Theme::LIGHT_SIDEBAR_BORDER : Theme::SIDEBAR_BORDER;
+    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
+    QString textMuted = L ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+    QString hoverBg = L ? Theme::LIGHT_HOVER_BG : Theme::HOVER_BG;
+    QString btnBg = L ? Theme::LIGHT_BUTTON_BG : Theme::BUTTON_BG;
+    QString btnBorder = L ? Theme::LIGHT_BUTTON_BORDER : Theme::BUTTON_BORDER;
 
     m_sidebar = new QWidget(m_sidebarOverlay);
     m_sidebar->setFixedWidth(220);
     m_sidebar->setStyleSheet(QString(
-        "QWidget { background: %1; border-right: 2px solid %2; }"
-    ).arg(sidebarBg, sidebarBorder));
+                                 "QWidget { background: %1; border-right: 2px solid %2; }")
+                                 .arg(sidebarBg, sidebarBorder));
     m_sidebar->setGeometry(-220, 0, 220, central->height());
 
-    QVBoxLayout* slay = new QVBoxLayout(m_sidebar);
+    QVBoxLayout *slay = new QVBoxLayout(m_sidebar);
     slay->setContentsMargins(0, 0, 0, 0);
     slay->setSpacing(0);
 
     // Header
-    QWidget* sHeader = new QWidget();
+    QWidget *sHeader = new QWidget();
     sHeader->setFixedHeight(52);
-    sHeader->setStyleSheet(QString("QWidget { background: %1; border-bottom: 1px solid %2; border-right: none; }").arg(
-        L ? Theme::LIGHT_DARK_BG : Theme::DARK_BG, sidebarBorder));
-    QHBoxLayout* shLay = new QHBoxLayout(sHeader);
+    sHeader->setStyleSheet(QString("QWidget { background: %1; border-bottom: 1px solid %2; border-right: none; }").arg(L ? Theme::LIGHT_DARK_BG : Theme::DARK_BG, sidebarBorder));
+    QHBoxLayout *shLay = new QHBoxLayout(sHeader);
     shLay->setContentsMargins(16, 0, 12, 0);
-    QLabel* sTitle = new QLabel("Menu");
+    QLabel *sTitle = new QLabel("Menu");
     sTitle->setStyleSheet(QString("font-size:15px;font-weight:bold;color:%1;background:transparent;border:none;").arg(textPrimary));
-    QPushButton* closeBtn = new QPushButton("✕");
+    QPushButton *closeBtn = new QPushButton("✕");
     closeBtn->setFixedSize(26, 26);
     closeBtn->setStyleSheet(QString(
-        "QPushButton { background:%1; border:1px solid %2; border-radius:13px; color:%3; font-size:12px; padding:0; }"
-        "QPushButton:hover { background:%4; }").arg(btnBg, btnBorder, textMuted, hoverBg));
+                                "QPushButton { background:%1; border:1px solid %2; border-radius:13px; color:%3; font-size:12px; padding:0; }"
+                                "QPushButton:hover { background:%4; }")
+                                .arg(btnBg, btnBorder, textMuted, hoverBg));
     connect(closeBtn, &QPushButton::clicked, this, &MainWindow::closeSidebar);
     shLay->addWidget(sTitle);
     shLay->addStretch();
@@ -2914,25 +2843,29 @@ void MainWindow::openSidebar() {
     slay->addWidget(sHeader);
 
     // Menu items
-    auto makeItem = [&](const QString& icon, const QString& label) -> QPushButton* {
-        QPushButton* btn = new QPushButton(QString("  %1  %2").arg(icon, label));
+    auto makeItem = [&](const QString &icon, const QString &label) -> QPushButton *
+    {
+        QPushButton *btn = new QPushButton(QString("  %1  %2").arg(icon, label));
         btn->setFixedHeight(48);
         btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-bottom: 1px solid %1;"
-            " color: %2; font-size: 13px; text-align: left; padding-left: 8px; border-radius: 0; }"
-            "QPushButton:hover { background: %3; }"
-            "QPushButton:pressed { background: %4; }"
-        ).arg(sidebarBorder, textPrimary, hoverBg, btnBg));
+                               "QPushButton { background: transparent; border: none; border-bottom: 1px solid %1;"
+                               " color: %2; font-size: 13px; text-align: left; padding-left: 8px; border-radius: 0; }"
+                               "QPushButton:hover { background: %3; }"
+                               "QPushButton:pressed { background: %4; }")
+                               .arg(sidebarBorder, textPrimary, hoverBg, btnBg));
         return btn;
     };
 
-    QPushButton* itemSettings   = makeItem("⚙", "Settings");
-    QPushButton* itemHowToUse   = makeItem("?", "How to Use");
-    QPushButton* itemAbout      = makeItem("ℹ", "About");
+    QPushButton *itemSettings = makeItem("⚙", "Settings");
+    QPushButton *itemHowToUse = makeItem("?", "How to Use");
+    QPushButton *itemAbout = makeItem("ℹ", "About");
 
-    connect(itemSettings, &QPushButton::clicked, this, [this]{ closeSidebar(); showSettingsModal(); });
-    connect(itemHowToUse, &QPushButton::clicked, this, [this]{ closeSidebar(); showHowToUseModal(); });
-    connect(itemAbout,    &QPushButton::clicked, this, [this]{ closeSidebar(); showAboutModal(); });
+    connect(itemSettings, &QPushButton::clicked, this, [this]
+            { closeSidebar(); showSettingsModal(); });
+    connect(itemHowToUse, &QPushButton::clicked, this, [this]
+            { closeSidebar(); showHowToUseModal(); });
+    connect(itemAbout, &QPushButton::clicked, this, [this]
+            { closeSidebar(); showAboutModal(); });
 
     slay->addWidget(itemSettings);
     slay->addWidget(itemHowToUse);
@@ -2943,7 +2876,7 @@ void MainWindow::openSidebar() {
     m_sidebar->raise();
 
     // Animate slide-in
-    QPropertyAnimation* anim = new QPropertyAnimation(m_sidebar, "geometry");
+    QPropertyAnimation *anim = new QPropertyAnimation(m_sidebar, "geometry");
     anim->setDuration(180);
     anim->setStartValue(QRect(-220, 0, 220, central->height()));
     anim->setEndValue(QRect(0, 0, 220, central->height()));
@@ -2951,18 +2884,24 @@ void MainWindow::openSidebar() {
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 
     // Close on overlay click
-    struct SidebarFilter : public QObject {
-        MainWindow* mw; QWidget* overlay; QWidget* sidebar;
-        SidebarFilter(MainWindow* m, QWidget* o, QWidget* s)
+    struct SidebarFilter : public QObject
+    {
+        MainWindow *mw;
+        QWidget *overlay;
+        QWidget *sidebar;
+        SidebarFilter(MainWindow *m, QWidget *o, QWidget *s)
             : QObject(o), mw(m), overlay(o), sidebar(s) {}
-        bool eventFilter(QObject* watched, QEvent* e) override {
-            if (e->type() == QEvent::MouseButtonPress && watched == overlay) {
-                QMouseEvent* me = static_cast<QMouseEvent*>(e);
+        bool eventFilter(QObject *watched, QEvent *e) override
+        {
+            if (e->type() == QEvent::MouseButtonPress && watched == overlay)
+            {
+                QMouseEvent *me = static_cast<QMouseEvent *>(e);
                 if (!sidebar->geometry().contains(me->pos()))
                     mw->closeSidebar();
                 return true;
             }
-            if (e->type() == QEvent::Resize && watched == overlay->parentWidget()) {
+            if (e->type() == QEvent::Resize && watched == overlay->parentWidget())
+            {
                 overlay->setGeometry(overlay->parentWidget()->rect());
                 sidebar->setFixedHeight(overlay->height());
                 return false;
@@ -2970,249 +2909,281 @@ void MainWindow::openSidebar() {
             return false;
         }
     };
-    SidebarFilter* sf = new SidebarFilter(this, m_sidebarOverlay, m_sidebar);
+    SidebarFilter *sf = new SidebarFilter(this, m_sidebarOverlay, m_sidebar);
     central->installEventFilter(sf);
     m_sidebarOverlay->installEventFilter(sf);
 }
 
-void MainWindow::closeSidebar() {
-    if (!m_sidebarOpen || !m_sidebar) return;
-    QWidget* sb = m_sidebar;
-    QWidget* ov = m_sidebarOverlay;
-    QPropertyAnimation* anim = new QPropertyAnimation(sb, "geometry");
+void MainWindow::closeSidebar()
+{
+    if (!m_sidebarOpen || !m_sidebar)
+        return;
+    QWidget *sb = m_sidebar;
+    QWidget *ov = m_sidebarOverlay;
+    QPropertyAnimation *anim = new QPropertyAnimation(sb, "geometry");
     anim->setDuration(150);
     anim->setStartValue(sb->geometry());
     anim->setEndValue(QRect(-220, 0, 220, sb->height()));
     anim->setEasingCurve(QEasingCurve::InCubic);
-    connect(anim, &QPropertyAnimation::finished, this, [ov, this]{
+    connect(anim, &QPropertyAnimation::finished, this, [ov, this]
+            {
         if (ov) ov->deleteLater();
         m_sidebar = nullptr;
         m_sidebarOverlay = nullptr;
-        m_sidebarOpen = false;
-    });
+        m_sidebarOpen = false; });
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-void MainWindow::showSettingsModal() {
-    QWidget* central = this->centralWidget();
+void MainWindow::showSettingsModal()
+{
+    QWidget *central = this->centralWidget();
     bool L = m_lightTheme;
-    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
-    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY  : Theme::TEXT_PRIMARY;
-    QString textMuted   = L ? Theme::LIGHT_TEXT_MUTED    : Theme::TEXT_MUTED;
+    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
+    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
+    QString textMuted = L ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
 
-    QWidget* overlay = new QWidget(central);
+    QWidget *overlay = new QWidget(central);
     overlay->setGeometry(central->rect());
     overlay->setStyleSheet("background: rgba(0,0,0,160);");
-    overlay->show(); overlay->raise();
+    overlay->show();
+    overlay->raise();
 
-    QWidget* card = new QWidget(overlay);
+    QWidget *card = new QWidget(overlay);
     card->setObjectName("settingsCard");
     card->setFixedWidth(380);
     card->setStyleSheet(QString(
-        "QWidget#settingsCard { background:%1; border:1px solid %2; border-radius:10px; }"
-    ).arg(modalBg, modalBorder));
+                            "QWidget#settingsCard { background:%1; border:1px solid %2; border-radius:10px; }")
+                            .arg(modalBg, modalBorder));
 
-    QVBoxLayout* lay = new QVBoxLayout(card);
+    QVBoxLayout *lay = new QVBoxLayout(card);
     lay->setContentsMargins(28, 24, 28, 24);
     lay->setSpacing(14);
 
-    QLabel* title = new QLabel("Settings");
+    QLabel *title = new QLabel("Settings");
     title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
     lay->addWidget(title);
 
     // Theme toggle
-    QCheckBox* chkLight = new QCheckBox("Light theme");
+    QCheckBox *chkLight = new QCheckBox("Light theme");
     chkLight->setChecked(m_lightTheme);
     chkLight->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
-    connect(chkLight, &QCheckBox::toggled, this, [this, overlay](bool checked){
+    connect(chkLight, &QCheckBox::toggled, this, [this, overlay](bool checked)
+            {
         m_lightTheme = checked;
         applyTheme();
         // Rebuild overlay style so it doesn't look stale
-        overlay->setStyleSheet("background: rgba(0,0,0,160);");
-    });
+        overlay->setStyleSheet("background: rgba(0,0,0,160);"); });
     lay->addWidget(chkLight);
 
-    QLabel* hint = new QLabel("More settings coming soon.");
+    QLabel *hint = new QLabel("More settings coming soon.");
     hint->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(textMuted));
     lay->addWidget(hint);
 
-    card->show(); card->adjustSize();
+    card->show();
+    card->adjustSize();
 
-    auto center = [overlay, card](){
+    auto center = [overlay, card]()
+    {
         overlay->setGeometry(overlay->parentWidget()->rect());
-        card->move((overlay->width()-card->width())/2, (overlay->height()-card->height())/2);
+        card->move((overlay->width() - card->width()) / 2, (overlay->height() - card->height()) / 2);
     };
-    center(); card->raise();
+    center();
+    card->raise();
 
-    struct F : public QObject {
-        QWidget* overlay; QWidget* card; std::function<void()> fn;
-        F(QWidget* o, QWidget* c, std::function<void()> f): QObject(o),overlay(o),card(c),fn(f){}
-        bool eventFilter(QObject* w, QEvent* e) override {
-            if (e->type()==QEvent::Resize && w==overlay->parentWidget()){ fn(); return false; }
-            if (e->type()==QEvent::MouseButtonPress && w==overlay){
-                if (!card->geometry().contains(static_cast<QMouseEvent*>(e)->pos()))
+    struct F : public QObject
+    {
+        QWidget *overlay;
+        QWidget *card;
+        std::function<void()> fn;
+        F(QWidget *o, QWidget *c, std::function<void()> f) : QObject(o), overlay(o), card(c), fn(f) {}
+        bool eventFilter(QObject *w, QEvent *e) override
+        {
+            if (e->type() == QEvent::Resize && w == overlay->parentWidget())
+            {
+                fn();
+                return false;
+            }
+            if (e->type() == QEvent::MouseButtonPress && w == overlay)
+            {
+                if (!card->geometry().contains(static_cast<QMouseEvent *>(e)->pos()))
                     overlay->deleteLater();
                 return true;
             }
             return false;
         }
     };
-    F* f = new F(overlay, card, center);
+    F *f = new F(overlay, card, center);
     central->installEventFilter(f);
     overlay->installEventFilter(f);
 }
 
-void MainWindow::showHowToUseModal() {
-    QWidget* central = this->centralWidget();
+void MainWindow::showHowToUseModal()
+{
+    QWidget *central = this->centralWidget();
     bool L = m_lightTheme;
-    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
-    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY  : Theme::TEXT_PRIMARY;
-    QString textBody    = L ? Theme::LIGHT_TEXT_SECONDARY: "#b0b0c8";
-    QString textCyan    = L ? Theme::LIGHT_TEXT_CYAN     : "#7abfe8";
-    QString scrollBg    = L ? Theme::LIGHT_SCROLLBAR_BG  : Theme::SCROLLBAR_BG;
-    QString scrollHandle= L ? Theme::LIGHT_SCROLLBAR_HANDLE : Theme::SCROLLBAR_HANDLE;
+    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
+    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
+    QString textBody = L ? Theme::LIGHT_TEXT_SECONDARY : "#b0b0c8";
+    QString textCyan = L ? Theme::LIGHT_TEXT_CYAN : "#7abfe8";
+    QString scrollBg = L ? Theme::LIGHT_SCROLLBAR_BG : Theme::SCROLLBAR_BG;
+    QString scrollHandle = L ? Theme::LIGHT_SCROLLBAR_HANDLE : Theme::SCROLLBAR_HANDLE;
 
-    QWidget* overlay = new QWidget(central);
+    QWidget *overlay = new QWidget(central);
     overlay->setGeometry(central->rect());
     overlay->setStyleSheet("background: rgba(0,0,0,160);");
-    overlay->show(); overlay->raise();
+    overlay->show();
+    overlay->raise();
 
-    QWidget* card = new QWidget(overlay);
+    QWidget *card = new QWidget(overlay);
     card->setObjectName("howToCard");
     int cardW = qMin(560, central->width() - 60);
     int cardH = qMin(520, central->height() - 80);
     card->setFixedSize(cardW, cardH);
     card->setStyleSheet(QString(
-        "QWidget#howToCard { background:%1; border:1px solid %2; border-radius:10px; }"
-    ).arg(modalBg, modalBorder));
+                            "QWidget#howToCard { background:%1; border:1px solid %2; border-radius:10px; }")
+                            .arg(modalBg, modalBorder));
 
-    QVBoxLayout* lay = new QVBoxLayout(card);
+    QVBoxLayout *lay = new QVBoxLayout(card);
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(0);
 
     // Title bar
-    QWidget* titleBar = new QWidget();
+    QWidget *titleBar = new QWidget();
     titleBar->setFixedHeight(48);
     titleBar->setStyleSheet(QString(
-        "QWidget { background: %1; border-bottom: 1px solid %2;"
-        " border-top-left-radius: 10px; border-top-right-radius: 10px; border-bottom-left-radius:0; border-bottom-right-radius:0; }"
-    ).arg(modalBg, modalBorder));
-    QHBoxLayout* tbLay = new QHBoxLayout(titleBar);
+                                "QWidget { background: %1; border-bottom: 1px solid %2;"
+                                " border-top-left-radius: 10px; border-top-right-radius: 10px; border-bottom-left-radius:0; border-bottom-right-radius:0; }")
+                                .arg(modalBg, modalBorder));
+    QHBoxLayout *tbLay = new QHBoxLayout(titleBar);
     tbLay->setContentsMargins(20, 0, 16, 0);
-    QLabel* titleLbl = new QLabel("How to Use");
+    QLabel *titleLbl = new QLabel("How to Use");
     titleLbl->setStyleSheet(QString("font-size:15px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
     tbLay->addWidget(titleLbl);
     tbLay->addStretch();
     lay->addWidget(titleBar);
 
     // Scrollable content
-    QScrollArea* sa = new QScrollArea();
+    QScrollArea *sa = new QScrollArea();
     sa->setWidgetResizable(true);
     sa->setFrameShape(QFrame::NoFrame);
     sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     sa->setStyleSheet(QString(
-        "QScrollArea { background: transparent; }"
-        "QScrollBar:vertical { background: %1; width: 6px; border-radius: 3px; }"
-        "QScrollBar::handle:vertical { background: %2; border-radius: 3px; min-height: 20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; border:0; }"
-    ).arg(scrollBg, scrollHandle));
+                          "QScrollArea { background: transparent; }"
+                          "QScrollBar:vertical { background: %1; width: 6px; border-radius: 3px; }"
+                          "QScrollBar::handle:vertical { background: %2; border-radius: 3px; min-height: 20px; }"
+                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; border:0; }")
+                          .arg(scrollBg, scrollHandle));
 
-    QLabel* body = new QLabel();
+    QLabel *body = new QLabel();
     body->setWordWrap(true);
     body->setOpenExternalLinks(false);
     body->setTextFormat(Qt::RichText);
     body->setContentsMargins(20, 16, 20, 16);
     body->setStyleSheet(QString("background: transparent; color: %1; font-size: 12px; line-height: 1.7;").arg(textBody));
     body->setText(QString(
-        "<b style='color:%1;font-size:13px;'>Cube Controls</b><br>"
-        "<b style='color:%1;'>Keyboard shortcuts:</b><br>"
-        "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset the cube to solved<br>"
-        "The below shortcuts are identical to those of the csTimer virtual squan.<br>"
-        "• <b style='color:%2;'>J</b> = U, but only by one piece &nbsp; <b style='color:%2;'>F</b> = U', but only by one piece <br>"
-        "• <b style='color:%2;'>S</b> = D, but only by one piece &nbsp; <b style='color:%2;'>L</b> = D', but only by one piece <br>"
-        "• <b style='color:%2;'>I</b> or <b style='color:%2;'>K</b> = Slice<br>"
-        "• <b style='color:%2;'>H</b> = 3,0 (U) &nbsp; <b style='color:%2;'>G</b> = -3,0 (U')<br>"
-        "• <b style='color:%2;'>W</b> = 0,3 (D) &nbsp; <b style='color:%2;'>O</b> = 0,-3 (D')<br><br>"
-        "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
-        "Type some moves and hit <b>Apply</b>. Karn will be parsed correctly.<br>"
-        "Use the mode button (to the left of the alg input) to switch between <b>Scram</b> (applies moves forward) and <b>Alg</b> (inverts before applying).<br><br>"
-        "<b style='color:%1;font-size:13px;'>Options</b><br>"
-        "you can read the descriptions for the options by hovering over them, but here's a comprehensive list:<br>"
-        "• <b>Slice metric</b>: only count slices as moves (instead of also including U and D moves when counting the \"movecount\" of an alg).<br>"
-        "• <b>All optimal</b>: instead of stopping the solver after finding one of the shortest solutions, find all of them. (\"shortest\" means: the least \"moves\". change what a \"move\" mean with the slice metric option)<br>"
-        "• <b>+suboptimal</b>: on top of finding all the shortest solutions, also find solutions up to N moves longer than optimal.<br>"
-        "• <b>Specific depths</b>: search only for solutions that are these moves long (comma-separated). e.g. \"8,9\" will return all solutions that are 8 moves and 9 moves long.<br>"
-        "• <b>Generator alg</b>: instead of solving the case displayed in the app, output algs will set up the case.<br>"
-        "• <b>Stay in cubeshape</b>: restrict to algs that stay in cubeshape (CS) throughout.<br>"
-        "• <b>Karnotation output</b>: display solutions in karn instead of WCA notation.<br>"
-        "• <b>Max top / bottom / total turns</b>: limit how big the layer turns can be. Hover over the options to see details.<br><br>"
-        "<b style='color:%1;font-size:13px;'>Output</b><br>"
-        "Solutions will appear in the terminal. After you generated some algs, these buttons will appear:<br>"
-        "• the <b>⊞</b> button: switch between terminal view and table view.<br>"
-        "• the <b>⤢</b> button: expand the terminal to full screen.<br>"
-        "Right-click a row in the table view to copy the alg, or to copy the whole row.<br>"
-        "If <b>Stay in cubeshape</b> was active, you can click on <b>Roughly rank algs based on relative ergonomics</b> (located below the terminal area), which will sort the output algs by an estimate of their actual speed.<br>"
-    ).arg(textPrimary, textCyan));
+                      "<b style='color:%1;font-size:13px;'>Cube Controls</b><br>"
+                      "<b style='color:%1;'>Keyboard shortcuts:</b><br>"
+                      "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset the cube to solved<br>"
+                      "The below shortcuts are identical to those of the csTimer virtual squan.<br>"
+                      "• <b style='color:%2;'>J</b> = U, but only by one piece &nbsp; <b style='color:%2;'>F</b> = U', but only by one piece <br>"
+                      "• <b style='color:%2;'>S</b> = D, but only by one piece &nbsp; <b style='color:%2;'>L</b> = D', but only by one piece <br>"
+                      "• <b style='color:%2;'>I</b> or <b style='color:%2;'>K</b> = Slice<br>"
+                      "• <b style='color:%2;'>H</b> = 3,0 (U) &nbsp; <b style='color:%2;'>G</b> = -3,0 (U')<br>"
+                      "• <b style='color:%2;'>W</b> = 0,3 (D) &nbsp; <b style='color:%2;'>O</b> = 0,-3 (D')<br><br>"
+                      "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
+                      "Type some moves and hit <b>Apply</b>. Karn will be parsed correctly.<br>"
+                      "Use the mode button (to the left of the alg input) to switch between <b>Scram</b> (applies moves forward) and <b>Alg</b> (inverts before applying).<br><br>"
+                      "<b style='color:%1;font-size:13px;'>Options</b><br>"
+                      "you can read the descriptions for the options by hovering over them, but here's a comprehensive list:<br>"
+                      "• <b>Slice metric</b>: only count slices as moves (instead of also including U and D moves when counting the \"movecount\" of an alg).<br>"
+                      "• <b>All optimal</b>: instead of stopping the solver after finding one of the shortest solutions, find all of them. (\"shortest\" means: the least \"moves\". change what a \"move\" mean with the slice metric option)<br>"
+                      "• <b>+suboptimal</b>: on top of finding all the shortest solutions, also find solutions up to N moves longer than optimal.<br>"
+                      "• <b>Specific depths</b>: search only for solutions that are these moves long (comma-separated). e.g. \"8,9\" will return all solutions that are 8 moves and 9 moves long.<br>"
+                      "• <b>Generator alg</b>: instead of solving the case displayed in the app, output algs will set up the case.<br>"
+                      "• <b>Stay in cubeshape</b>: restrict to algs that stay in cubeshape (CS) throughout.<br>"
+                      "• <b>Karnotation output</b>: display solutions in karn instead of WCA notation.<br>"
+                      "• <b>Max top / bottom / total turns</b>: limit how big the layer turns can be. Hover over the options to see details.<br><br>"
+                      "<b style='color:%1;font-size:13px;'>Output</b><br>"
+                      "Solutions will appear in the terminal. After you generated some algs, these buttons will appear:<br>"
+                      "• the <b>⊞</b> button: switch between terminal view and table view.<br>"
+                      "• the <b>⤢</b> button: expand the terminal to full screen.<br>"
+                      "Right-click a row in the table view to copy the alg, or to copy the whole row.<br>"
+                      "If <b>Stay in cubeshape</b> was active, you can click on <b>Roughly rank algs based on relative ergonomics</b> (located below the terminal area), which will sort the output algs by an estimate of their actual speed.<br>")
+                      .arg(textPrimary, textCyan));
 
     sa->setWidget(body);
     lay->addWidget(sa, 1);
 
     card->show();
 
-    auto center = [overlay, card, central](){
+    auto center = [overlay, card, central]()
+    {
         overlay->setGeometry(overlay->parentWidget()->rect());
-        int cw = qMin(560, central->width()-60);
-        int ch = qMin(520, central->height()-80);
+        int cw = qMin(560, central->width() - 60);
+        int ch = qMin(520, central->height() - 80);
         card->setFixedSize(cw, ch);
-        card->move((overlay->width()-card->width())/2, (overlay->height()-card->height())/2);
+        card->move((overlay->width() - card->width()) / 2, (overlay->height() - card->height()) / 2);
     };
-    center(); card->raise();
+    center();
+    card->raise();
 
-    struct F : public QObject {
-        QWidget* overlay; QWidget* card; std::function<void()> fn;
-        F(QWidget* o, QWidget* c, std::function<void()> f): QObject(o),overlay(o),card(c),fn(f){}
-        bool eventFilter(QObject* w, QEvent* e) override {
-            if (e->type()==QEvent::Resize && w==overlay->parentWidget()){ fn(); return false; }
-            if (e->type()==QEvent::MouseButtonPress && w==overlay){
-                if (!card->geometry().contains(static_cast<QMouseEvent*>(e)->pos()))
+    struct F : public QObject
+    {
+        QWidget *overlay;
+        QWidget *card;
+        std::function<void()> fn;
+        F(QWidget *o, QWidget *c, std::function<void()> f) : QObject(o), overlay(o), card(c), fn(f) {}
+        bool eventFilter(QObject *w, QEvent *e) override
+        {
+            if (e->type() == QEvent::Resize && w == overlay->parentWidget())
+            {
+                fn();
+                return false;
+            }
+            if (e->type() == QEvent::MouseButtonPress && w == overlay)
+            {
+                if (!card->geometry().contains(static_cast<QMouseEvent *>(e)->pos()))
                     overlay->deleteLater();
                 return true;
             }
             return false;
         }
     };
-    F* f = new F(overlay, card, center);
+    F *f = new F(overlay, card, center);
     central->installEventFilter(f);
     overlay->installEventFilter(f);
 }
 
-bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
     // ── (0) Per-line tooltips for the output box ──────────────────────────────
     // QTextEdit delivers QHelpEvent to its internal viewport, not to itself.
-    if (event->type() == QEvent::ToolTip && txtOutput
-            && watched == txtOutput->viewport())
+    if (event->type() == QEvent::ToolTip && txtOutput && watched == txtOutput->viewport())
         return true;
 
-    if (event->type() == QEvent::Resize && watched == m_outputWrapper) {
+    if (event->type() == QEvent::Resize && watched == m_outputWrapper)
+    {
         int w = m_outputWrapper->width();
         int margin = 6;
         int bw = 22;
         btnExpand->move(w - margin - bw, margin);
-        btnTableMode->move(w - margin - bw*2 - 4, margin);
-        btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
+        btnTableMode->move(w - margin - bw * 2 - 4, margin);
+        btnCopyTerminal->move(w - margin - bw * 3 - 8, margin);
         return false;
     }
 
     if (event->type() != QEvent::KeyPress)
         return QMainWindow::eventFilter(watched, event);
 
-    QKeyEvent* ke = static_cast<QKeyEvent*>(event);
+    QKeyEvent *ke = static_cast<QKeyEvent *>(event);
 
     // ── (1) Ctrl+C stops the solver ──────────────────────────────────────────
-    if (ke->key() == Qt::Key_C && (ke->modifiers() & Qt::ControlModifier)) {
-        if (worker && worker->isRunning()) {
+    if (ke->key() == Qt::Key_C && (ke->modifiers() & Qt::ControlModifier))
+    {
+        if (worker && worker->isRunning())
+        {
             stopSolver();
             return true; // consume — don't copy
         }
@@ -3225,8 +3196,10 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
         return QMainWindow::eventFilter(watched, event);
 
     // ── Shift+Enter in m_mainInput: apply from solved state ──────────────────
-    if ((watched == m_mainInput) && ke->key() == Qt::Key_Return) {
-        if (ke->modifiers() & Qt::ShiftModifier) {
+    if ((watched == m_mainInput) && ke->key() == Qt::Key_Return)
+    {
+        if (ke->modifiers() & Qt::ShiftModifier)
+        {
             m_applyFromSolved = true;
             btnApply->click();
             m_applyFromSolved = false;
@@ -3238,47 +3211,96 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
 
     // ── Text inputs get all keys — never steal from them ─────────────────────
     {
-        QWidget* fw = QApplication::focusWidget();
+        QWidget *fw = QApplication::focusWidget();
         if (fw == txtCommand || fw == txtScramble || fw == txtDepths || fw == m_mainInput ||
             watched == txtCommand || watched == txtScramble || watched == txtDepths || watched == m_mainInput)
             return QMainWindow::eventFilter(watched, event);
     }
 
     // ── (2) Route cube shortcuts from any other widget ────────────────────────
-    if (ke->modifiers() == Qt::NoModifier) {
-        auto sendCube = [this](Qt::Key k) {
+    if (ke->modifiers() == Qt::NoModifier)
+    {
+        auto sendCube = [this](Qt::Key k)
+        {
             QKeyEvent e(QEvent::KeyPress, k, Qt::NoModifier);
             QApplication::sendEvent(cubeWidget, &e);
         };
         bool handled = true;
-        switch (ke->key()) {
-        case Qt::Key_I: case Qt::Key_K: {
+        switch (ke->key())
+        {
+        case Qt::Key_I:
+        case Qt::Key_K:
+        {
             m_sliceCount++;
             m_slicePending.append({cubeWidget->getPositionString()});
             sendCube(static_cast<Qt::Key>(ke->key()));
             m_sliceTimer->start(600);
             break;
         }
-        case Qt::Key_J:                 pushUndoState(); sendCube(Qt::Key_J); break;
-        case Qt::Key_F:                 pushUndoState(); sendCube(Qt::Key_F); break;
-        case Qt::Key_S:                 pushUndoState(); sendCube(Qt::Key_S); break;
-        case Qt::Key_L:                 pushUndoState(); sendCube(Qt::Key_L); break;
-        case Qt::Key_Escape:            m_undoStack.clear(); m_redoStack.clear(); btnUndo->setEnabled(false); btnRedo->setEnabled(false); sendCube(Qt::Key_Escape); break;
-        case Qt::Key_Z:                 if (!m_undoStack.isEmpty()) btnUndo->click(); break;
-        case Qt::Key_Y:                 if (!m_redoStack.isEmpty()) btnRedo->click(); break;
-        case Qt::Key_H: pushUndoState(); sendCube(Qt::Key_J); sendCube(Qt::Key_J); break; // UU
-        case Qt::Key_G: pushUndoState(); sendCube(Qt::Key_F); sendCube(Qt::Key_F); break; // U'U'
-        case Qt::Key_O: pushUndoState(); sendCube(Qt::Key_L); sendCube(Qt::Key_L); break; // D'D'
-        case Qt::Key_W: pushUndoState(); sendCube(Qt::Key_S); sendCube(Qt::Key_S); break; // DD
-        default: handled = false; break;
+        case Qt::Key_J:
+            pushUndoState();
+            sendCube(Qt::Key_J);
+            break;
+        case Qt::Key_F:
+            pushUndoState();
+            sendCube(Qt::Key_F);
+            break;
+        case Qt::Key_S:
+            pushUndoState();
+            sendCube(Qt::Key_S);
+            break;
+        case Qt::Key_L:
+            pushUndoState();
+            sendCube(Qt::Key_L);
+            break;
+        case Qt::Key_Escape:
+            m_undoStack.clear();
+            m_redoStack.clear();
+            btnUndo->setEnabled(false);
+            btnRedo->setEnabled(false);
+            sendCube(Qt::Key_Escape);
+            break;
+        case Qt::Key_Z:
+            if (!m_undoStack.isEmpty())
+                btnUndo->click();
+            break;
+        case Qt::Key_Y:
+            if (!m_redoStack.isEmpty())
+                btnRedo->click();
+            break;
+        case Qt::Key_H:
+            pushUndoState();
+            sendCube(Qt::Key_J);
+            sendCube(Qt::Key_J);
+            break; // UU
+        case Qt::Key_G:
+            pushUndoState();
+            sendCube(Qt::Key_F);
+            sendCube(Qt::Key_F);
+            break; // U'U'
+        case Qt::Key_O:
+            pushUndoState();
+            sendCube(Qt::Key_L);
+            sendCube(Qt::Key_L);
+            break; // D'D'
+        case Qt::Key_W:
+            pushUndoState();
+            sendCube(Qt::Key_S);
+            sendCube(Qt::Key_S);
+            break; // DD
+        default:
+            handled = false;
+            break;
         }
-        if (handled) return true; // consume — letter goes to cube, not to any text field
+        if (handled)
+            return true; // consume — letter goes to cube, not to any text field
     }
 
     // ── (3) Auto-enable Specific depths when a digit is typed in txtDepths ────
     // txtDepths is kept enabled (never disabled) so it can receive focus and
     // clicks; the user enables the option implicitly by typing a number.
-    if (txtDepths->hasFocus() && !chkDepths->isChecked()) {
+    if (txtDepths->hasFocus() && !chkDepths->isChecked())
+    {
         const QString text = ke->text();
         if (!text.isEmpty() && text[0].isDigit())
             chkDepths->setChecked(true); // fires updateConstraints → updateCommand

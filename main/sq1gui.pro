@@ -13,10 +13,12 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     sq1widget.cpp \
-    stylesheet.cpp
+    stylesheet.cpp \
+    sq1_logic.cpp
 
 HEADERS += \
     mainwindow.h \
     sq1widget.h \
     karnotation.h \
-    stylesheet.h
+    stylesheet.h \
+    sq1_logic.h
