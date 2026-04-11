@@ -55,38 +55,50 @@ namespace Theme {
     static constexpr const char* BUTTON_SOLVE_HOVER   = "#227a47";  // Solve button hover
 
     // Input Bar Buttons (mode toggle, dropdown, apply) - PRIMARY ACTION
-    static constexpr const char* INPUT_MODE_BG        = "#1e1e2e";  // Input mode button background (dark)
-    static constexpr const char* INPUT_MODE_BORDER    = "#3a3a5a";  // Input mode button border
-    static constexpr const char* INPUT_MODE_HOVER     = "#2a2a4a";  // Input mode button hover
+    static constexpr const char* INPUT_MODE_BG        = "#0d1a2e";  // Input mode button background (dark blue) %64
+    static constexpr const char* INPUT_MODE_BORDER    = "#1e3a5a";  // Input mode button border                 %65
+    static constexpr const char* INPUT_MODE_HOVER     = "#142440";  // Input mode button hover                  %66
 
-    static constexpr const char* INPUT_ARROW_BG       = "#1e1e2e";  // Dropdown arrow background
-    static constexpr const char* INPUT_ARROW_BORDER   = "#3a3a5a";  // Dropdown arrow border
-    static constexpr const char* INPUT_ARROW_HOVER    = "#2a2a4a";  // Dropdown arrow hover
+    static constexpr const char* INPUT_ARROW_BG       = "#0d1a2e";  // Dropdown arrow background                %67
+    static constexpr const char* INPUT_ARROW_BORDER   = "#1e3a5a";  // Dropdown arrow border                    %68
+    static constexpr const char* INPUT_ARROW_HOVER    = "#142440";  // Dropdown arrow hover                     %69
 
-    static constexpr const char* INPUT_APPLY_BG       = "#1e1e2e";  // Apply button background
-    static constexpr const char* INPUT_APPLY_BORDER   = "#3a3a5a";  // Apply button border
-    static constexpr const char* INPUT_APPLY_HOVER    = "#2a2a4a";  // Apply button hover
+    static constexpr const char* INPUT_APPLY_BG       = "#0f3060";  // Apply button background                  %70
+    static constexpr const char* INPUT_APPLY_BORDER   = "#2060b0";  // Apply button border                      %71
+    static constexpr const char* INPUT_APPLY_HOVER    = "#1a4a8a";  // Apply button hover                       %72
 
-    static constexpr const char* INPUT_FIELD_BG       = "#0e0e1a";  // Input field background (very dark)
-    static constexpr const char* INPUT_FIELD_BORDER   = "#2a2a4a";  // Input field border
-    static constexpr const char* INPUT_FIELD_TEXT     = "#888899";  // Input field text (muted placeholder-like)
+    static constexpr const char* INPUT_FIELD_BG       = "#060e1a";  // Input field background (very dark blue)  %74
+    static constexpr const char* INPUT_FIELD_BORDER   = "#1a3050";  // Input field border                       %73
+    static constexpr const char* INPUT_FIELD_TEXT     = "#5a8ab0";  // Input field text (muted blue)            %75
+    static constexpr const char* INPUT_MODE_TEXT      = "#60a8e0";  // Input mode button text (bright blue)     %76
+    static constexpr const char* INPUT_MODE_BG      = "#60a8e0";
+    static constexpr const char* INPUT_MODE_BORDER      = "#60a8e0";
+    static constexpr const char* INPUT_PANEL_BG      = "#60a8e0";
+    static constexpr const char* INPUT_APPLY_TEXT     = "#7abfe8";  // Apply button text                        %77
+    static constexpr const char* INPUT_APPLY_HOVER_TEXT = "#ffffff"; // Apply button hover text                 %78
 
     // Light theme variants for input bar
-    static constexpr const char* LIGHT_INPUT_MODE_BG      = "#1a6b3c";  // Same green for visibility
-    static constexpr const char* LIGHT_INPUT_MODE_BORDER  = "#2db570";
-    static constexpr const char* LIGHT_INPUT_MODE_HOVER   = "#227a47";
+    static constexpr const char* LIGHT_INPUT_MODE_BG      = "#d8e8f8";  // Light blue tint
+    static constexpr const char* LIGHT_INPUT_MODE_BORDER  = "#6090c0";  // Medium blue border
+    static constexpr const char* LIGHT_INPUT_MODE_HOVER   = "#c4d8f0";  // Slightly darker on hover
 
-    static constexpr const char* LIGHT_INPUT_ARROW_BG     = "#1a6b3c";
-    static constexpr const char* LIGHT_INPUT_ARROW_BORDER = "#2db570";
-    static constexpr const char* LIGHT_INPUT_ARROW_HOVER  = "#227a47";
+    static constexpr const char* LIGHT_INPUT_ARROW_BG     = "#d8e8f8";
+    static constexpr const char* LIGHT_INPUT_ARROW_BORDER = "#6090c0";
+    static constexpr const char* LIGHT_INPUT_ARROW_HOVER  = "#c4d8f0";
 
-    static constexpr const char* LIGHT_INPUT_APPLY_BG     = "#1a6b3c";
-    static constexpr const char* LIGHT_INPUT_APPLY_BORDER = "#2db570";
-    static constexpr const char* LIGHT_INPUT_APPLY_HOVER  = "#227a47";
+    static constexpr const char* LIGHT_INPUT_APPLY_BG     = "#1a5fa8";  // Strong blue apply
+    static constexpr const char* LIGHT_INPUT_APPLY_BORDER = "#0e4a8a";  // Darker blue border
+    static constexpr const char* LIGHT_INPUT_APPLY_HOVER  = "#154d90";  // Hover slightly darker
 
-    static constexpr const char* LIGHT_INPUT_FIELD_BG     = "#e0e0f0";  // Light background
-    static constexpr const char* LIGHT_INPUT_FIELD_BORDER = "#aaa";     // Light border
-    static constexpr const char* LIGHT_INPUT_FIELD_TEXT   = "#1a1a3e";  // Dark text for light bg
+    static constexpr const char* LIGHT_INPUT_FIELD_BG     = "#eaf2fc";  // Very light blue field
+    static constexpr const char* LIGHT_INPUT_FIELD_BORDER = "#7aaad8";  // Blue field border
+    static constexpr const char* LIGHT_INPUT_FIELD_TEXT   = "#1a3a5a";  // Dark blue text
+    static constexpr const char* LIGHT_INPUT_MODE_TEXT    = "#1a5fa8";  // Dark blue mode text
+    static constexpr const char* LIGHT_INPUT_MODE_BG    = "#1a5fa8";  // Dark blue mode text
+    static constexpr const char* LIGHT_INPUT_MODE_BORDER    = "#1a5fa8";  // Dark blue mode text
+    static constexpr const char* LIGHT_INPUT_PANEL_BG      = "#60a8e0";
+    static constexpr const char* LIGHT_INPUT_APPLY_TEXT   = "#ffffff";  // White on dark blue apply
+    static constexpr const char* LIGHT_INPUT_APPLY_HOVER_TEXT = "#ffffff"; // White on hover
 
     // Reset Button (red - alarming)
     static constexpr const char* BUTTON_RESET_BG      = "#2a2a3e";  // Reset button background

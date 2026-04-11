@@ -75,6 +75,12 @@ QString buildStyleSheet(bool lightTheme) {
     QString INPUT_FIELD_BG  = b(Theme::INPUT_FIELD_BG,     Theme::LIGHT_INPUT_FIELD_BG);
     QString INPUT_FIELD_BORDER = b(Theme::INPUT_FIELD_BORDER, Theme::LIGHT_INPUT_FIELD_BORDER);
     QString INPUT_FIELD_TEXT = b(Theme::INPUT_FIELD_TEXT,   Theme::LIGHT_INPUT_FIELD_TEXT);
+    QString INPUT_MODE_TEXT  = b(Theme::INPUT_MODE_TEXT,    Theme::LIGHT_INPUT_MODE_TEXT);
+    QString INPUT_APPLY_TEXT = b(Theme::INPUT_APPLY_TEXT,   Theme::LIGHT_INPUT_APPLY_TEXT);
+    QString INPUT_APPLY_HOVER_TEXT = b(Theme::INPUT_APPLY_HOVER_TEXT, Theme::LIGHT_INPUT_APPLY_HOVER_TEXT);
+    QString INPUT_MODE_BG = b(Theme::INPUT_MODE_BG, Theme::LIGHT_INPUT_MODE_BG);
+    QString INPUT_MODE_BORDER = b(Theme::INPUT_MODE_BORDER, Theme::LIGHT_INPUT_MODE_BORDER);
+    QString INPUT_PANEL_BG = b(Theme::INPUT_PANEL_BG, Theme::LIGHT_INPUT_PANEL_BG);
     
     QString UNDO_REDO_DISABLED_BG = b("#1e1e2a", Theme::LIGHT_DISABLED_BG);
     QString UNDO_REDO_DISABLED_BORDER = b("#333", Theme::LIGHT_BORDER_DARK);
@@ -153,6 +159,8 @@ QString buildStyleSheet(bool lightTheme) {
         .arg(UNDO_REDO_DISABLED_BG)    // %61
         .arg(UNDO_REDO_DISABLED_BORDER)// %62
         .arg(UNDO_REDO_DISABLED_TEXT)  // %63
+
+        //===========input panel================//
         .arg(INPUT_MODE_BG)       // %64 input mode button bg
         .arg(INPUT_MODE_BORDER)   // %65 input mode button border
         .arg(INPUT_MODE_HOVER)    // %66 input mode button hover
@@ -164,5 +172,11 @@ QString buildStyleSheet(bool lightTheme) {
         .arg(INPUT_APPLY_HOVER)   // %72 input apply button hover
         .arg(INPUT_FIELD_BORDER)  // %73 input field border
         .arg(INPUT_FIELD_BG)      // %74 input field background
-        .arg(INPUT_FIELD_TEXT);   // %75 input field text color
+        .arg(INPUT_FIELD_TEXT)    // %75 input field text color
+        .arg(INPUT_MODE_TEXT)     // %76 input mode button text
+        .arg(INPUT_APPLY_TEXT)    // %77 apply button text
+        .arg(INPUT_APPLY_HOVER_TEXT) // %78 apply button hover text
+        .arg(INPUT_MODE_BG)        //%79
+        .arg(INPUT_MODE_BORDER)     //%80
+        .arg(INPUT_PANEL_BG);    //%81
 }

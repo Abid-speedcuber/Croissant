@@ -255,8 +255,8 @@ QPushButton#btnScrambleMode:hover {
 
 /* ========== Input Bar Container (ALL spacing/sizing via QSS!) ========== */
 QWidget#inputBarOuter {
-    background: #0a0a16;
-    border-bottom: 1px solid %51;
+    background: %64;
+    border-bottom: 1px solid %65;
     padding: 0px 12px;
     min-height: 50px;
     max-height: 50px;
@@ -277,7 +277,7 @@ QPushButton#btnInputMode {
     border-right: none;
     margin-left: 8px;
     margin-right: 0;
-    color: #2db570;
+    color: %76;
     padding: 0 10px;
     font-size: 11px;
     font-weight: bold;
@@ -293,12 +293,12 @@ QPushButton#btnInputMode:hover {
 }
 
 QPushButton#btnInputModeArrow {
-    background: %64;
-    border: 1px solid %65;
+    background: %67;
+    border: 1px solid %68;
     border-radius: 9px;
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    color: #2db570;
+    color: %76;
     padding: 0 6px;
     margin-right: 10px;
     font-size: 11px;
@@ -308,17 +308,17 @@ QPushButton#btnInputModeArrow {
 }
 
 QPushButton#btnInputModeArrow:hover { 
-    background: %66;
-    border-color: %65;
+    background: %69;
+    border-color: %68;
 }
 
 QPushButton#btnApply {
-    background: %64;
-    border: 1px solid %65;
+    background: %70;
+    border: 1px solid %71;
     border-radius: 9px;
     margin-left: 10px;
     margin-right: 8px;
-    color: #2db570;
+    color: %77;
     font-size: 11px;
     font-weight: bold;
     padding: 0 12px;
@@ -331,17 +331,17 @@ QPushButton#btnApply {
 QPushButton#btnApply:hover { 
     background: %72;
     border-color: %71;
-    color: #e0e0ff;
+    color: %78;
 }
 
 QLineEdit#txtMainInput {
     border-radius: 9px;
-    border: 1px solid %65;
+    border: 1px solid %73;
     margin-left: 0px;
     margin-right: 0px;
     font-family: monospace;
     font-size: 12px;
-    background: %64;
+    background: %74;
     color: %75;
     padding: 4px 8px;
     height: 25px;
