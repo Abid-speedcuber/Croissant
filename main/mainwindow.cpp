@@ -1027,35 +1027,13 @@ void MainWindow::buildUI()
     m_solutionTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     m_solutionTable->verticalHeader()->setVisible(false);
     m_solutionTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_solutionTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_solutionTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_solutionTable->setSelectionMode(QAbstractItemView::NoSelection);
+    m_solutionTable->setFocusPolicy(Qt::NoFocus);
     m_solutionTable->setShowGrid(false);
     m_solutionTable->setAlternatingRowColors(false);
     m_solutionTable->setTextElideMode(Qt::ElideNone);
-    m_solutionTable->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_solutionTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint &pos)
-            {
-        int row = m_solutionTable->rowAt(pos.y());
-        if (row < 0) return;
-        QMenu menu(this);
-        QAction* copyRow = menu.addAction("Copy row");
-        QAction* copyAlg = menu.addAction("Copy algorithm");
-        QAction* chosen = menu.exec(m_solutionTable->viewport()->mapToGlobal(pos));
-        if (chosen == copyRow) {
-            QStringList parts;
-            for (int c = 0; c < m_solutionTable->columnCount(); c++) {
-                QTableWidgetItem* it = m_solutionTable->item(row, c);
-                if (it) parts << it->text();
-            }
-            QApplication::clipboard()->setText(parts.join("\t"));
-            appendStatusLine("Row copied to clipboard.");
-        } else if (chosen == copyAlg) {
-            QTableWidgetItem* it = m_solutionTable->item(row, 1);
-            if (it) {
-                QApplication::clipboard()->setText(it->text());
-                appendStatusLine("Algorithm copied to clipboard.");
-            }
-        } });
+    m_solutionTable->setContextMenuPolicy(Qt::NoContextMenu);
+    m_solutionTable->viewport()->setCursor(Qt::IBeamCursor);
     tableLay->addWidget(m_solutionTable, 1);
 
     outputWrapperLay->addWidget(m_tableContainer);
@@ -2072,12 +2050,13 @@ void MainWindow::appendStatusLine(const QString &msg)
 void MainWindow::rebuildTable()
 {
     const bool ergo = chkRankErgo->isChecked();
-    const bool showErgo = m_cubeshapeWasActive; // captured at solve time, not current checkbox
+    const bool showErgo = m_cubeshapeWasActive;
     m_solutionTable->setColumnCount(showErgo ? 5 : 4);
     m_solutionTable->setHorizontalHeaderLabels(
         showErgo ? QStringList{"#", "Solution", "Moves", "Slices", "Ergo"}
                  : QStringList{"#", "Solution", "Moves", "Slices"});
-    m_solutionTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_solutionTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    m_solutionTable->setColumnWidth(0, 72);
     m_solutionTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_solutionTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_solutionTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
@@ -2087,95 +2066,63 @@ void MainWindow::rebuildTable()
     if (m_solutionLines.isEmpty())
         return;
 
-    // Parse move count and slice count from bracket annotation e.g. "[7|14]"
     auto parseCounts = [](const QString &line, int &moves, int &slices)
     {
-        moves = 0;
-        slices = 0;
+        moves = 0; slices = 0;
         int lb = line.lastIndexOf('[');
         int rb = line.lastIndexOf(']');
-        if (lb < 0 || rb < 0)
-            return;
-        QString bracket = line.mid(lb + 1, rb - lb - 1); // e.g. "7|14"
+        if (lb < 0 || rb < 0) return;
+        QString bracket = line.mid(lb + 1, rb - lb - 1);
         QStringList parts = bracket.split('|');
-        if (parts.size() >= 2)
-        {
+        if (parts.size() >= 2) {
             slices = parts[0].trimmed().toInt();
-            moves = parts[1].trimmed().toInt();
+            moves  = parts[1].trimmed().toInt();
         }
     };
 
-    // Strip bracket annotation from display
     auto stripBracket = [](const QString &line) -> QString
     {
         int lb = line.lastIndexOf('[');
         return lb > 0 ? line.left(lb).trimmed() : line.trimmed();
     };
 
-    struct Row
-    {
-        QString alg;
-        int moves;
-        int slices;
-        double ergo;
-    };
+    struct Row { QString alg; int moves; int slices; double ergo; };
     QVector<Row> rows;
 
-    bool useKarn = chkKarnotation->isChecked(); // showErgo already declared above
+    bool useKarn = chkKarnotation->isChecked();
     auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
-    // rated[i].first is the full line with slice indicator injected (bracket still attached).
-    // Build rows directly from rated so the display alg already has the indicator.
-    for (auto &[line, score] : rated)
-    {
+    for (auto &[line, score] : rated) {
         int mv, sl;
         parseCounts(line, mv, sl);
-        QString displayAlg = stripBracket(line);
-        rows.append({displayAlg, mv, sl, score});
+        rows.append({stripBracket(line), mv, sl, score});
     }
 
     if (ergo && showErgo)
-    {
-        std::stable_sort(rows.begin(), rows.end(),
-                         [](const Row &a, const Row &b)
-                         { return a.ergo > b.ergo; });
-    }
+        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){ return a.ergo > b.ergo; });
     else
-    {
-        std::stable_sort(rows.begin(), rows.end(),
-                         [](const Row &a, const Row &b)
-                         {
-                             if (a.slices != b.slices)
-                                 return a.slices < b.slices;
-                             return a.moves < b.moves;
-                         });
-    }
+        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
+            if (a.slices != b.slices) return a.slices < b.slices;
+            return a.moves < b.moves;
+        });
 
     const QColor rowA = QColor(Theme::rowAltDark(m_lightTheme));
     const QColor rowB = m_lightTheme ? rowA : QColor(Theme::rowAltLight(m_lightTheme));
-    // Dark mode: row A gets blue text, row B gets white text (alternating)
-    const QColor textCol = QColor(Theme::textSolution(m_lightTheme));
-    const QColor textColAlt = QColor(Theme::textSolution(m_lightTheme));
-    const QColor metaCol = QColor(Theme::textSecondary(m_lightTheme));
-    const QColor metaColAlt = QColor(Theme::textSecondary(m_lightTheme));
-    const int rowH = m_expanded ? 36 : 24;
+    const QColor textCol    = QColor(Theme::textSolution(m_lightTheme));
+    const QColor metaCol    = QColor(Theme::textSecondary(m_lightTheme));
+    const int rowH    = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
     m_solutionTable->setRowCount(rows.size());
-    for (int i = 0; i < rows.size(); i++)
-    {
+    for (int i = 0; i < rows.size(); i++) {
         const Row &r = rows[i];
         QColor bg = (i % 2 == 0) ? rowA : rowB;
 
-        bool isAltRow = (i % 2 == 1);
-        auto cell = [&](int col, const QString &txt, bool isMeta = false)
-        {
+        auto cell = [&](int col, const QString &txt, bool isMeta = false) {
             QTableWidgetItem *item = new QTableWidgetItem(txt);
             item->setBackground(bg);
-            QColor c = isMeta ? (isAltRow ? metaColAlt : metaCol)
-                              : (isAltRow ? textColAlt : textCol);
-            item->setForeground(c);
-            if (m_expanded)
-            {
+            item->setForeground(isMeta ? metaCol : textCol);
+            item->setFlags(Qt::ItemIsEnabled);  // not selectable
+            if (m_expanded) {
                 QFont f = item->font();
                 f.setPointSize(fontSize);
                 item->setFont(f);
@@ -2184,29 +2131,33 @@ void MainWindow::rebuildTable()
             m_solutionTable->setItem(i, col, item);
         };
 
+        // SI no column — fixed font, no italic
         QTableWidgetItem *numItem = new QTableWidgetItem(QString::number(i + 1));
         numItem->setBackground(bg);
-        numItem->setForeground(isAltRow ? metaColAlt : metaCol);
+        numItem->setForeground(metaCol);
+        numItem->setFlags(Qt::ItemIsEnabled);
         numItem->setTextAlignment(Qt::AlignCenter);
         {
             QFont f = numItem->font();
             f.setPointSize(m_expanded ? fontSize - 2 : 10);
-            f.setItalic(true);
+            f.setItalic(false);
             numItem->setFont(f);
         }
         m_solutionTable->setItem(i, 0, numItem);
+
         // Solution column: left-aligned
         QTableWidgetItem *algItem = new QTableWidgetItem(r.alg);
         algItem->setBackground(bg);
-        algItem->setForeground(isAltRow ? textColAlt : textCol);
+        algItem->setForeground(textCol);
+        algItem->setFlags(Qt::ItemIsEnabled);
         algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-        if (m_expanded)
-        {
+        if (m_expanded) {
             QFont f = algItem->font();
             f.setPointSize(fontSize);
             algItem->setFont(f);
         }
         m_solutionTable->setItem(i, 1, algItem);
+
         cell(2, QString::number(r.moves), true);
         cell(3, QString::number(r.slices), true);
         if (showErgo)
