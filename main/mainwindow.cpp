@@ -245,8 +245,8 @@ void MainWindow::buildUI()
     QLabel *logoLabel = new QLabel();
     auto updateLogo = [this, logoLabel]()
     {
-        QString primary = m_lightTheme ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
-        QString muted = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+        QString primary = Theme::textPrimary(m_lightTheme);
+        QString muted = Theme::textMuted(m_lightTheme);
         logoLabel->setText(QString("<span style='font-size:17px;font-weight:bold;color:%1;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
                                    "<br><span style='font-size:10px;color:%2;'>by Abid and Matt</span>")
                                .arg(primary, muted));
@@ -1232,7 +1232,7 @@ void MainWindow::rebuildTerminalView()
             bool isAlt = (solIdx % 2 == 1);
             QString col = m_lightTheme
                               ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                              : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+                              : (isAlt ? "#cbcbcb" : Theme::textSolution(m_lightTheme));
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
@@ -1243,7 +1243,7 @@ void MainWindow::rebuildTerminalView()
         }
         else
         {
-            QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+            QString col = Theme::textMuted(m_lightTheme);
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 11 : 10);
@@ -1320,9 +1320,9 @@ void MainWindow::updateConstraints()
     {
         txtDepths->setStyleSheet(QString(
                                      "QLineEdit { color: %1; background: %2; border-color: %3; }")
-                                     .arg(m_lightTheme ? "#aaa" : "#666",
-                                          m_lightTheme ? Theme::LIGHT_DISABLED_BG : "#1e1e30",
-                                          m_lightTheme ? Theme::LIGHT_BORDER_DARK : "#3a3a4e"));
+                                     .arg(Theme::textSecondary(m_lightTheme),
+                                          Theme::disabledBg(m_lightTheme),
+                                          Theme::borderDark(m_lightTheme)));
     }
 
     spnMaxX->setEnabled(chkMaxX->isChecked());
@@ -1530,7 +1530,7 @@ void MainWindow::updateCommand()
     QStringList args = buildArgList();
     txtCommand->setText("sq1opt " + args.join(" ") + " " + pos);
     lblCommandError->setVisible(false);
-    QString cyan = m_lightTheme ? Theme::LIGHT_TEXT_CYAN : Theme::TEXT_CYAN;
+    QString cyan = Theme::textCyan(m_lightTheme);
     txtCommand->setStyleSheet(QString("QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }").arg(cyan));
 }
 
@@ -1579,7 +1579,7 @@ void MainWindow::onSolve()
                                 "  background: %1; border: 1px solid %2; padding-top: 0px; padding-bottom: 0px;"
                                 "  color: %3; font-size: 12px; font-weight: bold; }"
                                 "QPushButton#btnSolve:hover { background: %4; }")
-                                .arg(Theme::BUTTON_STOP_BG, Theme::BUTTON_STOP_BORDER, Theme::BUTTON_STOP_TEXT, Theme::BUTTON_STOP_HOVER));
+                                .arg(Theme::buttonStopBg(m_lightTheme), Theme::buttonStopBorder(m_lightTheme), Theme::buttonStopText(m_lightTheme), Theme::buttonStopHover(m_lightTheme)));
 
     progressBar->setVisible(true);
 
@@ -1638,7 +1638,7 @@ void MainWindow::onSolverLine(QString line)
             bool isAlt = (m_solutionLines.size() % 2 == 0);
             QString col = m_lightTheme
                               ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                              : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+                              : (isAlt ? "#cbcbcb" : Theme::textSolution(m_lightTheme));
             QTextCursor cur = txtOutput->textCursor();
             cur.movePosition(QTextCursor::End);
             if (!txtOutput->document()->isEmpty())
@@ -1656,7 +1656,7 @@ void MainWindow::onSolverLine(QString line)
     }
     else
     {
-        QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+        QString col = Theme::textMuted(m_lightTheme);
         QTextCursor cur = txtOutput->textCursor();
         cur.movePosition(QTextCursor::End);
         if (!txtOutput->document()->isEmpty())
@@ -2065,7 +2065,7 @@ void MainWindow::onApplyScramble()
 
 void MainWindow::appendStatusLine(const QString &msg)
 {
-    QString col = m_lightTheme ? Theme::LIGHT_TEXT_TERMINAL : "#6a9ab8";
+    QString col = Theme::textTerminal(m_lightTheme);
     QTextCursor cur = txtOutput->textCursor();
     cur.movePosition(QTextCursor::End);
     if (!txtOutput->document()->isEmpty())
@@ -2162,13 +2162,13 @@ void MainWindow::rebuildTable()
                          });
     }
 
-    const QColor rowA = QColor(m_lightTheme ? Theme::LIGHT_TABLE_BG : Theme::ROW_ALT_DARK);
-    const QColor rowB = m_lightTheme ? rowA : QColor(Theme::ROW_ALT_LIGHT);
+    const QColor rowA = QColor(Theme::rowAltDark(m_lightTheme));
+    const QColor rowB = m_lightTheme ? rowA : QColor(Theme::rowAltLight(m_lightTheme));
     // Dark mode: row A gets blue text, row B gets white text (alternating)
-    const QColor textCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor(Theme::TEXT_SOLUTION);
-    const QColor textColAlt = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SOLUTION) : QColor("#cbcbcb");
-    const QColor metaCol = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SECONDARY) : QColor(154, 172, 190);
-    const QColor metaColAlt = m_lightTheme ? QColor(Theme::LIGHT_TEXT_SECONDARY) : QColor(150, 150, 150, 238);
+    const QColor textCol = QColor(Theme::textSolution(m_lightTheme));
+    const QColor textColAlt = QColor(Theme::textSolution(m_lightTheme));
+    const QColor metaCol = QColor(Theme::textSecondary(m_lightTheme));
+    const QColor metaColAlt = QColor(Theme::textSecondary(m_lightTheme));
     const int rowH = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
@@ -2293,7 +2293,7 @@ void MainWindow::onRankErgoToggled(bool checked)
         bool isSol = line.contains('[') && line.contains(']');
         if (!isSol)
         {
-            QString col = m_lightTheme ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+            QString col = Theme::textMuted(m_lightTheme);
             insertLine(line, col, false, m_expanded ? 11 : 10, m_expanded ? 150 : 120);
         }
     }
@@ -2303,7 +2303,7 @@ void MainWindow::onRankErgoToggled(bool checked)
         bool isAlt = (solIdx % 2 == 1);
         QString col = m_lightTheme
                           ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                          : (isAlt ? "#cbcbcb" : Theme::TEXT_SOLUTION);
+                          : (isAlt ? "#cbcbcb" : Theme::textSolution(m_lightTheme));
         QString display = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
         insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         solIdx++;
@@ -2366,8 +2366,8 @@ void MainWindow::showAboutModal()
     overlay->raise();
 
     bool L = m_lightTheme;
-    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
+    QString modalBg = Theme::primaryBg(L);
+    QString modalBorder = Theme::borderGroup(L);
     QWidget *card = new QWidget(overlay);
     card->setObjectName("aboutCard");
     card->setFixedWidth(480);
@@ -2379,8 +2379,8 @@ void MainWindow::showAboutModal()
     lay->setContentsMargins(28, 24, 28, 24);
     lay->setSpacing(10);
 
-    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : "#e0e0e0";
-    QString textBody = L ? Theme::LIGHT_TEXT_SECONDARY : "#b0b0c8";
+    QString textPrimary = Theme::textPrimary(L);
+    QString textBody = Theme::textSecondary(L);
     QLabel *title = new QLabel("About Solve-A-Squan");
     title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
     // Build the about body content with proper string building
@@ -2528,10 +2528,10 @@ void MainWindow::showReadDocsPopup()
     overlay->raise();
 
     bool L = m_lightTheme;
-    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
-    QString textColor = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
-    QString titleColor = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
+    QString modalBg = Theme::primaryBg(L);
+    QString modalBorder = Theme::borderGroup(L);
+    QString textColor = Theme::textMuted(L);
+    QString titleColor = Theme::textPrimary(L);
 
     QWidget *card = new QWidget(overlay);
     card->setObjectName("docsCard");
@@ -2650,10 +2650,10 @@ void MainWindow::showOldDocsPopup()
     overlay->raise();
 
     bool L = m_lightTheme;
-    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
-    QString textColor = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
-    QString titleColor = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
+    QString modalBg = Theme::primaryBg(L);
+    QString modalBorder = Theme::borderGroup(L);
+    QString textColor = Theme::textMuted(L);
+    QString titleColor = Theme::textPrimary(L);
 
     QWidget *card = new QWidget(overlay);
     card->setObjectName("docsOldCard");
@@ -2738,7 +2738,7 @@ void MainWindow::applyTheme()
     if (m_updateLogo)
         m_updateLogo();
     updateConstraints();
-    QString termBg = m_lightTheme ? Theme::LIGHT_SECONDARY_BG : "#000000";
+    QString termBg = Theme::secondaryBg(m_lightTheme);
     txtOutput->setStyleSheet(QString("QTextEdit { background: %1; }").arg(termBg));
     txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
     if (!m_rawLines.isEmpty())
@@ -2751,10 +2751,10 @@ void MainWindow::applyTheme()
     if (m_tableVisible)
         rebuildTable();
     // Repaint the cube widget with the right canvas bg
-    QString canvasBg = m_lightTheme ? Theme::LIGHT_CANVAS_BG : Theme::PRIMARY_BG;
+    QString canvasBg = Theme::primaryBg(m_lightTheme);
     cubeWidget->setStyleSheet(QString("background: %1;").arg(canvasBg));
     // Update command line color
-    QString cyan = m_lightTheme ? Theme::LIGHT_TEXT_CYAN : Theme::TEXT_CYAN;
+    QString cyan = Theme::textCyan(m_lightTheme);
     txtCommand->setStyleSheet(QString(
                                   "QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px;"
                                   " border-right: none; border-radius: 0; border-top-left-radius: 4px;"
@@ -2764,8 +2764,8 @@ void MainWindow::applyTheme()
     // Input bar background
     if (m_inputBarOuter)
     {
-        QString barBg = m_lightTheme ? Theme::LIGHT_DARK_BG : Theme::DARK_BG;
-        QString barBorder = m_lightTheme ? Theme::LIGHT_BORDER_BOTTOM : Theme::BORDER_BOTTOM;
+        QString barBg = Theme::darkBg(m_lightTheme);
+        QString barBorder = Theme::borderBottom(m_lightTheme);
         m_inputBarOuter->setStyleSheet(QString(
                                            "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
                                            .arg(barBg, barBorder));
@@ -2787,13 +2787,13 @@ void MainWindow::openSidebar()
     m_sidebarOverlay->raise();
 
     bool L = m_lightTheme;
-    QString sidebarBg = L ? Theme::LIGHT_SIDEBAR_BG : Theme::SIDEBAR_BG;
-    QString sidebarBorder = L ? Theme::LIGHT_SIDEBAR_BORDER : Theme::SIDEBAR_BORDER;
-    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
-    QString textMuted = L ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
-    QString hoverBg = L ? Theme::LIGHT_HOVER_BG : Theme::HOVER_BG;
-    QString btnBg = L ? Theme::LIGHT_BUTTON_BG : Theme::BUTTON_BG;
-    QString btnBorder = L ? Theme::LIGHT_BUTTON_BORDER : Theme::BUTTON_BORDER;
+    QString sidebarBg = Theme::sidebarBg(L);
+    QString sidebarBorder = Theme::sidebarBorder(L);
+    QString textPrimary = Theme::textPrimary(L);
+    QString textMuted = Theme::textMuted(L);
+    QString hoverBg = Theme::hoverBg(L);
+    QString btnBg = Theme::buttonBg(L);
+    QString btnBorder = Theme::buttonBorder(L);
 
     m_sidebar = new QWidget(m_sidebarOverlay);
     m_sidebar->setFixedWidth(220);
@@ -2809,7 +2809,7 @@ void MainWindow::openSidebar()
     // Header
     QWidget *sHeader = new QWidget();
     sHeader->setFixedHeight(52);
-    sHeader->setStyleSheet(QString("QWidget { background: %1; border-bottom: 1px solid %2; border-right: none; }").arg(L ? Theme::LIGHT_DARK_BG : Theme::DARK_BG, sidebarBorder));
+    sHeader->setStyleSheet(QString("QWidget { background: %1; border-bottom: 1px solid %2; border-right: none; }").arg(Theme::darkBg(L), sidebarBorder));
     QHBoxLayout *shLay = new QHBoxLayout(sHeader);
     shLay->setContentsMargins(16, 0, 12, 0);
     QLabel *sTitle = new QLabel("Menu");
@@ -2922,10 +2922,10 @@ void MainWindow::showSettingsModal()
 {
     QWidget *central = this->centralWidget();
     bool L = m_lightTheme;
-    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
-    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
-    QString textMuted = L ? Theme::LIGHT_TEXT_MUTED : Theme::TEXT_MUTED;
+    QString modalBg = Theme::primaryBg(L);
+    QString modalBorder = Theme::borderGroup(L);
+    QString textPrimary = Theme::textPrimary(L);
+    QString textMuted = Theme::textMuted(L);
 
     QWidget *overlay = new QWidget(central);
     overlay->setGeometry(central->rect());
@@ -3006,13 +3006,13 @@ void MainWindow::showHowToUseModal()
 {
     QWidget *central = this->centralWidget();
     bool L = m_lightTheme;
-    QString modalBg = L ? Theme::LIGHT_PRIMARY_BG : Theme::MODAL_BG;
-    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP : Theme::MODAL_BORDER;
-    QString textPrimary = L ? Theme::LIGHT_TEXT_PRIMARY : Theme::TEXT_PRIMARY;
-    QString textBody = L ? Theme::LIGHT_TEXT_SECONDARY : "#b0b0c8";
-    QString textCyan = L ? Theme::LIGHT_TEXT_CYAN : "#7abfe8";
-    QString scrollBg = L ? Theme::LIGHT_SCROLLBAR_BG : Theme::SCROLLBAR_BG;
-    QString scrollHandle = L ? Theme::LIGHT_SCROLLBAR_HANDLE : Theme::SCROLLBAR_HANDLE;
+    QString modalBg = Theme::primaryBg(L);
+    QString modalBorder = Theme::borderGroup(L);
+    QString textPrimary = Theme::textPrimary(L);
+    QString textBody = Theme::textSecondary(L);
+    QString textCyan = Theme::textCyan(L);
+    QString scrollBg = Theme::scrollbarBg(L);
+    QString scrollHandle = Theme::scrollbarHandle(L);
 
     QWidget *overlay = new QWidget(central);
     overlay->setGeometry(central->rect());

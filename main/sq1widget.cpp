@@ -99,13 +99,13 @@ QPointF Sq1Widget::polar(QPointF center, double angleDeg, double radius) {
 
 void Sq1Widget::drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill) {
     p.setBrush(fill);
-    p.setPen(QPen(Theme::color(Theme::CUBE_BORDER), 1));
+    p.setPen(QPen(QColor(Theme::cubeBorder()), 1));
     p.drawPolygon(QPolygonF(pts));
 }
 
 void Sq1Widget::drawSelection(QPainter& p, QVector<QPointF> pts) {
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(Theme::color(Theme::CUBE_SELECTION), 3));
+    p.setPen(QPen(QColor(Theme::cubeSelection()), 3));
     p.drawPolygon(QPolygonF(pts));
 }
 
@@ -156,7 +156,7 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     QColor bg = palette().color(QPalette::Window);
-    if (!bg.isValid() || bg == Qt::black) bg = Theme::color(Theme::CANVAS_BG);
+    if (!bg.isValid() || bg == Qt::black) bg = QColor(Theme::canvasBg(false));
     p.fillRect(rect(), bg);
 
     drawLayer(p, 0,  12, {TOP_CX, TOP_CY}, -105);  // top layer, starts at -105 deg

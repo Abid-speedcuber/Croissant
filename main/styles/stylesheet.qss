@@ -1,18 +1,18 @@
 /* ========== Main Window & Base Styling ========== */
 QMainWindow, QWidget { 
-    background: %1; 
-    color: %2; 
+    background: --primary-bg; 
+    color: --text-primary; 
     font-family: 'Segoe UI', Arial; 
     font-size: 13px; 
 }
 
 /* ========== GroupBox ========== */
 QGroupBox { 
-    border: 1px solid %3; 
+    border: 1px solid --border-group; 
     border-radius: 6px; 
     margin-top: 8px; 
     padding-top: 8px; 
-    color: %4; 
+    color: --text-secondary; 
 }
 
 QGroupBox::title { 
@@ -29,18 +29,18 @@ QCheckBox::indicator {
     width:14px;
     height:14px;
     border-radius:3px;
-    border:1px solid %5;
-    background:%6;
+    border:1px solid --checkbox-border;
+    background:--checkbox-bg;
 }
 
 QCheckBox::indicator:checked { 
-    background: %7;
-    border-color: %7;
+    background: --checkbox-check-blue;
+    border-color: --checkbox-check-blue;
 }
 
 QCheckBox#chkRankErgo::indicator:checked { 
-    background: %8;
-    border-color: %8;
+    background: --checkbox-check-orange;
+    border-color: --checkbox-check-orange;
 }
 
 QCheckBox:disabled { 
@@ -48,28 +48,28 @@ QCheckBox:disabled {
 }
 
 QCheckBox::indicator:disabled { 
-    border-color: %9;
-    background: %10;
+    border-color: --border-dark;
+    background: --disabled-bg;
 }
 
 /* ========== Input Fields (LineEdit & SpinBox) ========== */
 QLineEdit { 
-    background: %11;
-    border: 1px solid %12;
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
     border-radius: 4px;
     padding: 3px 6px;
-    color: %60;
+    color: --input-field-text;
 }
 
 QLineEdit:disabled { 
-    color: %13;
-    background: %14;
-    border-color: %15;
+    color: --text-disabled;
+    background: --disabled-bg;
+    border-color: --border-dark;
 }
 
 QLineEdit#txtCommand { 
     font-family: monospace;
-    color: %16;
+    color: --text-cyan;
     font-size: 12px;
     border-radius: 0;
     border-top-left-radius: 4px;
@@ -78,18 +78,18 @@ QLineEdit#txtCommand {
 }
 
 QSpinBox {
-    background: %11;
-    border: 1px solid %12;
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
     border-radius: 4px;
     padding: 2px 4px 2px 6px;
-    color: %60;
+    color: --input-field-text;
     min-width: 48px;
 }
 
 QSpinBox:disabled { 
-    color: %13;
-    background: %14;
-    border-color: %15;
+    color: --text-disabled;
+    background: --disabled-bg;
+    border-color: --border-dark;
 }
 
 QSpinBox::up-button   { 
@@ -114,47 +114,47 @@ QSpinBox::down-arrow  {
 
 /* ========== TextEdit ========== */
 QTextEdit#txtOutput { 
-    background: %17;
-    border: 1px solid %3;
+    background: --secondary-bg;
+    border: 1px solid --border-group;
     border-radius: 4px;
     font-family: monospace;
     font-size: 12px;
-    color: %18;
+    color: --text-terminal;
     padding: 4px;
 }
 
 QTextEdit#txtOutput > QWidget { 
-    background: %17;
+    background: --secondary-bg;
 }
 
 /* ========== Buttons ========== */
 QPushButton { 
-    background: %19;
-    border: 1px solid %20;
+    background: --button-bg;
+    border: 1px solid --button-border;
     border-radius: 5px;
     padding: 5px 12px;
-    color: %21;
+    color: --button-text;
 }
 
 QPushButton:hover { 
-    background: %22;
-    border-color: %20;
+    background: --hover-bg;
+    border-color: --button-border;
 }
 
 QPushButton:pressed { 
-    background: %23;
+    background: --pressed-bg;
 }
 
 QPushButton#btnSolve { 
-    background: %24;
-    border-color: %25;
+    background: --button-solve-bg;
+    border-color: --button-solve-border;
     color: #fff;
     font-size: 13px;
     font-weight: bold;
 }
 
 QPushButton#btnSolve:hover { 
-    background: %26;
+    background: --button-solve-hover;
 }
 
 QPushButton#btnSolve:disabled { 
@@ -164,28 +164,28 @@ QPushButton#btnSolve:disabled {
 }
 
 QPushButton#btnCopy { 
-    background: %11;
-    border: 1px solid %12;
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
     border-left: none;
     border-radius: 4px;
     border-top-left-radius: 0px;
     border-bottom-left-radius: 0px;
-    color: %4;
+    color: --text-secondary;
     font-size: 14px;
     padding: 0;
     margin-right: 5px;
 }
 
 QPushButton#btnCopy:hover { 
-    background: %22;
-    color: %21;
+    background: --hover-bg;
+    color: --button-text;
 }
 
 QPushButton#btnReset {
-    background: %27;
-    border: 1px solid %28;
+    background: --button-reset-bg;
+    border: 1px solid --button-reset-border;
     border-radius: 26px;
-    color: %4;
+    color: --text-secondary;
     font-size: 11px;
     font-weight: bold;
     padding: 0;
@@ -193,48 +193,48 @@ QPushButton#btnReset {
 }
 
 QPushButton#btnReset:hover { 
-    background: %29;
-    border-color: %20;
-    color: %21;
+    background: --button-reset-hover;
+    border-color: --button-border;
+    color: --button-text;
 }
 
 QPushButton#btnUndo, QPushButton#btnRedo {
-    background: %19;
-    border-color: %20;
-    color: %21;
+    background: --button-bg;
+    border-color: --button-border;
+    color: --button-text;
 }
 
 QPushButton#btnUndo:hover, QPushButton#btnRedo:hover {
-    background: %22;
-    border-color: %20;
+    background: --hover-bg;
+    border-color: --button-border;
 }
 
 QPushButton#btnUndo:pressed, QPushButton#btnRedo:pressed {
-    background: %23;
+    background: --pressed-bg;
 }
 
 QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled {
-    background: %63;
-    border-color: %64;
-    color: %65;
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
 }
 
 QPushButton#btnApplyScramble {
-    background: %11;
-    border: 1px solid %12;
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
     border-radius: 4px;
-    color: %4;
+    color: --text-secondary;
     padding: 4px 8px;
 }
 
 QPushButton#btnApplyScramble:hover { 
-    background: %22;
-    border-color: %20;
+    background: --hover-bg;
+    border-color: --button-border;
 }
 
 QPushButton#btnScrambleMode {
     background: #333350;
-    border: 1px solid %12;
+    border: 1px solid --border-light;
     border-radius: 0;
     border-top-left-radius: 4px;
     border-bottom-left-radius: 4px;
@@ -250,13 +250,13 @@ QPushButton#btnScrambleMode:checked {
 }
 
 QPushButton#btnScrambleMode:hover { 
-    background: %22;
+    background: --hover-bg;
 }
 
 /* ========== Input Bar Container (ALL spacing/sizing via QSS!) ========== */
 QWidget#inputBarOuter {
-    background: %64;
-    border-bottom: 1px solid %65;
+    background: --input-mode-bg;
+    border-bottom: 1px solid --input-mode-border;
     padding: 0px 12px;
     min-height: 50px;
     max-height: 50px;
@@ -269,15 +269,15 @@ QWidget#inputBarOuter QHBoxLayout {
 
 /* ========== Input Bar Buttons & Input ========== */
 QPushButton#btnInputMode {
-    background: %64;
-    border: 1px solid %65;
+    background: --input-mode-bg;
+    border: 1px solid --input-mode-border;
     border-radius: 9px;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
     border-right: none;
     margin-left: 8px;
     margin-right: 0;
-    color: %76;
+    color: --input-mode-text;
     padding: 0 10px;
     font-size: 11px;
     font-weight: bold;
@@ -288,17 +288,17 @@ QPushButton#btnInputMode {
 }
 
 QPushButton#btnInputMode:hover { 
-    background: %66;
-    border-color: %65;
+    background: --input-mode-hover;
+    border-color: --input-mode-border;
 }
 
 QPushButton#btnInputModeArrow {
-    background: %67;
-    border: 1px solid %68;
+    background: --input-arrow-bg;
+    border: 1px solid --input-arrow-border;
     border-radius: 9px;
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    color: %76;
+    color: --input-mode-text;
     padding: 0 6px;
     margin-right: 10px;
     font-size: 11px;
@@ -308,17 +308,17 @@ QPushButton#btnInputModeArrow {
 }
 
 QPushButton#btnInputModeArrow:hover { 
-    background: %69;
-    border-color: %68;
+    background: --input-arrow-hover;
+    border-color: --input-arrow-border;
 }
 
 QPushButton#btnApply {
-    background: %70;
-    border: 1px solid %71;
+    background: --input-apply-bg;
+    border: 1px solid --input-apply-border;
     border-radius: 9px;
     margin-left: 10px;
     margin-right: 8px;
-    color: %77;
+    color: --input-apply-text;
     font-size: 11px;
     font-weight: bold;
     padding: 0 12px;
@@ -329,93 +329,93 @@ QPushButton#btnApply {
 }
 
 QPushButton#btnApply:hover { 
-    background: %72;
-    border-color: %71;
-    color: %78;
+    background: --input-apply-hover;
+    border-color: --input-apply-border;
+    color: --input-apply-hover-text;
 }
 
 QLineEdit#txtMainInput {
     border-radius: 9px;
-    border: 1px solid %73;
+    border: 1px solid --input-field-border;
     margin-left: 0px;
     margin-right: 0px;
     font-family: monospace;
     font-size: 12px;
-    background: %74;
-    color: %75;
+    background: --input-field-bg;
+    color: --input-field-text;
     padding: 4px 8px;
     height: 25px;
 }
 
 QLineEdit#txtMainInput[hasError="true"] {
-    border-color: %39;
+    border-color: --text-error;
 }
 
 QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
-    background: %30;
-    border: 1px solid %31;
+    background: --button-util-bg;
+    border: 1px solid --button-util-border;
     border-radius: 4px;
-    color: %32;
+    color: --button-util-text;
     font-size: 13px;
     padding: 0;
 }
 
 QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover, QPushButton#btnTableMode:hover {
-    background: %33;
-    border-color: %34;
-    color: %35;
+    background: --button-util-hover-bg;
+    border-color: --button-util-hover-border;
+    color: --button-util-hover-text;
 }
 
 QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#btnTableMode:pressed {
-    background: %23;
+    background: --pressed-bg;
 }
 
 /* ========== ProgressBar ========== */
 QProgressBar { 
     border: none;
-    background: %36;
+    background: --progress-bg;
     border-radius: 3px;
 }
 
 QProgressBar::chunk { 
-    background: %37;
+    background: --progress-fill;
     border-radius: 3px;
 }
 
 /* ========== Labels ========== */
 QLabel#lblStatus { 
-    color: %38;
+    color: --status-text;
     font-size: 11px;
 }
 
 QLabel#lblScrambleError { 
-    color: %39;
+    color: --text-error;
     font-size: 11px;
     padding: 2px 2px;
 }
 
 QLabel#lblCommandError  { 
-    color: %39;
+    color: --text-error;
     font-size: 11px;
     padding: 2px 2px;
 }
 
 /* ========== ScrollBars ========== */
 QScrollBar:vertical { 
-    background: %40;
+    background: --scrollbar-bg;
     width: 8px;
     border-radius: 4px;
     margin: 0;
 }
 
 QScrollBar::handle:vertical { 
-    background: %41;
+    background: --scrollbar-handle;
     border-radius: 4px;
     min-height: 24px;
 }
 
 QScrollBar::handle:vertical:hover { 
-    background: %42;
+    background: --scrollbar-hover;
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { 
@@ -428,20 +428,20 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 
 QScrollBar:horizontal { 
-    background: %40;
+    background: --scrollbar-bg;
     height: 8px;
     border-radius: 4px;
     margin: 0;
 }
 
 QScrollBar::handle:horizontal { 
-    background: %41;
+    background: --scrollbar-handle;
     border-radius: 4px;
     min-width: 24px;
 }
 
 QScrollBar::handle:horizontal:hover { 
-    background: %42;
+    background: --scrollbar-hover;
 }
 
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { 
@@ -455,34 +455,34 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
 
 /* ========== TableWidget ========== */
 QTableWidget#m_solutionTable {
-    background: %43;
-    border: 1px solid %44;
+    background: --table-bg;
+    border: 1px solid --table-border;
     border-radius: 4px;
-    gridline-color: %45;
+    gridline-color: --table-border;
     font-family: monospace;
     font-size: 12px;
-    color: %2;
+    color: --text-primary;
 }
 
 QTableWidget#m_solutionTable QHeaderView::section {
-    background: %46;
-    color: %47;
+    background: --table-header-bg;
+    color: --table-header-text;
     border: none;
-    border-bottom: 1px solid %44;
+    border-bottom: 1px solid --table-border;
     padding: 4px;
     font-size: 11px;
     font-weight: bold;
 }
 
 QTableWidget#m_solutionTable::item:selected {
-    background: %48;
-    color: %49;
+    background: --table-selected-bg;
+    color: --table-selected-text;
 }
 
 /* ========== TopBar ========== */
 QWidget#topBar {
-    background: %50;
-    border-bottom: 2px solid %51;
+    background: --dark-bg;
+    border-bottom: 2px solid --border-bottom;
     min-height: 52px;
     max-height: 52px;
 }
@@ -493,10 +493,10 @@ QLabel#logoLabel {
 }
 
 QPushButton#btnAbout, QPushButton#btnHamburger {
-    background: %52;
-    border: 1px solid %53;
+    background: --button-about-bg;
+    border: 1px solid --button-about-border;
     border-radius: 15px;
-    color: %54;
+    color: --button-about-text;
     font-size: 15px;
     font-weight: bold;
     padding: 0;
@@ -507,16 +507,16 @@ QPushButton#btnAbout, QPushButton#btnHamburger {
 }
 
 QPushButton#btnAbout:hover, QPushButton#btnHamburger:hover {
-    background: %55;
-    border-color: %56;
-    color: %57;
+    background: --button-about-hover-bg;
+    border-color: --button-about-hover-border;
+    color: --button-about-hover-text;
 }
 
 /* ========== Tooltips ========== */
 QToolTip {
-    background: %58;
-    color: %59;
-    border: 1px solid %58;
+    background: --tooltip-bg;
+    color: --tooltip-text;
+    border: 1px solid --tooltip-bg;
     border-radius: 5px;
     padding: 6px 10px;
     font-size: 12px;

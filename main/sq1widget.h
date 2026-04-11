@@ -51,13 +51,13 @@ private:
 
     // Colors: 0=darkgrey(top face), 1=white(bot face), 2=red, 3=blue, 4=orange, 5=green, 6=grey(partial)
     QColor colors[7] = {
-        Theme::color(Theme::CUBE_TOP_FACE),
-        Theme::color(Theme::CUBE_BOT_FACE),
-        Theme::color(Theme::CUBE_RED),
-        Theme::color(Theme::CUBE_BLUE),
-        Theme::color(Theme::CUBE_ORANGE),
-        Theme::color(Theme::CUBE_GREEN),
-        Theme::color(Theme::CUBE_PARTIAL)
+        QColor(Theme::cubeTopFace()),
+        QColor(Theme::cubeBotFace()),
+        QColor(Theme::cubeRed()),
+        QColor(Theme::cubeBlue()),
+        QColor(Theme::cubeOrange()),
+        QColor(Theme::cubeGreen()),
+        QColor(Theme::cubePartial())
     };
 
     // side_colors[piece] = which color indices to use for side faces

@@ -2,181 +2,163 @@
 #include "theme.h"
 #include <QString>
 #include <QFile>
+#include <QMap>
 
 QString buildStyleSheet(bool lightTheme) {
-    bool L = lightTheme;
-    auto b = [&](const char* dark, const char* light) -> QString {
-        return L ? QString(light) : QString(dark);
+    // Helper lambda to choose between dark and light versions
+    auto color = [&](const QString& darkColor, const QString& lightColor) -> QString {
+        return lightTheme ? lightColor : darkColor;
     };
 
-    QString PRIMARY_BG      = b(Theme::PRIMARY_BG,       Theme::LIGHT_PRIMARY_BG);
-    QString SECONDARY_BG    = b(Theme::SECONDARY_BG,     Theme::LIGHT_TABLE_BG);
-    QString TERTIARY_BG     = b(Theme::TERTIARY_BG,      Theme::LIGHT_TERTIARY_BG);
-    QString DARK_BG         = b(Theme::DARK_BG,          Theme::LIGHT_DARK_BG);
-    QString DISABLED_BG     = b(Theme::DISABLED_BG,      Theme::LIGHT_DISABLED_BG);
-    QString HOVER_BG        = b(Theme::HOVER_BG,          Theme::LIGHT_HOVER_BG);
-    QString PRESSED_BG      = b(Theme::PRESSED_BG,        Theme::LIGHT_PRESSED_BG);
-    QString TEXT_PRIMARY    = b(Theme::TEXT_PRIMARY,      Theme::LIGHT_TEXT_PRIMARY);
-    QString TEXT_SECONDARY  = b(Theme::TEXT_SECONDARY,    Theme::LIGHT_TEXT_SECONDARY);
-    QString TEXT_MUTED      = b(Theme::TEXT_MUTED,        Theme::LIGHT_TEXT_MUTED);
-    QString TEXT_DISABLED   = b(Theme::TEXT_DISABLED,     Theme::LIGHT_TEXT_DISABLED);
-    QString TEXT_ERROR      = b(Theme::TEXT_ERROR,        Theme::LIGHT_TEXT_ERROR);
-    QString TEXT_CYAN       = b(Theme::TEXT_CYAN,         Theme::LIGHT_TEXT_CYAN);
-    QString TEXT_TERMINAL   = b(Theme::TEXT_TERMINAL,     Theme::LIGHT_TEXT_TERMINAL);
-    QString BORDER_LIGHT    = b(Theme::BORDER_LIGHT,      Theme::LIGHT_BORDER_LIGHT);
-    QString BORDER_DARK     = b(Theme::BORDER_DARK,       Theme::LIGHT_BORDER_DARK);
-    QString BORDER_GROUP    = b(Theme::BORDER_GROUP,      Theme::LIGHT_BORDER_GROUP);
-    QString BORDER_BOTTOM   = b(Theme::BORDER_BOTTOM,     Theme::LIGHT_BORDER_BOTTOM);
-    QString CHECKBOX_BG     = b(Theme::CHECKBOX_BG,       Theme::LIGHT_CHECKBOX_BG);
-    QString CHECKBOX_BORDER = b(Theme::CHECKBOX_BORDER,   Theme::LIGHT_BORDER_LIGHT);
-    QString BUTTON_BG       = b(Theme::BUTTON_BG,         Theme::LIGHT_BUTTON_BG);
-    QString BUTTON_BORDER   = b(Theme::BUTTON_BORDER,     Theme::LIGHT_BUTTON_BORDER);
-    QString BUTTON_TEXT     = b(Theme::BUTTON_TEXT,       Theme::LIGHT_BUTTON_TEXT);
-    QString SCROLLBAR_BG    = b(Theme::SCROLLBAR_BG,      Theme::LIGHT_SCROLLBAR_BG);
-    QString SCROLLBAR_HANDLE= b(Theme::SCROLLBAR_HANDLE,  Theme::LIGHT_SCROLLBAR_HANDLE);
-    QString SCROLLBAR_HOVER = b(Theme::SCROLLBAR_HOVER,   Theme::LIGHT_SCROLLBAR_HOVER);
-    QString TABLE_BG        = b(Theme::TABLE_BG,          Theme::LIGHT_TABLE_BG);
-    QString TABLE_BORDER    = b(Theme::TABLE_BORDER,      Theme::LIGHT_TABLE_BORDER);
-    QString TABLE_HEADER_BG = b(Theme::TABLE_HEADER_BG,   Theme::LIGHT_TABLE_HEADER_BG);
-    QString TABLE_HEADER_TEXT= b(Theme::TABLE_HEADER_TEXT, Theme::LIGHT_TABLE_HEADER_TEXT);
-    QString TABLE_SEL_BG    = b(Theme::TABLE_SELECTED_BG, Theme::LIGHT_TABLE_SELECTED_BG);
-    QString TABLE_SEL_TEXT  = b(Theme::TABLE_SELECTED_TEXT, Theme::LIGHT_TABLE_SELECTED_TEXT);
-    QString TOOLTIP_BG      = b(Theme::TOOLTIP_BG,        Theme::LIGHT_TOOLTIP_BG);
-    QString TOOLTIP_TEXT    = b(Theme::TOOLTIP_TEXT,      Theme::LIGHT_TOOLTIP_TEXT);
-    QString TOOLTIP_BORDER  = b(Theme::TOOLTIP_BORDER,    Theme::LIGHT_TOOLTIP_BORDER);
-    QString PROGRESS_BG     = b(Theme::PROGRESS_BG,       Theme::LIGHT_PROGRESS_BG);
-    QString PROGRESS_FILL   = b(Theme::PROGRESS_FILL,     Theme::LIGHT_PROGRESS_FILL);
-    QString UTIL_BG         = b(Theme::BUTTON_UTIL_BG,    Theme::LIGHT_BUTTON_BG);
-    QString UTIL_BORDER     = b(Theme::BUTTON_UTIL_BORDER, Theme::LIGHT_BUTTON_BORDER);
-    QString UTIL_TEXT       = b(Theme::BUTTON_UTIL_TEXT,  Theme::LIGHT_TEXT_SECONDARY);
-    QString UTIL_HOVER_BG   = b(Theme::BUTTON_UTIL_HOVER_BG, Theme::LIGHT_HOVER_BG);
-    QString UTIL_HOVER_BORDER= b(Theme::BUTTON_UTIL_HOVER_BORDER, Theme::LIGHT_BORDER_LIGHT);
-    QString UTIL_HOVER_TEXT = b(Theme::BUTTON_UTIL_HOVER_TEXT, Theme::LIGHT_TEXT_PRIMARY);
-    QString ABOUT_BG        = b(Theme::BUTTON_ABOUT_BG,   Theme::LIGHT_BUTTON_BG);
-    QString ABOUT_BORDER    = b(Theme::BUTTON_ABOUT_BORDER, Theme::LIGHT_BUTTON_BORDER);
-    QString ABOUT_TEXT      = b(Theme::BUTTON_ABOUT_TEXT, Theme::LIGHT_TEXT_SECONDARY);
-    QString ABOUT_HOVER_BG  = b(Theme::BUTTON_ABOUT_HOVER_BG, Theme::LIGHT_HOVER_BG);
-    QString ABOUT_HOVER_BORDER = b(Theme::BUTTON_ABOUT_HOVER_BORDER, Theme::LIGHT_BORDER_LIGHT);
-    QString ABOUT_HOVER_TEXT= b(Theme::BUTTON_ABOUT_HOVER_TEXT, Theme::LIGHT_TEXT_PRIMARY);
-    QString RESET_BG        = b(Theme::BUTTON_RESET_BG,   Theme::LIGHT_BUTTON_BG);
-    QString RESET_BORDER    = b(Theme::BUTTON_RESET_BORDER, Theme::LIGHT_BUTTON_BORDER);
-    QString RESET_HOVER     = b(Theme::BUTTON_RESET_HOVER, Theme::LIGHT_HOVER_BG);
+    // Build a map of all CSS variable names to their values
+    QMap<QString, QString> variables;
     
-    // Input bar unified colors
-    QString INPUT_MODE_BG   = b(Theme::INPUT_MODE_BG,      Theme::LIGHT_INPUT_MODE_BG);
-    QString INPUT_MODE_BORDER = b(Theme::INPUT_MODE_BORDER, Theme::LIGHT_INPUT_MODE_BORDER);
-    QString INPUT_MODE_HOVER = b(Theme::INPUT_MODE_HOVER,    Theme::LIGHT_INPUT_MODE_HOVER);
-    QString INPUT_ARROW_BG  = b(Theme::INPUT_ARROW_BG,     Theme::LIGHT_INPUT_ARROW_BG);
-    QString INPUT_ARROW_BORDER = b(Theme::INPUT_ARROW_BORDER, Theme::LIGHT_INPUT_ARROW_BORDER);
-    QString INPUT_ARROW_HOVER = b(Theme::INPUT_ARROW_HOVER,  Theme::LIGHT_INPUT_ARROW_HOVER);
-    QString INPUT_APPLY_BG  = b(Theme::INPUT_APPLY_BG,     Theme::LIGHT_INPUT_APPLY_BG);
-    QString INPUT_APPLY_BORDER = b(Theme::INPUT_APPLY_BORDER, Theme::LIGHT_INPUT_APPLY_BORDER);
-    QString INPUT_APPLY_HOVER = b(Theme::INPUT_APPLY_HOVER,  Theme::LIGHT_INPUT_APPLY_HOVER);
-    QString INPUT_FIELD_BG  = b(Theme::INPUT_FIELD_BG,     Theme::LIGHT_INPUT_FIELD_BG);
-    QString INPUT_FIELD_BORDER = b(Theme::INPUT_FIELD_BORDER, Theme::LIGHT_INPUT_FIELD_BORDER);
-    QString INPUT_FIELD_TEXT = b(Theme::INPUT_FIELD_TEXT,   Theme::LIGHT_INPUT_FIELD_TEXT);
-    QString INPUT_MODE_TEXT  = b(Theme::INPUT_MODE_TEXT,    Theme::LIGHT_INPUT_MODE_TEXT);
-    QString INPUT_APPLY_TEXT = b(Theme::INPUT_APPLY_TEXT,   Theme::LIGHT_INPUT_APPLY_TEXT);
-    QString INPUT_APPLY_HOVER_TEXT = b(Theme::INPUT_APPLY_HOVER_TEXT, Theme::LIGHT_INPUT_APPLY_HOVER_TEXT);
-    QString INPUT_MODE_BG = b(Theme::INPUT_MODE_BG, Theme::LIGHT_INPUT_MODE_BG);
-    QString INPUT_MODE_BORDER = b(Theme::INPUT_MODE_BORDER, Theme::LIGHT_INPUT_MODE_BORDER);
-    QString INPUT_PANEL_BG = b(Theme::INPUT_PANEL_BG, Theme::LIGHT_INPUT_PANEL_BG);
-    
-    QString UNDO_REDO_DISABLED_BG = b("#1e1e2a", Theme::LIGHT_DISABLED_BG);
-    QString UNDO_REDO_DISABLED_BORDER = b("#333", Theme::LIGHT_BORDER_DARK);
-    QString UNDO_REDO_DISABLED_TEXT   = b("#444", Theme::LIGHT_TEXT_DISABLED);
-    QString INPUT_TEXT = b("#fff", Theme::LIGHT_TEXT_PRIMARY);
+    // ========== DARK MODE / PRIMARY BACKGROUND COLORS ==========
+    variables["--primary-bg"] = color(Theme::primaryBg(false), Theme::primaryBg(true));
+    variables["--secondary-bg"] = color(Theme::secondaryBg(false), Theme::secondaryBg(true));
+    variables["--tertiary-bg"] = color(Theme::tertiaryBg(false), Theme::tertiaryBg(true));
+    variables["--dark-bg"] = color(Theme::darkBg(false), Theme::darkBg(true));
+    variables["--disabled-bg"] = color(Theme::disabledBg(false), Theme::disabledBg(true));
+    variables["--hover-bg"] = color(Theme::hoverBg(false), Theme::hoverBg(true));
+    variables["--pressed-bg"] = color(Theme::pressedBg(false), Theme::pressedBg(true));
 
-    // Load stylesheet from file
+    // ========== TEXT / FOREGROUND COLORS ==========
+    variables["--text-primary"] = color(Theme::textPrimary(false), Theme::textPrimary(true));
+    variables["--text-secondary"] = color(Theme::textSecondary(false), Theme::textSecondary(true));
+    variables["--text-muted"] = color(Theme::textMuted(false), Theme::textMuted(true));
+    variables["--text-disabled"] = color(Theme::textDisabled(false), Theme::textDisabled(true));
+    variables["--text-error"] = color(Theme::textError(false), Theme::textError(true));
+    variables["--text-cyan"] = color(Theme::textCyan(false), Theme::textCyan(true));
+    variables["--text-terminal"] = color(Theme::textTerminal(false), Theme::textTerminal(true));
+    variables["--text-solution"] = color(Theme::textSolution(false), Theme::textSolution(true));
+
+    // ========== BORDER / OUTLINE COLORS ==========
+    variables["--border-light"] = color(Theme::borderLight(false), Theme::borderLight(true));
+    variables["--border-dark"] = color(Theme::borderDark(false), Theme::borderDark(true));
+    variables["--border-accent"] = color(Theme::borderAccent(false), Theme::borderAccent(true));
+    variables["--border-group"] = color(Theme::borderGroup(false), Theme::borderGroup(true));
+    variables["--border-bottom"] = color(Theme::borderBottom(false), Theme::borderBottom(true));
+
+    // ========== CHECKBOX / INDICATOR COLORS ==========
+    variables["--checkbox-bg"] = color(Theme::checkboxBg(false), Theme::checkboxBg(true));
+    variables["--checkbox-check-blue"] = color(Theme::checkboxCheckBlue(false), Theme::checkboxCheckBlue(true));
+    variables["--checkbox-check-orange"] = color(Theme::checkboxCheckOrange(false), Theme::checkboxCheckOrange(true));
+    variables["--checkbox-border"] = color(Theme::checkboxBorder(false), Theme::checkboxBorder(true));
+
+    // ========== BUTTON COLORS ==========
+    variables["--button-bg"] = color(Theme::buttonBg(false), Theme::buttonBg(true));
+    variables["--button-border"] = color(Theme::buttonBorder(false), Theme::buttonBorder(true));
+    variables["--button-text"] = color(Theme::buttonText(false), Theme::buttonText(true));
+    variables["--button-secondary-text"] = color(Theme::buttonSecondaryText(false), Theme::buttonSecondaryText(true));
+
+    variables["--button-solve-bg"] = color(Theme::buttonSolveBg(false), Theme::buttonSolveBg(true));
+    variables["--button-solve-border"] = color(Theme::buttonSolveBorder(false), Theme::buttonSolveBorder(true));
+    variables["--button-solve-hover"] = color(Theme::buttonSolveHover(false), Theme::buttonSolveHover(true));
+
+    // ========== INPUT BAR COLORS ==========
+    variables["--input-mode-bg"] = color(Theme::inputModeBg(false), Theme::inputModeBg(true));
+    variables["--input-mode-border"] = color(Theme::inputModeBorder(false), Theme::inputModeBorder(true));
+    variables["--input-mode-hover"] = color(Theme::inputModeHover(false), Theme::inputModeHover(true));
+    variables["--input-mode-text"] = color(Theme::inputModeText(false), Theme::inputModeText(true));
+
+    variables["--input-arrow-bg"] = color(Theme::inputArrowBg(false), Theme::inputArrowBg(true));
+    variables["--input-arrow-border"] = color(Theme::inputArrowBorder(false), Theme::inputArrowBorder(true));
+    variables["--input-arrow-hover"] = color(Theme::inputArrowHover(false), Theme::inputArrowHover(true));
+
+    variables["--input-apply-bg"] = color(Theme::inputApplyBg(false), Theme::inputApplyBg(true));
+    variables["--input-apply-border"] = color(Theme::inputApplyBorder(false), Theme::inputApplyBorder(true));
+    variables["--input-apply-hover"] = color(Theme::inputApplyHover(false), Theme::inputApplyHover(true));
+    variables["--input-apply-text"] = color(Theme::inputApplyText(false), Theme::inputApplyText(true));
+    variables["--input-apply-hover-text"] = color(Theme::inputApplyHoverText(false), Theme::inputApplyHoverText(true));
+
+    variables["--input-field-bg"] = color(Theme::inputFieldBg(false), Theme::inputFieldBg(true));
+    variables["--input-field-border"] = color(Theme::inputFieldBorder(false), Theme::inputFieldBorder(true));
+    variables["--input-field-text"] = color(Theme::inputFieldText(false), Theme::inputFieldText(true));
+    variables["--input-panel-bg"] = color(Theme::inputPanelBg(false), Theme::inputPanelBg(true));
+
+    // ========== RESET/STOP/UTIL BUTTON COLORS ==========
+    variables["--button-reset-bg"] = color(Theme::buttonResetBg(false), Theme::buttonResetBg(true));
+    variables["--button-reset-border"] = color(Theme::buttonResetBorder(false), Theme::buttonResetBorder(true));
+    variables["--button-reset-hover"] = color(Theme::buttonResetHover(false), Theme::buttonResetHover(true));
+
+    variables["--button-stop-bg"] = color(Theme::buttonStopBg(false), Theme::buttonStopBg(true));
+    variables["--button-stop-border"] = color(Theme::buttonStopBorder(false), Theme::buttonStopBorder(true));
+    variables["--button-stop-hover"] = color(Theme::buttonStopHover(false), Theme::buttonStopHover(true));
+    variables["--button-stop-text"] = color(Theme::buttonStopText(false), Theme::buttonStopText(true));
+
+    variables["--button-util-bg"] = color(Theme::buttonUtilBg(false), Theme::buttonUtilBg(true));
+    variables["--button-util-border"] = color(Theme::buttonUtilBorder(false), Theme::buttonUtilBorder(true));
+    variables["--button-util-text"] = color(Theme::buttonUtilText(false), Theme::buttonUtilText(true));
+    variables["--button-util-hover-bg"] = color(Theme::buttonUtilHoverBg(false), Theme::buttonUtilHoverBg(true));
+    variables["--button-util-hover-border"] = color(Theme::buttonUtilHoverBorder(false), Theme::buttonUtilHoverBorder(true));
+    variables["--button-util-hover-text"] = color(Theme::buttonUtilHoverText(false), Theme::buttonUtilHoverText(true));
+
+    variables["--button-about-bg"] = color(Theme::buttonAboutBg(false), Theme::buttonAboutBg(true));
+    variables["--button-about-border"] = color(Theme::buttonAboutBorder(false), Theme::buttonAboutBorder(true));
+    variables["--button-about-text"] = color(Theme::buttonAboutText(false), Theme::buttonAboutText(true));
+    variables["--button-about-hover-bg"] = color(Theme::buttonAboutHoverBg(false), Theme::buttonAboutHoverBg(true));
+    variables["--button-about-hover-border"] = color(Theme::buttonAboutHoverBorder(false), Theme::buttonAboutHoverBorder(true));
+    variables["--button-about-hover-text"] = color(Theme::buttonAboutHoverText(false), Theme::buttonAboutHoverText(true));
+
+    // ========== PROGRESS / STATUS COLORS ==========
+    variables["--progress-bg"] = color(Theme::progressBg(false), Theme::progressBg(true));
+    variables["--progress-fill"] = color(Theme::progressFill(false), Theme::progressFill(true));
+    variables["--status-text"] = color(Theme::statusText(false), Theme::statusText(true));
+
+    // ========== SCROLLBAR COLORS ==========
+    variables["--scrollbar-bg"] = color(Theme::scrollbarBg(false), Theme::scrollbarBg(true));
+    variables["--scrollbar-handle"] = color(Theme::scrollbarHandle(false), Theme::scrollbarHandle(true));
+    variables["--scrollbar-hover"] = color(Theme::scrollbarHover(false), Theme::scrollbarHover(true));
+
+    // ========== TABLE COLORS ==========
+    variables["--table-bg"] = color(Theme::tableBg(false), Theme::tableBg(true));
+    variables["--table-border"] = color(Theme::tableBorder(false), Theme::tableBorder(true));
+    variables["--table-header-bg"] = color(Theme::tableHeaderBg(false), Theme::tableHeaderBg(true));
+    variables["--table-header-text"] = color(Theme::tableHeaderText(false), Theme::tableHeaderText(true));
+    variables["--table-selected-bg"] = color(Theme::tableSelectedBg(false), Theme::tableSelectedBg(true));
+    variables["--table-selected-text"] = color(Theme::tableSelectedText(false), Theme::tableSelectedText(true));
+
+    // ========== ALTERNATING ROW COLORS ==========
+    variables["--row-alt-dark"] = color(Theme::rowAltDark(false), Theme::rowAltDark(true));
+    variables["--row-alt-light"] = color(Theme::rowAltLight(false), Theme::rowAltLight(true));
+
+    // ========== TOOLTIP COLORS ==========
+    variables["--tooltip-bg"] = color(Theme::tooltipBg(false), Theme::tooltipBg(true));
+    variables["--tooltip-text"] = color(Theme::tooltipText(false), Theme::tooltipText(true));
+    variables["--tooltip-border"] = color(Theme::tooltipBorder(false), Theme::tooltipBorder(true));
+
+    // ========== CUBE COLORS ==========
+    variables["--cube-top-face"] = Theme::cubeTopFace(false);
+    variables["--cube-bot-face"] = Theme::cubeBotFace(false);
+    variables["--cube-red"] = Theme::cubeRed(false);
+    variables["--cube-blue"] = Theme::cubeBlue(false);
+    variables["--cube-orange"] = Theme::cubeOrange(false);
+    variables["--cube-green"] = Theme::cubeGreen(false);
+    variables["--cube-partial"] = Theme::cubePartial(false);
+    variables["--cube-border"] = Theme::cubeBorder(false);
+    variables["--cube-selection"] = Theme::cubeSelection(false);
+    variables["--canvas-bg"] = color(Theme::canvasBg(false), Theme::canvasBg(true));
+
+    // ========== SIDEBAR / MODAL COLORS ==========
+    variables["--sidebar-bg"] = color(Theme::sidebarBg(false), Theme::sidebarBg(true));
+    variables["--sidebar-border"] = color(Theme::sidebarBorder(false), Theme::sidebarBorder(true));
+    variables["--modal-bg"] = color(Theme::modalBg(false), Theme::modalBg(true));
+    variables["--modal-border"] = color(Theme::modalBorder(false), Theme::modalBorder(true));
+    variables["--modal-overlay"] = color(Theme::modalOverlay(false), Theme::modalOverlay(true));
+
+    // Load stylesheet from resource file
     QFile styleFile(":/stylesheet.qss");
     if (!styleFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return ""; // Return empty if file not found
+        return ""; // Return empty if main stylesheet not found
     }
     QString rawStyle = styleFile.readAll();
     styleFile.close();
 
-    return rawStyle
-        .arg(PRIMARY_BG)          // %1  main bg
-        .arg(TEXT_PRIMARY)        // %2  main text
-        .arg(BORDER_GROUP)        // %3  group border
-        .arg(TEXT_SECONDARY)      // %4  secondary text
-        .arg(CHECKBOX_BORDER)     // %5
-        .arg(CHECKBOX_BG)         // %6
-        .arg(Theme::CHECKBOX_CHECK_BLUE)  // %7
-        .arg(Theme::CHECKBOX_CHECK_ORANGE)// %8
-        .arg(BORDER_DARK)         // %9
-        .arg(DISABLED_BG)         // %10
-        .arg(TERTIARY_BG)         // %11 input/button bg
-        .arg(BORDER_LIGHT)        // %12 input border
-        .arg(TEXT_DISABLED)       // %13
-        .arg(DISABLED_BG)         // %14
-        .arg(BORDER_DARK)         // %15
-        .arg(TEXT_CYAN)           // %16 command line text
-        .arg(SECONDARY_BG)        // %17 terminal bg
-        .arg(TEXT_TERMINAL)       // %18
-        .arg(BUTTON_BG)           // %19
-        .arg(BUTTON_BORDER)       // %20
-        .arg(BUTTON_TEXT)         // %21
-        .arg(HOVER_BG)            // %22
-        .arg(PRESSED_BG)          // %23
-        .arg(Theme::BUTTON_SOLVE_BG)     // %24
-        .arg(Theme::BUTTON_SOLVE_BORDER) // %25
-        .arg(Theme::BUTTON_SOLVE_HOVER)  // %26
-        .arg(RESET_BG)            // %27
-        .arg(RESET_BORDER)        // %28
-        .arg(RESET_HOVER)         // %29
-        .arg(UTIL_BG)             // %30 floating btns bg
-        .arg(UTIL_BORDER)         // %31
-        .arg(UTIL_TEXT)           // %32
-        .arg(UTIL_HOVER_BG)       // %33
-        .arg(UTIL_HOVER_BORDER)   // %34
-        .arg(UTIL_HOVER_TEXT)     // %35
-        .arg(PROGRESS_BG)         // %36
-        .arg(PROGRESS_FILL)       // %37
-        .arg(TEXT_MUTED)          // %38 status text
-        .arg(TEXT_ERROR)          // %39
-        .arg(SCROLLBAR_BG)        // %40
-        .arg(SCROLLBAR_HANDLE)    // %41
-        .arg(SCROLLBAR_HOVER)     // %42
-        .arg(TABLE_BG)            // %43
-        .arg(TABLE_BORDER)        // %44
-        .arg(TABLE_BORDER)        // %45 gridline
-        .arg(TABLE_HEADER_BG)     // %46
-        .arg(TABLE_HEADER_TEXT)   // %47
-        .arg(TABLE_SEL_BG)        // %48
-        .arg(TABLE_SEL_TEXT)      // %49
-        .arg(DARK_BG)             // %50 topbar bg
-        .arg(BORDER_BOTTOM)       // %51
-        .arg(ABOUT_BG)            // %52
-        .arg(ABOUT_BORDER)        // %53
-        .arg(ABOUT_TEXT)          // %54
-        .arg(ABOUT_HOVER_BG)      // %55
-        .arg(ABOUT_HOVER_BORDER)  // %56
-        .arg(ABOUT_HOVER_TEXT)    // %57
-        .arg(TOOLTIP_BG)          // %58
-        .arg(TOOLTIP_TEXT)        // %59
-        .arg(INPUT_TEXT)          // %60 input text color
-        .arg(UNDO_REDO_DISABLED_BG)    // %61
-        .arg(UNDO_REDO_DISABLED_BORDER)// %62
-        .arg(UNDO_REDO_DISABLED_TEXT)  // %63
+    // Now substitute all CSS variables in the stylesheet with their actual values
+    QString finalStyle = rawStyle;
+    for (auto it = variables.begin(); it != variables.end(); ++it) {
+        finalStyle.replace(it.key(), it.value());
+    }
 
-        //===========input panel================//
-        .arg(INPUT_MODE_BG)       // %64 input mode button bg
-        .arg(INPUT_MODE_BORDER)   // %65 input mode button border
-        .arg(INPUT_MODE_HOVER)    // %66 input mode button hover
-        .arg(INPUT_ARROW_BG)      // %67 input arrow button bg
-        .arg(INPUT_ARROW_BORDER)  // %68 input arrow button border
-        .arg(INPUT_ARROW_HOVER)   // %69 input arrow button hover
-        .arg(INPUT_APPLY_BG)      // %70 input apply button bg
-        .arg(INPUT_APPLY_BORDER)  // %71 input apply button border
-        .arg(INPUT_APPLY_HOVER)   // %72 input apply button hover
-        .arg(INPUT_FIELD_BORDER)  // %73 input field border
-        .arg(INPUT_FIELD_BG)      // %74 input field background
-        .arg(INPUT_FIELD_TEXT)    // %75 input field text color
-        .arg(INPUT_MODE_TEXT)     // %76 input mode button text
-        .arg(INPUT_APPLY_TEXT)    // %77 apply button text
-        .arg(INPUT_APPLY_HOVER_TEXT) // %78 apply button hover text
-        .arg(INPUT_MODE_BG)        //%79
-        .arg(INPUT_MODE_BORDER)     //%80
-        .arg(INPUT_PANEL_BG);    //%81
+    return finalStyle;
 }

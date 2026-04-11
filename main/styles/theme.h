@@ -1,237 +1,173 @@
 #pragma once
 #include <QColor>
+#include <QString>
+#include <QMap>
 
 // ============================================================
-// THEME.H - Centralized Color Palette for the entire application
+// THEME.H - CSS-like Color System for the entire application
 // ============================================================
-// All colors used in the UI, cube visualization, and styling
-// are defined here. Modify this file to experiment with themes!
+// Colors are organized like CSS variables (--var-name format)
+// Use Theme::getColor() to access colors in C++
+// Colors are automatically available in QSS via --var-name
 // ============================================================
 
 namespace Theme {
+    // CSS-like variable colors - organized by category
+    
+    // These will be injected into QSS as --var-name variables
+    extern const QMap<QString, QString> COLORS;
+
     // ========== DARK MODE / PRIMARY BACKGROUND COLORS ==========
-    static constexpr const char* PRIMARY_BG           = "#1a1a2e";  // Main window background
-    static constexpr const char* SECONDARY_BG         = "#0d1117";  // Code/terminal background
-    static constexpr const char* TERTIARY_BG          = "#2a2a3e";  // Buttons, inputs, components
-    static constexpr const char* DARK_BG              = "#0e0e1c";  // Top bar, very dark areas
-    static constexpr const char* DISABLED_BG          = "#1e1e30";  // Disabled component background
-    static constexpr const char* HOVER_BG             = "#3a3a5e";  // Hover states
-    static constexpr const char* PRESSED_BG           = "#1a1a2e";  // Pressed button state
+    inline QString primaryBg(bool light = false) { return light ? "#f0f0f8" : "#1a1a2e"; }
+    inline QString secondaryBg(bool light = false) { return light ? "#e0e0f0" : "#0d1117"; }
+    inline QString tertiaryBg(bool light = false) { return light ? "#d8d8ee" : "#2a2a3e"; }
+    inline QString darkBg(bool light = false) { return light ? "#c8c8e0" : "#0e0e1c"; }
+    inline QString disabledBg(bool light = false) { return light ? "#e8e8f4" : "#1e1e30"; }
+    inline QString hoverBg(bool light = false) { return light ? "#d0d0e8" : "#3a3a5e"; }
+    inline QString pressedBg(bool light = false) { return light ? "#c0c0d8" : "#1a1a2e"; }
 
     // ========== TEXT / FOREGROUND COLORS ==========
-    static constexpr const char* TEXT_PRIMARY         = "#e0e0e0";  // Main text, labels
-    static constexpr const char* TEXT_SECONDARY       = "#aaa";     // Secondary text, less important
-    static constexpr const char* TEXT_MUTED           = "#888";     // Very muted text (status, hints)
-    static constexpr const char* TEXT_DARK            = "#ddd";     // Slightly lighter than primary
-    static constexpr const char* TEXT_DISABLED        = "#555";     // Disabled text
-    static constexpr const char* TEXT_ERROR           = "#ff5555";  // Error messages
-    static constexpr const char* TEXT_CYAN            = "#7fdbff";  // Monospace input (command line)
-    static constexpr const char* TEXT_TERMINAL        = "#7ec8e3";  // Terminal output
-    static constexpr const char* TEXT_SOLUTION        = "#7abfe8";  // Solution highlights
+    inline QString textPrimary(bool light = false) { return light ? "#1a1a3e" : "#e0e0e0"; }
+    inline QString textSecondary(bool light = false) { return light ? "#444466" : "#aaa"; }
+    inline QString textMuted(bool light = false) { return light ? "#888" : "#888"; }
+    inline QString textDisabled(bool light = false) { return light ? "#aaa" : "#555"; }
+    inline QString textError(bool light = false) { return light ? "#cc2222" : "#ff5555"; }
+    inline QString textCyan(bool light = false) { return light ? "#1a5fa8" : "#7fdbff"; }
+    inline QString textTerminal(bool light = false) { return light ? "#1a5080" : "#7ec8e3"; }
+    inline QString textSolution(bool light = false) { return light ? "#1a5fa8" : "#7abfe8"; }
 
     // ========== BORDER / OUTLINE COLORS ==========
-    static constexpr const char* BORDER_LIGHT         = "#555";     // Standard borders
-    static constexpr const char* BORDER_DARK          = "#3a3a4e";  // Subtle borders
-    static constexpr const char* BORDER_ACCENT        = "#777";     // Brighter borders on hover
-    static constexpr const char* BORDER_GROUP         = "#444";     // GroupBox border
-    static constexpr const char* BORDER_HEADER        = "#2a2a4a";  // Table header border
-    static constexpr const char* BORDER_BOTTOM        = "#2a2a4a";  // Bottom bar/divider
+    inline QString borderLight(bool light = false) { return light ? "#aaa" : "#555"; }
+    inline QString borderDark(bool light = false) { return light ? "#c8c8de" : "#3a3a4e"; }
+    inline QString borderAccent(bool light = false) { return light ? "#888" : "#777"; }
+    inline QString borderGroup(bool light = false) { return light ? "#aaa" : "#444"; }
+    inline QString borderBottom(bool light = false) { return light ? "#c0c0da" : "#2a2a4a"; }
 
     // ========== CHECKBOX / INDICATOR COLORS ==========
-    static constexpr const char* CHECKBOX_BG          = "#2a2a3e";  // Unchecked checkbox background
-    static constexpr const char* CHECKBOX_CHECK_BLUE  = "#4a90d9";  // Standard checked checkbox (blue)
-    static constexpr const char* CHECKBOX_CHECK_ORANGE= "#d97a4a";  // Special checkbox (rank ergo - orange)
-    static constexpr const char* CHECKBOX_BORDER      = "#666";     // Checkbox border
+    inline QString checkboxBg(bool light = false) { return light ? "#d8d8ee" : "#2a2a3e"; }
+    inline QString checkboxCheckBlue(bool light = false) { return light ? "#4a80c4" : "#4a90d9"; }
+    inline QString checkboxCheckOrange(bool light = false) { return light ? "#c87030" : "#d97a4a"; }
+    inline QString checkboxBorder(bool light = false) { return light ? "#aaa" : "#666"; }
 
     // ========== BUTTON COLORS ==========
-    static constexpr const char* BUTTON_BG            = "#2a2a3e";  // Default button background
-    static constexpr const char* BUTTON_BORDER        = "#555";     // Default button border
-    static constexpr const char* BUTTON_TEXT          = "#ddd";     // Default button text
-    static constexpr const char* BUTTON_SECONDARY_TEXT= "#aaa";     // Secondary button text
+    inline QString buttonBg(bool light = false) { return light ? "#d8d8ee" : "#2a2a3e"; }
+    inline QString buttonBorder(bool light = false) { return light ? "#aaa" : "#555"; }
+    inline QString buttonText(bool light = false) { return light ? "#1a1a3e" : "#ddd"; }
+    inline QString buttonSecondaryText(bool light = false) { return light ? "#444466" : "#aaa"; }
 
     // Solve Button (green)
-    static constexpr const char* BUTTON_SOLVE_BG      = "#1a6b3c";  // Solve button background
-    static constexpr const char* BUTTON_SOLVE_BORDER  = "#2db570";  // Solve button border
-    static constexpr const char* BUTTON_SOLVE_HOVER   = "#227a47";  // Solve button hover
+    inline QString buttonSolveBg(bool light = false) { return light ? "#1a6b3c" : "#1a6b3c"; }
+    inline QString buttonSolveBorder(bool light = false) { return light ? "#2db570" : "#2db570"; }
+    inline QString buttonSolveHover(bool light = false) { return light ? "#227a47" : "#227a47"; }
 
-    // Input Bar Buttons (mode toggle, dropdown, apply) - PRIMARY ACTION
-    static constexpr const char* INPUT_MODE_BG        = "#0d1a2e";  // Input mode button background (dark blue) %64
-    static constexpr const char* INPUT_MODE_BORDER    = "#1e3a5a";  // Input mode button border                 %65
-    static constexpr const char* INPUT_MODE_HOVER     = "#142440";  // Input mode button hover                  %66
+    // Input Bar - Mode Toggle
+    inline QString inputModeBg(bool light = false) { return light ? "#d8e8f8" : "#0d1a2e"; }
+    inline QString inputModeBorder(bool light = false) { return light ? "#6090c0" : "#1e3a5a"; }
+    inline QString inputModeHover(bool light = false) { return light ? "#c4d8f0" : "#142440"; }
+    inline QString inputModeText(bool light = false) { return light ? "#1a5fa8" : "#60a8e0"; }
 
-    static constexpr const char* INPUT_ARROW_BG       = "#0d1a2e";  // Dropdown arrow background                %67
-    static constexpr const char* INPUT_ARROW_BORDER   = "#1e3a5a";  // Dropdown arrow border                    %68
-    static constexpr const char* INPUT_ARROW_HOVER    = "#142440";  // Dropdown arrow hover                     %69
+    // Input Bar - Dropdown Arrow
+    inline QString inputArrowBg(bool light = false) { return light ? "#d8e8f8" : "#0d1a2e"; }
+    inline QString inputArrowBorder(bool light = false) { return light ? "#6090c0" : "#1e3a5a"; }
+    inline QString inputArrowHover(bool light = false) { return light ? "#c4d8f0" : "#142440"; }
 
-    static constexpr const char* INPUT_APPLY_BG       = "#0f3060";  // Apply button background                  %70
-    static constexpr const char* INPUT_APPLY_BORDER   = "#2060b0";  // Apply button border                      %71
-    static constexpr const char* INPUT_APPLY_HOVER    = "#1a4a8a";  // Apply button hover                       %72
+    // Input Bar - Apply Button
+    inline QString inputApplyBg(bool light = false) { return light ? "#1a5fa8" : "#0f3060"; }
+    inline QString inputApplyBorder(bool light = false) { return light ? "#0e4a8a" : "#2060b0"; }
+    inline QString inputApplyHover(bool light = false) { return light ? "#154d90" : "#1a4a8a"; }
+    inline QString inputApplyText(bool light = false) { return light ? "#ffffff" : "#7abfe8"; }
+    inline QString inputApplyHoverText(bool light = false) { return light ? "#ffffff" : "#ffffff"; }
 
-    static constexpr const char* INPUT_FIELD_BG       = "#060e1a";  // Input field background (very dark blue)  %74
-    static constexpr const char* INPUT_FIELD_BORDER   = "#1a3050";  // Input field border                       %73
-    static constexpr const char* INPUT_FIELD_TEXT     = "#5a8ab0";  // Input field text (muted blue)            %75
-    static constexpr const char* INPUT_MODE_TEXT      = "#60a8e0";  // Input mode button text (bright blue)     %76
-    static constexpr const char* INPUT_MODE_BG      = "#60a8e0";
-    static constexpr const char* INPUT_MODE_BORDER      = "#60a8e0";
-    static constexpr const char* INPUT_PANEL_BG      = "#60a8e0";
-    static constexpr const char* INPUT_APPLY_TEXT     = "#7abfe8";  // Apply button text                        %77
-    static constexpr const char* INPUT_APPLY_HOVER_TEXT = "#ffffff"; // Apply button hover text                 %78
+    // Input Bar - Field
+    inline QString inputFieldBg(bool light = false) { return light ? "#eaf2fc" : "#060e1a"; }
+    inline QString inputFieldBorder(bool light = false) { return light ? "#7aaad8" : "#1a3050"; }
+    inline QString inputFieldText(bool light = false) { return light ? "#1a3a5a" : "#5a8ab0"; }
+    inline QString inputPanelBg(bool light = false) { return light ? "#60a8e0" : "#60a8e0"; }
 
-    // Light theme variants for input bar
-    static constexpr const char* LIGHT_INPUT_MODE_BG      = "#d8e8f8";  // Light blue tint
-    static constexpr const char* LIGHT_INPUT_MODE_BORDER  = "#6090c0";  // Medium blue border
-    static constexpr const char* LIGHT_INPUT_MODE_HOVER   = "#c4d8f0";  // Slightly darker on hover
-
-    static constexpr const char* LIGHT_INPUT_ARROW_BG     = "#d8e8f8";
-    static constexpr const char* LIGHT_INPUT_ARROW_BORDER = "#6090c0";
-    static constexpr const char* LIGHT_INPUT_ARROW_HOVER  = "#c4d8f0";
-
-    static constexpr const char* LIGHT_INPUT_APPLY_BG     = "#1a5fa8";  // Strong blue apply
-    static constexpr const char* LIGHT_INPUT_APPLY_BORDER = "#0e4a8a";  // Darker blue border
-    static constexpr const char* LIGHT_INPUT_APPLY_HOVER  = "#154d90";  // Hover slightly darker
-
-    static constexpr const char* LIGHT_INPUT_FIELD_BG     = "#eaf2fc";  // Very light blue field
-    static constexpr const char* LIGHT_INPUT_FIELD_BORDER = "#7aaad8";  // Blue field border
-    static constexpr const char* LIGHT_INPUT_FIELD_TEXT   = "#1a3a5a";  // Dark blue text
-    static constexpr const char* LIGHT_INPUT_MODE_TEXT    = "#1a5fa8";  // Dark blue mode text
-    static constexpr const char* LIGHT_INPUT_MODE_BG    = "#1a5fa8";  // Dark blue mode text
-    static constexpr const char* LIGHT_INPUT_MODE_BORDER    = "#1a5fa8";  // Dark blue mode text
-    static constexpr const char* LIGHT_INPUT_PANEL_BG      = "#60a8e0";
-    static constexpr const char* LIGHT_INPUT_APPLY_TEXT   = "#ffffff";  // White on dark blue apply
-    static constexpr const char* LIGHT_INPUT_APPLY_HOVER_TEXT = "#ffffff"; // White on hover
-
-    // Reset Button (red - alarming)
-    static constexpr const char* BUTTON_RESET_BG      = "#2a2a3e";  // Reset button background
-    static constexpr const char* BUTTON_RESET_BORDER  = "#555";     // Reset button border
-    static constexpr const char* BUTTON_RESET_HOVER   = "#3a3a5e";  // Reset button hover
+    // Reset Button
+    inline QString buttonResetBg(bool light = false) { return light ? "#d8d8ee" : "#2a2a3e"; }
+    inline QString buttonResetBorder(bool light = false) { return light ? "#aaa" : "#555"; }
+    inline QString buttonResetHover(bool light = false) { return light ? "#c8c8de" : "#3a3a5e"; }
 
     // Stop Button (muted red)
-    static constexpr const char* BUTTON_STOP_BG       = "#3d1616";  // Stop button background
-    static constexpr const char* BUTTON_STOP_BORDER   = "#7a2e2e";  // Stop button border
-    static constexpr const char* BUTTON_STOP_HOVER    = "#4d1e1e";  // Stop button hover
-    static constexpr const char* BUTTON_STOP_TEXT     = "#c89898";  // Stop button text
+    inline QString buttonStopBg(bool light = false) { return light ? "#d8d8ee" : "#3d1616"; }
+    inline QString buttonStopBorder(bool light = false) { return light ? "#aaa" : "#7a2e2e"; }
+    inline QString buttonStopHover(bool light = false) { return light ? "#c8c8de" : "#4d1e1e"; }
+    inline QString buttonStopText(bool light = false) { return light ? "#1a1a3e" : "#c89898"; }
 
     // Utility Buttons
-    static constexpr const char* BUTTON_UTIL_BG       = "#1e1e30";  // Utility button background
-    static constexpr const char* BUTTON_UTIL_BORDER   = "#3a3a5e";  // Utility button border
-    static constexpr const char* BUTTON_UTIL_TEXT     = "#7a7aaa";  // Utility button text
-    static constexpr const char* BUTTON_UTIL_HOVER_BG = "#2a2a4a";  // Utility button hover bg
-    static constexpr const char* BUTTON_UTIL_HOVER_BORDER = "#5a5a8a";  // Utility button hover border
-    static constexpr const char* BUTTON_UTIL_HOVER_TEXT   = "#b0b0dd";  // Utility button hover text
+    inline QString buttonUtilBg(bool light = false) { return light ? "#d8d8ee" : "#1e1e30"; }
+    inline QString buttonUtilBorder(bool light = false) { return light ? "#aaa" : "#3a3a5e"; }
+    inline QString buttonUtilText(bool light = false) { return light ? "#444466" : "#7a7aaa"; }
+    inline QString buttonUtilHoverBg(bool light = false) { return light ? "#c8c8de" : "#2a2a4a"; }
+    inline QString buttonUtilHoverBorder(bool light = false) { return light ? "#888" : "#5a5a8a"; }
+    inline QString buttonUtilHoverText(bool light = false) { return light ? "#1a1a3e" : "#b0b0dd"; }
 
     // About Button
-    static constexpr const char* BUTTON_ABOUT_BG      = "#2a2a3e";  // About button background
-    static constexpr const char* BUTTON_ABOUT_BORDER  = "#4a4a6a";  // About button border
-    static constexpr const char* BUTTON_ABOUT_TEXT    = "#9090bb";  // About button text
-    static constexpr const char* BUTTON_ABOUT_HOVER_BG = "#3a3a5e";  // About button hover bg
-    static constexpr const char* BUTTON_ABOUT_HOVER_BORDER = "#7a7aaa";  // About button hover border
-    static constexpr const char* BUTTON_ABOUT_HOVER_TEXT = "#e0e0ff";  // About button hover text
+    inline QString buttonAboutBg(bool light = false) { return light ? "#d8d8ee" : "#2a2a3e"; }
+    inline QString buttonAboutBorder(bool light = false) { return light ? "#aaa" : "#4a4a6a"; }
+    inline QString buttonAboutText(bool light = false) { return light ? "#444466" : "#9090bb"; }
+    inline QString buttonAboutHoverBg(bool light = false) { return light ? "#c8c8de" : "#3a3a5e"; }
+    inline QString buttonAboutHoverBorder(bool light = false) { return light ? "#888" : "#7a7aaa"; }
+    inline QString buttonAboutHoverText(bool light = false) { return light ? "#1a1a3e" : "#e0e0ff"; }
 
     // ========== PROGRESS / STATUS COLORS ==========
-    static constexpr const char* PROGRESS_BG          = "#2a2a3e";  // Progress bar background
-    static constexpr const char* PROGRESS_FILL        = "#4a90d9";  // Progress bar filled portion
-    static constexpr const char* STATUS_TEXT          = "#888";     // Status label text
+    inline QString progressBg(bool light = false) { return light ? "#c8c8e0" : "#2a2a3e"; }
+    inline QString progressFill(bool light = false) { return light ? "#4a80c4" : "#4a90d9"; }
+    inline QString statusText(bool light = false) { return light ? "#888" : "#888"; }
 
     // ========== SCROLLBAR COLORS ==========
-    static constexpr const char* SCROLLBAR_BG         = "#0d1117";  // Scrollbar track background
-    static constexpr const char* SCROLLBAR_HANDLE     = "#4a4a6e";  // Scrollbar handle
-    static constexpr const char* SCROLLBAR_HOVER      = "#6a6aae";  // Scrollbar handle hover
+    inline QString scrollbarBg(bool light = false) { return light ? "#dcdcec" : "#0d1117"; }
+    inline QString scrollbarHandle(bool light = false) { return light ? "#a0a0c0" : "#4a4a6e"; }
+    inline QString scrollbarHover(bool light = false) { return light ? "#7878a8" : "#6a6aae"; }
 
     // ========== TABLE COLORS ==========
-    static constexpr const char* TABLE_BG             = "#0d1117";  // Table background
-    static constexpr const char* TABLE_BORDER         = "#444";     // Table border
-    static constexpr const char* TABLE_HEADER_BG      = "#1a1a2e";  // Table header background
-    static constexpr const char* TABLE_HEADER_TEXT    = "#7a9ab8";  // Table header text
-    static constexpr const char* TABLE_SELECTED_BG    = "#1e3a5a";  // Selected row background
-    static constexpr const char* TABLE_SELECTED_TEXT  = "#ffffff";  // Selected row text
+    inline QString tableBg(bool light = false) { return light ? "#e8e8f8" : "#0d1117"; }
+    inline QString tableBorder(bool light = false) { return light ? "#bbb" : "#444"; }
+    inline QString tableHeaderBg(bool light = false) { return light ? "#d8d8ee" : "#1a1a2e"; }
+    inline QString tableHeaderText(bool light = false) { return light ? "#3a5a8a" : "#7a9ab8"; }
+    inline QString tableSelectedBg(bool light = false) { return light ? "#4a80c4" : "#1e3a5a"; }
+    inline QString tableSelectedText(bool light = false) { return light ? "#ffffff" : "#ffffff"; }
 
-    // ========== ALTERNATING ROW COLORS (for solutions) ==========
-    static constexpr const char* ROW_ALT_DARK         = "#0d1117";  // Odd rows (dark)
-    static constexpr const char* ROW_ALT_LIGHT        = "#131c28";  // Even rows (slightly lighter)
+    // ========== ALTERNATING ROW COLORS ==========
+    inline QString rowAltDark(bool light = false) { return light ? "#e0e8f8" : "#0d1117"; }
+    inline QString rowAltLight(bool light = false) { return light ? "#eceef8" : "#131c28"; }
 
     // ========== TOOLTIP COLORS ==========
-    static constexpr const char* TOOLTIP_BG           = "#252540";  // Tooltip background
-    static constexpr const char* TOOLTIP_TEXT         = "#d8d8f0";  // Tooltip text
-    static constexpr const char* TOOLTIP_BORDER       = "#5a5a8a";  // Tooltip border
+    inline QString tooltipBg(bool light = false) { return light ? "#2a2a50" : "#252540"; }
+    inline QString tooltipText(bool light = false) { return light ? "#e8e8ff" : "#d8d8f0"; }
+    inline QString tooltipBorder(bool light = false) { return light ? "#5a5a8a" : "#5a5a8a"; }
 
-    // ========== CUBE COLORS (piece colors) ==========
-    // Index mapping: [0]=dark grey (top), [1]=white (bottom), [2]=red, [3]=blue,
-    //                [4]=orange, [5]=green, [6]=grey (partial/incomplete pieces)
-    static constexpr const char* CUBE_TOP_FACE        = "#333333";  // Dark grey (top face)
-    static constexpr const char* CUBE_BOT_FACE        = "#ffffff";  // White (bottom face)
-    static constexpr const char* CUBE_RED             = "#ff0000";  // Red piece
-    static constexpr const char* CUBE_BLUE            = "#0000ff";  // Blue piece
-    static constexpr const char* CUBE_ORANGE          = "#ff8600";  // Orange piece
-    static constexpr const char* CUBE_GREEN           = "#00ff00";  // Green piece
-    static constexpr const char* CUBE_PARTIAL         = "#888888";  // Partial/incomplete piece
-    static constexpr const char* CUBE_BORDER          = "#000000";  // Piece border (black)
-    static constexpr const char* CUBE_SELECTION       = "#ffff00";  // Selection highlight (yellow)
-    static constexpr const char* CANVAS_BG            = "#1a1a2e";  // Canvas/widget background
+    // ========== CUBE COLORS ==========
+    inline QString cubeTopFace(bool light = false) { return "#333333"; }
+    inline QString cubeBotFace(bool light = false) { return "#ffffff"; }
+    inline QString cubeRed(bool light = false) { return "#ff0000"; }
+    inline QString cubeBlue(bool light = false) { return "#0000ff"; }
+    inline QString cubeOrange(bool light = false) { return "#ff8600"; }
+    inline QString cubeGreen(bool light = false) { return "#00ff00"; }
+    inline QString cubePartial(bool light = false) { return "#888888"; }
+    inline QString cubeBorder(bool light = false) { return "#000000"; }
+    inline QString cubeSelection(bool light = false) { return "#ffff00"; }
+    inline QString canvasBg(bool light = false) { return light ? "#f0f0f8" : "#1a1a2e"; }
 
     // ========== SIDEBAR / MODAL COLORS ==========
-    static constexpr const char* SIDEBAR_BG           = "#13132a";  // Sidebar background
-    static constexpr const char* SIDEBAR_BORDER       = "#2a2a4a";  // Sidebar border
-    static constexpr const char* MODAL_BG             = "#1e1e34";  // Modal card background
-    static constexpr const char* MODAL_BORDER         = "#3a3a5e";  // Modal border
-    static constexpr const char* MODAL_OVERLAY        = "rgba(0,0,0,170)"; // Modal overlay
-
-    // ========== LIGHT THEME COLORS ==========
-    static constexpr const char* LIGHT_PRIMARY_BG     = "#f0f0f8";
-    static constexpr const char* LIGHT_SECONDARY_BG   = "#e0e0f0";
-    static constexpr const char* LIGHT_TERTIARY_BG    = "#d8d8ee";
-    static constexpr const char* LIGHT_DARK_BG        = "#c8c8e0";
-    static constexpr const char* LIGHT_DISABLED_BG    = "#e8e8f4";
-    static constexpr const char* LIGHT_HOVER_BG       = "#d0d0e8";
-    static constexpr const char* LIGHT_PRESSED_BG     = "#c0c0d8";
-    static constexpr const char* LIGHT_TEXT_PRIMARY   = "#1a1a3e";
-    static constexpr const char* LIGHT_TEXT_SECONDARY = "#444466";
-    static constexpr const char* LIGHT_TEXT_MUTED     = "#888";
-    static constexpr const char* LIGHT_TEXT_DISABLED  = "#aaa";
-    static constexpr const char* LIGHT_TEXT_ERROR     = "#cc2222";
-    static constexpr const char* LIGHT_TEXT_CYAN      = "#1a5fa8";
-    static constexpr const char* LIGHT_TEXT_TERMINAL  = "#1a5080";
-    static constexpr const char* LIGHT_TEXT_SOLUTION  = "#1a5fa8";
-    static constexpr const char* LIGHT_BORDER_LIGHT   = "#aaa";
-    static constexpr const char* LIGHT_BORDER_DARK    = "#c8c8de";
-    static constexpr const char* LIGHT_BORDER_GROUP   = "#aaa";
-    static constexpr const char* LIGHT_BORDER_BOTTOM  = "#c0c0da";
-    static constexpr const char* LIGHT_CHECKBOX_BG    = "#d8d8ee";
-    static constexpr const char* LIGHT_BUTTON_BG      = "#d8d8ee";
-    static constexpr const char* LIGHT_BUTTON_BORDER  = "#aaa";
-    static constexpr const char* LIGHT_BUTTON_TEXT    = "#1a1a3e";
-    static constexpr const char* LIGHT_SCROLLBAR_BG   = "#dcdcec";
-    static constexpr const char* LIGHT_SCROLLBAR_HANDLE = "#a0a0c0";
-    static constexpr const char* LIGHT_SCROLLBAR_HOVER = "#7878a8";
-    static constexpr const char* LIGHT_TABLE_BG       = "#e8e8f8";
-    static constexpr const char* LIGHT_TABLE_HEADER_BG= "#d8d8ee";
-    static constexpr const char* LIGHT_TABLE_BORDER   = "#bbb";
-    static constexpr const char* LIGHT_TABLE_SELECTED_BG  = "#4a80c4";
-    static constexpr const char* LIGHT_TABLE_SELECTED_TEXT= "#ffffff";
-    static constexpr const char* LIGHT_TABLE_HEADER_TEXT  = "#3a5a8a";
-    static constexpr const char* LIGHT_ROW_ALT_DARK   = "#e0e8f8";
-    static constexpr const char* LIGHT_ROW_ALT_LIGHT  = "#eceef8";
-    static constexpr const char* LIGHT_TOOLTIP_BG     = "#2a2a50";
-    static constexpr const char* LIGHT_TOOLTIP_TEXT   = "#e8e8ff";
-    static constexpr const char* LIGHT_TOOLTIP_BORDER = "#5a5a8a";
-    static constexpr const char* LIGHT_SOLVE_BG       = "#1a6b3c";
-    static constexpr const char* LIGHT_SOLVE_BORDER   = "#2db570";
-    static constexpr const char* LIGHT_SOLVE_HOVER    = "#227a47";
-    static constexpr const char* LIGHT_PROGRESS_BG    = "#c8c8e0";
-    static constexpr const char* LIGHT_PROGRESS_FILL  = "#4a80c4";
-    static constexpr const char* LIGHT_SIDEBAR_BG     = "#e8e8f8";
-    static constexpr const char* LIGHT_SIDEBAR_BORDER = "#c0c0da";
-    static constexpr const char* LIGHT_CANVAS_BG      = "#f0f0f8";
+    inline QString sidebarBg(bool light = false) { return light ? "#e8e8f8" : "#13132a"; }
+    inline QString sidebarBorder(bool light = false) { return light ? "#c0c0da" : "#2a2a4a"; }
+    inline QString modalBg(bool light = false) { return light ? "#d8d8ee" : "#1e1e34"; }
+    inline QString modalBorder(bool light = false) { return light ? "#a0a0c0" : "#3a3a5e"; }
+    inline QString modalOverlay(bool light = false) { return light ? "rgba(0,0,0,100)" : "rgba(0,0,0,170)"; }
 
     // ========== INLINE / RUNTIME DYNAMIC COLORS ==========
-    static constexpr const char* DEPTHS_INACTIVE_COLOR  = "#666";
-    static constexpr const char* DEPTHS_INACTIVE_BG     = "#1e1e30";
-    static constexpr const char* DEPTHS_INACTIVE_BORDER = "#3a3a4e";
-    static constexpr const char* ERGO_ALT_TEXT_DARK     = "#cdcdcd";
-    static constexpr const char* ERGO_ALT_META_DARK     = "#969696";
+    inline QString depthsInactiveColor(bool light = false) { return light ? "#888" : "#666"; }
+    inline QString depthsInactiveBg(bool light = false) { return light ? "#d8d8ee" : "#1e1e30"; }
+    inline QString depthsInactiveBorder(bool light = false) { return light ? "#aaa" : "#3a3a4e"; }
+    inline QString ergoAltTextDark(bool light = false) { return light ? "#333333" : "#cdcdcd"; }
+    inline QString ergoAltMetaDark(bool light = false) { return light ? "#555555" : "#969696"; }
 
-    // ========== UTILITY FUNCTION ==========
-    // Returns a QColor from any theme constant
-    inline QColor color(const char* hex) {
-        return QColor(hex);
-    }
+    // ========== UTILITY FUNCTIONS ==========
+    // Get a QColor from color name (e.g., "primary-bg", "button-text")
+    QColor getColor(const QString& colorName, bool lightTheme = false);
+    
+    // Build stylesheet with CSS variables
+    QString buildStyleSheet(bool lightTheme = false);
 }
