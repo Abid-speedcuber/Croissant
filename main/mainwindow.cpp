@@ -83,7 +83,7 @@ void SolverWorker::requestStop()
 
 void SolverWorker::run()
 {
-    QString exePath = QCoreApplication::applicationDirPath() + "/sq1opt";
+    QString exePath = QCoreApplication::applicationDirPath() + "/solver-core/sq1opt";
 #ifdef Q_OS_WIN
     exePath += ".exe";
 #endif
@@ -92,7 +92,7 @@ void SolverWorker::run()
     m_proc.store(&proc);
 
     proc.setProcessChannelMode(QProcess::MergedChannels);
-    proc.setWorkingDirectory(QCoreApplication::applicationDirPath());
+    proc.setWorkingDirectory(QCoreApplication::applicationDirPath() + "/solver-core");
     QStringList args;
     args << "-v5";
     args.append(flags);
@@ -101,7 +101,7 @@ void SolverWorker::run()
     if (!proc.waitForStarted(3000))
     {
         m_proc.store(nullptr);
-        emit lineReady("ERROR: Could not start sq1opt. Make sure sq1opt is in the same folder.");
+        emit lineReady("ERROR: Could not start sq1opt. Make sure sq1opt.exe is in the solver-core folder.");
         emit finished(-1);
         return;
     }
