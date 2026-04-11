@@ -2172,12 +2172,14 @@ void MainWindow::rebuildTable()
         // Solution column: selectable QLabel
         QLabel *algLabel = new QLabel(r.alg);
         algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        algLabel->setCursor(Qt::IBeamCursor);
+        algLabel->setCursor(Qt::ArrowCursor);
         algLabel->setContentsMargins(4, 0, 4, 0);
         algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
             .arg(bg.name(),
                  textCol.name(),
                  m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
+        // Install event filter to show IBeam only when hovering over the text itself
+        algLabel->installEventFilter(this);
         m_solutionTable->setCellWidget(i, 1, algLabel);
 
         cell(2, QString::number(r.moves), true);
@@ -3105,6 +3107,23 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // QTextEdit delivers QHelpEvent to its internal viewport, not to itself.
     if (event->type() == QEvent::ToolTip && txtOutput && watched == txtOutput->viewport())
         return true;
+
+    // ── IBeam cursor only over actual label text ──────────────────────────────
+    if (event->type() == QEvent::MouseMove) {
+        if (QLabel *lbl = qobject_cast<QLabel*>(watched)) {
+            if (lbl->parent() && qobject_cast<QTableWidget*>(lbl->parent()->parent())) {
+                QMouseEvent *me = static_cast<QMouseEvent*>(event);
+                // Check if the mouse is within the bounding rect of the actual text
+                QFontMetrics fm(lbl->font());
+                QRect textRect = fm.boundingRect(
+                    lbl->contentsRect(), Qt::AlignVCenter | Qt::AlignLeft | Qt::TextWordWrap,
+                    lbl->text());
+                textRect.adjust(4, 0, 0, 0); // match contentsMargins
+                lbl->setCursor(textRect.contains(me->pos()) ? Qt::IBeamCursor : Qt::ArrowCursor);
+                return false;
+            }
+        }
+    }
 
     if (event->type() == QEvent::Resize && watched == m_outputWrapper)
     {
