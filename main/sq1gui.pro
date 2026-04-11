@@ -12,9 +12,11 @@ win32: CONFIG += windows
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    sq1widget.cpp
+    sq1widget.cpp \
+    stylesheet.cpp
 
 HEADERS += \
     mainwindow.h \
     sq1widget.h \
-    karnotation.h
+    karnotation.h \
+    stylesheet.h
