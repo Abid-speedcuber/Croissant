@@ -10,6 +10,7 @@
 #include <QGridLayout>
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QStyledItemDelegate>
 #include <QTextEdit>
 #include <QPushButton>
 #include <QLabel>
@@ -49,6 +50,29 @@
 #include <string>
 #include <map>
 #include <set>
+
+// ============================================================
+// SelectableDelegate — makes table cells selectable by mouse drag
+// ============================================================
+class SelectableDelegate : public QStyledItemDelegate {
+public:
+    explicit SelectableDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &) const override {
+        QLineEdit *ed = new QLineEdit(parent);
+        ed->setReadOnly(true);
+        ed->setFrame(false);
+        ed->setStyleSheet("QLineEdit { background: transparent; border: none; padding: 0 4px; selection-background-color: #3a6ea8; selection-color: #ffffff; }");
+        ed->setCursor(Qt::IBeamCursor);
+        return ed;
+    }
+    void setEditorData(QWidget *editor, const QModelIndex &index) const override {
+        static_cast<QLineEdit*>(editor)->setText(index.data().toString());
+    }
+    void setModelData(QWidget *, QAbstractItemModel *, const QModelIndex &) const override {}
+    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &) const override {
+        editor->setGeometry(option.rect);
+    }
+};
 
 // ============================================================
 // FastTipStyle — QProxyStyle that makes tooltips appear instantly.
@@ -1033,7 +1057,7 @@ void MainWindow::buildUI()
     m_solutionTable->setAlternatingRowColors(false);
     m_solutionTable->setTextElideMode(Qt::ElideNone);
     m_solutionTable->setContextMenuPolicy(Qt::NoContextMenu);
-    m_solutionTable->viewport()->setCursor(Qt::IBeamCursor);
+    m_solutionTable->viewport()->setCursor(Qt::ArrowCursor);
     tableLay->addWidget(m_solutionTable, 1);
 
     outputWrapperLay->addWidget(m_tableContainer);
@@ -1139,7 +1163,7 @@ void MainWindow::buildUI()
     const auto allChks = findChildren<QCheckBox *>();
     for (auto *c : allChks)
         c->setCursor(Qt::PointingHandCursor);
-    m_solutionTable->setCursor(Qt::PointingHandCursor);
+    m_solutionTable->setCursor(Qt::ArrowCursor);
 
     updateConstraints();
     rebuildTerminalView();
@@ -2145,18 +2169,16 @@ void MainWindow::rebuildTable()
         }
         m_solutionTable->setItem(i, 0, numItem);
 
-        // Solution column: left-aligned
-        QTableWidgetItem *algItem = new QTableWidgetItem(r.alg);
-        algItem->setBackground(bg);
-        algItem->setForeground(textCol);
-        algItem->setFlags(Qt::ItemIsEnabled);
-        algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-        if (m_expanded) {
-            QFont f = algItem->font();
-            f.setPointSize(fontSize);
-            algItem->setFont(f);
-        }
-        m_solutionTable->setItem(i, 1, algItem);
+        // Solution column: selectable QLabel
+        QLabel *algLabel = new QLabel(r.alg);
+        algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        algLabel->setCursor(Qt::IBeamCursor);
+        algLabel->setContentsMargins(4, 0, 4, 0);
+        algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
+            .arg(bg.name(),
+                 textCol.name(),
+                 m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
+        m_solutionTable->setCellWidget(i, 1, algLabel);
 
         cell(2, QString::number(r.moves), true);
         cell(3, QString::number(r.slices), true);
