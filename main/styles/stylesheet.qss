@@ -381,15 +381,17 @@ QWidget#leftPanel {
 }
 
 QWidget#cubeWithReset {
-    background: #ff0000;
+    background: --primary-bg;
+    border-radius: 4px;
+    border: 1px solid #27274d;
 }
 
 QWidget#cubeWrapper {
-    background: #ffaa00;
+    background: --primary-bg;
 }
 
 QWidget#sq1Widget {
-    background: #ff22ee;
+    background: --primary-bg;
     border-radius: 0px;
 }
 

@@ -103,7 +103,7 @@ QPointF Sq1Widget::polar(QPointF center, double angleDeg, double radius) {
 void Sq1Widget::drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill, bool isHovered) {
     if (isHovered) {
         // Lighten the color by increasing lightness in HSL
-        fill = fill.lighter(115);  // 115% brightness = slightly lighter
+        fill = fill.lighter(130);  // 115% brightness = slightly lighter
     }
     p.setBrush(fill);
     p.setPen(QPen(QColor(Theme::cubeBorder()), 1));

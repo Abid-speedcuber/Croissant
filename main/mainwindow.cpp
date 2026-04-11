@@ -268,7 +268,6 @@ void MainWindow::buildUI()
     outerLayout->addWidget(topBar);
 
     // ── Full-width input bar ──────────────────────────────────────────────────
-    // All styling (padding, spacing, sizing) is controlled by QSS!
     QWidget *inputBarOuter = new QWidget();
     inputBarOuter->setObjectName("inputBarOuter");
     m_inputBarOuter = inputBarOuter;
@@ -314,30 +313,57 @@ void MainWindow::buildUI()
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
     connect(cubeWidget, &Sq1Widget::userInteracted, this, &MainWindow::pushUndoState);
     {
-        QWidget *cubeWrapper = new QWidget();
+        // cubeWithReset fills the full width of leftContainer; reset button overlaps absolutely
+        QWidget *cubeWithReset = new QWidget();
+        cubeWithReset->setObjectName("cubeWithReset");
+        cubeWithReset->setAttribute(Qt::WA_StyledBackground, true);
+        // Height: cube height + some padding for the reset button row at top
+        cubeWithReset->setFixedHeight(cubeWidget->height() + 20);
+        // Width is NOT fixed — it will stretch to fill leftContainer
+
+        // cubeWrapper is centered inside cubeWithReset via absolute positioning after layout
+        QWidget *cubeWrapper = new QWidget(cubeWithReset);
         cubeWrapper->setObjectName("cubeWrapper");
+        cubeWrapper->setAttribute(Qt::WA_StyledBackground, true);
         cubeWrapper->setFixedSize(cubeWidget->width(), cubeWidget->height());
         cubeWidget->setParent(cubeWrapper);
         cubeWidget->move(0, 0);
-
-        QWidget *cubeWithReset = new QWidget();
-        cubeWithReset->setObjectName("cubeWithReset");
-        cubeWithReset->setFixedSize(cubeWrapper->width(), cubeWrapper->height());
-        cubeWrapper->setParent(cubeWithReset);
-        cubeWrapper->move(0, 0);
+        // cubeWrapper will be centered in cubeWithReset after show (via event filter / resize)
 
         btnReset = new QPushButton("Reset", cubeWithReset);
         btnReset->setObjectName("btnReset");
         btnReset->setToolTip("Reset  [Esc]");
-        btnReset->move(cubeWithReset->width() - 52 - 6, 6);
+        // Position reset button at top-right; it overlaps the cube area
+        btnReset->move(cubeWithReset->width() - 58, 6);
         btnReset->raise();
+
+        // Use a resize event filter to keep cubeWrapper centered and btnReset at top-right
+        struct CubeResizeFilter : public QObject {
+            QWidget *cubeWithReset;
+            QWidget *cubeWrapper;
+            QPushButton *btnReset;
+            CubeResizeFilter(QWidget *p, QWidget *cwr, QWidget *cwrap, QPushButton *btn)
+                : QObject(p), cubeWithReset(cwr), cubeWrapper(cwrap), btnReset(btn) {}
+            bool eventFilter(QObject *watched, QEvent *e) override {
+                if (e->type() == QEvent::Resize && watched == cubeWithReset) {
+                    int cx = (cubeWithReset->width() - cubeWrapper->width()) / 2;
+                    cubeWrapper->move(cx, 20);
+                    btnReset->move(cubeWithReset->width() - 58, 6);
+                }
+                return false;
+            }
+        };
+        cubeWithReset->installEventFilter(
+            new CubeResizeFilter(cubeWithReset, cubeWithReset, cubeWrapper, btnReset));
+
+        // Initial position (will be corrected on first resize)
+        cubeWrapper->move((300 - cubeWidget->width()) / 2, 20);
 
         QHBoxLayout *centerRow = new QHBoxLayout();
         centerRow->setContentsMargins(0, 0, 0, 0);
-        centerRow->addStretch();
-        centerRow->addWidget(cubeWithReset);
-        centerRow->addStretch();
+        centerRow->addWidget(cubeWithReset);  // stretches to fill
         leftCol->addLayout(centerRow);
+        leftCol->addSpacing(-20);
     }
 
     // Grid: U' | Slice (rowspan 2) | U
@@ -354,7 +380,7 @@ void MainWindow::buildUI()
     btnSlice->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     moveGrid->addWidget(btnUP, 0, 0);
-    moveGrid->addWidget(btnSlice, 0, 1, 2, 1); // rowspan=2
+    moveGrid->addWidget(btnSlice, 0, 1, 2, 1);
     moveGrid->addWidget(btnU, 0, 2);
     moveGrid->addWidget(btnD, 1, 0);
     moveGrid->addWidget(btnDP, 1, 2);
@@ -420,8 +446,6 @@ void MainWindow::buildUI()
             {
         cubeWidget->setFocus();
         m_sliceCount++;
-
-        // Capture snapshot before this slice
         m_slicePending.append({cubeWidget->getPositionString()});
         QKeyEvent e(QEvent::KeyPress, Qt::Key_I, Qt::NoModifier);
         QApplication::sendEvent(cubeWidget, &e);
@@ -491,7 +515,6 @@ void MainWindow::buildUI()
     spnSuboptimal->setFixedHeight(26);
     spnSuboptimal->setToolTip("Extra moves beyond optimal to *also* find (0 = optimal only).");
 
-    // Container for the All-optimal row
     QWidget *allOptRow = new QWidget();
     allOptRow->setFixedHeight(28);
     QHBoxLayout *allOptLayout = new QHBoxLayout(allOptRow);
@@ -512,7 +535,6 @@ void MainWindow::buildUI()
     txtDepths->setFixedWidth(80);
     txtDepths->setFixedHeight(26);
     txtDepths->setPlaceholderText("e.g. 8,9");
-    // Only digits and commas allowed; letters are eaten by the global event filter anyway.
     txtDepths->setValidator(new QRegularExpressionValidator(
         QRegularExpression("[0-9,]*"), txtDepths));
     txtDepths->setToolTip("Comma-separated list of depths to search, e.g. \"8,9\"");
@@ -601,7 +623,6 @@ void MainWindow::buildUI()
     grid->addWidget(chkMaxTotal, row, 0);
     grid->addWidget(spnMaxTotal, row++, 1);
 
-    // Uniform row height — set after all rows are populated.
     for (int r = 0; r < row; r++)
         grid->setRowMinimumHeight(r, 28);
 
@@ -639,7 +660,6 @@ void MainWindow::buildUI()
     connect(chkMaxTotal, &QCheckBox::toggled, this, upd);
     connect(spnMaxTotal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
 
-    // fix #2: propagate tooltip to the whole allOptRow so right-side hover works
     allOptRow->setToolTip(chkAllOptimal->toolTip());
 
     // ── Pack options/command/solve/progress into one hideable wrapper ─────────
@@ -649,7 +669,6 @@ void MainWindow::buildUI()
     topLay->setSpacing(6);
     topLay->addWidget(grpOptions);
 
-    // Hidden command line (does its job under the hood)
     txtCommand = new QLineEdit();
     txtCommand->setReadOnly(false);
     txtCommand->setObjectName("txtCommand");
@@ -662,7 +681,6 @@ void MainWindow::buildUI()
     btnCopy->setToolTip("Copy command");
     btnCopy->setVisible(false);
 
-    // Apply button
     connect(m_mainInput, &QLineEdit::returnPressed, this, [this]
             { btnApply->click(); });
 
@@ -674,7 +692,6 @@ void MainWindow::buildUI()
         if (text.isEmpty()) return;
 
         if (m_inputModeIndex == 2) {
-            // Position mode
             pushUndoState();
             bool ok = cubeWidget->setPositionFromString(text);
             if (!ok) {
@@ -690,12 +707,10 @@ void MainWindow::buildUI()
             return;
         }
 
-        // Scramble/Alg mode — full parsing pipeline
         pushUndoState();
 
         if (m_applyFromSolved) {
             cubeWidget->reset();
-            // don't push another undo for the reset — the pushUndoState above already saved pre-reset state
         }
 
         QString raw = text;
@@ -703,7 +718,6 @@ void MainWindow::buildUI()
             raw = invertScrambleStr(raw);
         }
 
-        // Convert karn to numeric first
         std::string karnStr = raw.toStdString();
         bool hasAlpha = false;
         for (char c : karnStr) if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
@@ -736,7 +750,6 @@ void MainWindow::buildUI()
                 if (!ok1 || !ok2) { ok = false; break; }
                 moves.append({false, x, y});
             } else {
-                // bare number → y defaults to 0
                 bool ok1;
                 int x = seg.toInt(&ok1);
                 if (!ok1) { ok = false; break; }
@@ -752,7 +765,6 @@ void MainWindow::buildUI()
             return;
         }
 
-        // Apply on top of CURRENT cube state (not reset)
         int pos[24] = {};
         int mid = 0;
         {
@@ -803,7 +815,6 @@ void MainWindow::buildUI()
             updateCommand();
         } });
 
-    // Mode toggle button: cycles SCRAMBLE → ALG → POSITION
     connect(m_inputMode, &QPushButton::clicked, this, [this]
             {
         qDebug() << "inputMode clicked, new index:" << ((m_inputModeIndex + 1) % 3);
@@ -814,7 +825,6 @@ void MainWindow::buildUI()
         m_mainInput->clear();
         lblScrambleError->setVisible(false); });
 
-    // Arrow button: opens dropdown menu
     connect(m_inputModeArrow, &QPushButton::clicked, this, [this]
             {
         qDebug() << "inputModeArrow clicked";
@@ -842,27 +852,21 @@ void MainWindow::buildUI()
         m_mainInput->setProperty("hasError", false);
         style()->polish(m_mainInput);
         if (m_inputModeIndex == 2) {
-            // Position mode: just validate border, no auto-apply
             if (text.trimmed().isEmpty()) { 
                 m_mainInput->setProperty("hasError", false);
                 style()->polish(m_mainInput);
                 return; 
             }
-            // Peek validity without committing
-            // (full apply only on Apply button press)
             return;
         } else {
-            // No live apply — handled by Apply button
             return; {
             if (false) {
 
             QString raw = text.trimmed();
             if (m_inputModeIndex == 1) {
-                // Alg mode: invert
                 raw = invertScrambleStr(raw);
             }
 
-            // Convert karn to numeric first
             std::string karnStr = raw.toStdString();
             bool hasAlpha = false;
             for (char c : karnStr) if (std::isalpha((unsigned char)c)) { hasAlpha = true; break; }
@@ -871,26 +875,21 @@ void MainWindow::buildUI()
                 raw = QString::fromStdString(converted);
             }
 
-            // Parse and apply silently
-            // Normalise: replace \ with / and collapse spaces
             raw.replace('\\', '/');
 
             struct Move { bool isSlice; int x, y; };
             QVector<Move> moves;
             bool ok = true;
 
-            // Split by '/' — each segment is either empty (= slice boundary) or a turn
-            // Leading/trailing '/' produce empty segments at start/end = slices
             QStringList segments = raw.split('/');
             for (int si = 0; si < segments.size() && ok; si++) {
                 QString seg = segments[si].trimmed();
                 seg.remove('('); seg.remove(')');
 
-                if (si > 0) moves.append({true, 0, 0}); // every '/' is a slice
+                if (si > 0) moves.append({true, 0, 0});
 
-                if (seg.isEmpty()) continue; // just a slash with no turn
+                if (seg.isEmpty()) continue;
 
-                // Could be "x,y", "x" (bare number), or garbage
                 if (seg.contains(',')) {
                     QStringList parts = seg.split(',');
                     if (parts.size() != 2) { ok = false; break; }
@@ -900,7 +899,6 @@ void MainWindow::buildUI()
                     if (!ok1 || !ok2) { ok = false; break; }
                     moves.append({false, x, y});
                 } else {
-                    // bare number → y defaults to 0
                     bool ok1;
                     int x = seg.toInt(&ok1);
                     if (!ok1) { ok = false; break; }
@@ -909,7 +907,6 @@ void MainWindow::buildUI()
             }
 
             if (!ok) {
-                // Soft error: just tint the border, don't pop anything
                 m_mainInput->setProperty("hasError", true);
                 style()->polish(m_mainInput);
                 cubeWidget->reset();
@@ -917,7 +914,6 @@ void MainWindow::buildUI()
                 return;
             }
 
-            // Apply to the (already reset) cube state
             int pos[24] = {};
             int mid = 0;
             {
@@ -994,7 +990,6 @@ void MainWindow::buildUI()
     txtOutput->setStyleSheet("QTextEdit { background: #000000; }");
     txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
 
-    // Floating buttons — parented to outputWrapper so they overlay the terminal
     btnExpand = new QPushButton("⤢", outputWrapper);
     btnExpand->setObjectName("btnExpand");
     btnExpand->setFixedSize(22, 22);
@@ -1016,7 +1011,6 @@ void MainWindow::buildUI()
 
     outputWrapperLay->addWidget(txtOutput);
 
-    // Table view
     m_tableContainer = new QWidget();
     m_tableContainer->setVisible(false);
     m_tableContainer->setMinimumHeight(120);
@@ -1037,7 +1031,7 @@ void MainWindow::buildUI()
     m_solutionTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_solutionTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_solutionTable->setShowGrid(false);
-    m_solutionTable->setAlternatingRowColors(false); // we do it manually
+    m_solutionTable->setAlternatingRowColors(false);
     m_solutionTable->setTextElideMode(Qt::ElideNone);
     m_solutionTable->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_solutionTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint &pos)
@@ -1071,7 +1065,6 @@ void MainWindow::buildUI()
     outputWrapper->installEventFilter(this);
     rightCol->addWidget(outputWrapper, 1);
 
-    // Always visible; enabled only when eligible (cubeshape + solutions present).
     chkRankErgo = new QCheckBox("Roughly rank algs based on relative ergonomics");
     chkRankErgo->setEnabled(false);
     chkRankErgo->setObjectName("chkRankErgo");
@@ -1121,7 +1114,6 @@ void MainWindow::buildUI()
 
         QString pos = parts.last();
 
-        // Must not look like a flag
         if (pos.startsWith('-') || pos.contains(',')) {
             showCmdError("No position string at end of command — last token looks like a flag.");
             return;
@@ -1134,8 +1126,6 @@ void MainWindow::buildUI()
             return;
         }
 
-        // Validate characters before passing to setPositionFromString to prevent crashes.
-        // Valid chars: A-H, 1-8, U, V, W, X, Y, Z, and optional trailing - or /
         static const QString validChars = "ABCDEFGHabcdefgh12345678UVWXYZuvwxyz-/";
         bool validCharsOk = true;
         for (int ci = 0; ci < pos.length(); ci++) {
@@ -1149,7 +1139,6 @@ void MainWindow::buildUI()
             return;
         }
 
-        // Safe to call setPositionFromString now
         bool applied = cubeWidget->setPositionFromString(pos);
         if (!applied) {
             showCmdError("Invalid position string — duplicate or unrecognised pieces.");
@@ -1158,7 +1147,6 @@ void MainWindow::buildUI()
         clearCmdError();
         syncFlagsFromCommand(text); });
 
-    // Initial floating button positions (will be corrected on first resize)
     QTimer::singleShot(0, this, [this]
                        {
         int w = m_outputWrapper->width();
@@ -1168,7 +1156,6 @@ void MainWindow::buildUI()
         btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
         btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise(); });
 
-    // Hand cursor on all clickable widgets
     const auto allBtns = findChildren<QPushButton *>();
     for (auto *b : allBtns)
         b->setCursor(Qt::PointingHandCursor);
@@ -1180,7 +1167,6 @@ void MainWindow::buildUI()
     updateConstraints();
     rebuildTerminalView();
 }
-
 // -------------------------------------------------------
 // toggleExpand — expand / shrink the output terminal
 // -------------------------------------------------------
