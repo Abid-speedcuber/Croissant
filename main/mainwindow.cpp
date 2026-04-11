@@ -30,6 +30,13 @@
 #include <QDialog>
 #include <QShortcut>
 #include <QDateTime>
+#include <QTextBrowser>
+#include <QString>
+#include <QDir>
+#include <QUrl>
+#include <QDesktopServices>
+#include <QFile>
+#include <QDir>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <algorithm>
@@ -45,6 +52,8 @@
 // Ergonomics Rating — pure C++ translation of alg_rater.html
 // Uses KARNOTATION from karnotation.h for unkarnify.
 // ============================================================
+
+// Helper removed: readTextFromFile consolidated into loadDocText
 
 static const std::map<int,int> CLOSEST_MAP = {
     {-5,-6},{-4,-3},{-3,-3},{-2,-3},{-1,0},{0,0},
@@ -332,9 +341,9 @@ static std::string unkarnify(const std::string& algIn) {
     // addCommas pass on each slash-segment
     auto parts = splitStr(final_, '/');
     final_.clear();
-    for (const auto& part : parts) {
-        if (!final_.empty()) final_ += "/";
-        final_ += addCommasToMove(part);
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i) final_ += "/";
+        final_ += addCommasToMove(parts[i]);
     }
 
     return final_;
@@ -882,7 +891,7 @@ void MainWindow::buildUI() {
         CubeSnapshot snap = m_redoStack.takeLast();
         cubeWidget->setPositionFromString(snap.posStr);
         updateCommand();
-        btnRedo->setEnabled(!m_redoStack.isEmpty());       
+        btnRedo->setEnabled(!m_redoStack.isEmpty());
     });
 
     root->addWidget(leftScroll);
@@ -2829,15 +2838,13 @@ void MainWindow::showAboutModal() {
     QString textBody    = L ? Theme::LIGHT_TEXT_SECONDARY : "#b0b0c8";
     QLabel* title = new QLabel("About Solve-A-Squan");
     title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
-
+    // Build the about body content with proper string building
     QLabel* body = new QLabel();
     body->setWordWrap(true);
-    body->setOpenExternalLinks(true);
     body->setTextFormat(Qt::RichText);
     body->setStyleSheet("background:transparent;");
-    body->setText(QString(
-        "<span style='color:%1;font-size:12px;line-height:1.7;'>").arg(textBody) +
-        QString(
+    QString aboutBody = QString(
+        "<span style='color:%1;font-size:12px;line-height:1.7;'>"
         "This program stemmed from the optimal Square-1 solver by "
         "<a href='https://www.jaapsch.net/puzzles/' style='color:#7abfe8;'>Jaap Scherphuis</a>."
         "<br><br>"
@@ -2845,8 +2852,8 @@ void MainWindow::showAboutModal() {
         "(<a href='https://github.com/qqwref' style='color:#7abfe8;'>GitHub</a>, "
         "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:#7abfe8;'>WCA</a>), "
         "who rewrote the solver with significant improvements and optimisations."
-        "<br><br>"
-        "This is the official <b style='color:#e0e0e0;'>v3</b>. New in v3:"
+        "<br><br>Read the old documentations <a href='read_old_docs'>here</a>. Note that it is largely not applicable within v3."
+        "<br><br>This is the official <b style='color:#e0e0e0;'>v3</b>. New in v3:"
         "<ul style='margin:4px 0 4px 16px;padding:0;color:#b0b0c8;'>"
         "<li>Actual graphical UI</li>"
         "<li>Ability to generate a solution from a specific angle</li>"
@@ -2858,7 +2865,16 @@ void MainWindow::showAboutModal() {
         " and "
         "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:#7abfe8;'>Matt Mao</a>."
         "</span>"
-    ));
+    ).arg(textBody);
+    body->setText(aboutBody);
+    // Enable clicking the in-text link to open the ReadDocs popup
+    connect(body, &QLabel::linkActivated, this, [this](const QString& link){
+        if (link == "read_old_docs") {
+            showReadDocsPopup();
+        } else {
+            QDesktopServices::openUrl(QUrl(link));
+        }
+    });
 
     lay->addWidget(title);
     lay->addWidget(body);
@@ -2898,6 +2914,231 @@ void MainWindow::showAboutModal() {
     };
 
     Filter* f = new Filter(overlay, card, centerCard);
+    central->installEventFilter(f);   // watches parent for resize
+    overlay->installEventFilter(f);   // watches overlay for click-outside
+}
+
+// Load a document from docs/ directory, searching appDir first then CWD
+QString MainWindow::loadDocText(const QString& fileName) {
+    auto readPath = [](const QString& p)->QString {
+        QFile f(p);
+        if (!f.exists()) return QString();
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+        QString s = QString::fromUtf8(f.readAll());
+        f.close();
+        return s;
+    };
+
+    QString appDir = QCoreApplication::applicationDirPath();
+    QDir cwd = QDir::current();
+
+    QList<QString> candidates;
+    candidates << cwd.filePath("docs/" + fileName);
+    candidates << appDir + "/docs/" + fileName;
+    candidates << appDir + "/../docs/" + fileName;
+    // ascend from current dir up to 6 levels looking for docs/
+    QDir d = cwd;
+    for (int i = 0; i < 6; ++i) {
+        if (!d.cdUp()) break;
+        candidates << d.filePath("docs/" + fileName);
+    }
+
+    for (const QString& p : candidates) {
+        QString s = readPath(p);
+        if (!s.isEmpty()) return s;
+    }
+    // Final hard fallback: root/docs if present
+    QString rootLike = QDir::rootPath() + "/docs/" + fileName;
+    QString s = readPath(rootLike);
+    if (!s.isEmpty()) return s;
+    return QString();
+}
+
+// Read documents popup – shows sq1opt.txt with an inline link to the old-doc
+void MainWindow::showReadDocsPopup() {
+    QWidget* central = this->centralWidget();
+    QWidget* overlay = new QWidget(central);
+    overlay->setObjectName("docsOverlay");
+    overlay->setProperty("isDocsOverlay", true);
+    overlay->setGeometry(central->rect());
+    overlay->setStyleSheet("background:rgba(0,0,0,160);");
+    overlay->show(); overlay->raise();
+
+    bool L = m_lightTheme;
+    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
+    QString textColor   = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
+    QString titleColor  = L ? Theme::LIGHT_TEXT_PRIMARY   : Theme::TEXT_PRIMARY;
+
+    QWidget* card = new QWidget(overlay);
+    card->setObjectName("docsCard");
+    card->setStyleSheet(QString(
+        "QWidget#docsCard { background:%1; border:1px solid %2; border-radius:10px; }"
+    ).arg(modalBg, modalBorder));
+
+    QVBoxLayout* lay = new QVBoxLayout(card);
+    lay->setContentsMargins(24, 16, 24, 16);
+    lay->setSpacing(6);
+
+    QLabel* titleLbl = new QLabel("Sq1opt v2 Documentation");
+    titleLbl->setStyleSheet(QString(
+        "font-size:14px;font-weight:bold;color:%1;background:transparent;"
+    ).arg(titleColor));
+    lay->addWidget(titleLbl);
+
+    QString content = loadDocText("sq1opt.txt");
+    if (content.isEmpty()) content = "Could not load sq1opt.txt";
+
+    // Build HTML line by line so text reflows to card width (no horizontal
+    // scroll) while preserving leading-space indentation via &nbsp;.
+    QString html;
+    for (const QString& line : content.split('\n')) {
+        QString esc = line.toHtmlEscaped();
+        int spaces = 0;
+        while (spaces < esc.size() && esc[spaces] == ' ') ++spaces;
+        if (spaces > 0)
+            esc = QString("&nbsp;").repeated(spaces) + esc.mid(spaces);
+        esc.replace("sq1opt_old.txt",
+            "<a href='open_old_docs' style='color:#7abfe8;'>sq1opt_old.txt</a>");
+        html += "<p style='margin:0;padding:0;'>" + esc + "</p>";
+    }
+
+    QTextBrowser* tb = new QTextBrowser(card);
+    tb->setReadOnly(true);
+    tb->setFrameShape(QFrame::NoFrame);
+    tb->setOpenLinks(false);
+    tb->setLineWrapMode(QTextEdit::WidgetWidth);
+    tb->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    tb->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    tb->setStyleSheet(QString(
+        "QTextBrowser { background:transparent; border:none; color:%1; }"
+    ).arg(textColor));
+    tb->document()->setDefaultStyleSheet(
+        QString("body, p { font-family:monospace; font-size:12px; color:%1; line-height:1.4; }"
+                "a { color:#7abfe8; }").arg(textColor));
+    tb->setHtml("<body>" + html + "</body>");
+
+    connect(tb, &QTextBrowser::anchorClicked, this, [this](const QUrl& url){
+        if (url.toString() == "open_old_docs") showOldDocsPopup();
+        else QDesktopServices::openUrl(url);
+    });
+
+    lay->addWidget(tb, 1);
+
+    card->show();
+    auto centerCard = [overlay, card, central](){
+        overlay->setGeometry(overlay->parentWidget()->rect());
+        int cw = qMin(640, central->width() - 40);
+        int ch = qMin(520, central->height() - 40);
+        card->setFixedSize(cw, ch);
+        card->move((overlay->width() - card->width()) / 2,
+                   (overlay->height() - card->height()) / 2);
+    };
+    centerCard(); card->raise();
+
+    // Event filter: resize re-centres the card; click OUTSIDE the card closes
+    // all docs modals. The card-geometry check is critical — without it any
+    // click that bubbles up from a non-interactive child would close the modal.
+    struct F : public QObject {
+        QWidget* overlay; QWidget* card; std::function<void()> fn;
+        F(QWidget* o, QWidget* c, std::function<void()> f)
+            : QObject(o), overlay(o), card(c), fn(f) {}
+        bool eventFilter(QObject* w, QEvent* e) override {
+            if (e->type() == QEvent::Resize && w == overlay->parentWidget()) {
+                fn(); return false;
+            }
+            if (e->type() == QEvent::MouseButtonPress && w == overlay) {
+                QMouseEvent* me = static_cast<QMouseEvent*>(e);
+                if (!card->geometry().contains(me->pos()))
+                    overlay->deleteLater();
+                return true;
+            }
+            return false;
+        }
+    };
+    F* f = new F(overlay, card, centerCard);
+    central->installEventFilter(f);   // watches parent for resize
+    overlay->installEventFilter(f);   // watches overlay for click-outside
+}
+
+// Old docs popup – shows sq1opt_old.txt
+void MainWindow::showOldDocsPopup() {
+    QWidget* central = this->centralWidget();
+    QWidget* overlay = new QWidget(central);
+    overlay->setObjectName("docsOverlay");
+    overlay->setProperty("isDocsOverlay", true);
+    overlay->setGeometry(central->rect());
+    overlay->setStyleSheet("background:rgba(0,0,0,160);");
+    overlay->show(); overlay->raise();
+
+    bool L = m_lightTheme;
+    QString modalBg     = L ? Theme::LIGHT_PRIMARY_BG   : Theme::MODAL_BG;
+    QString modalBorder = L ? Theme::LIGHT_BORDER_GROUP  : Theme::MODAL_BORDER;
+    QString textColor   = L ? Theme::LIGHT_TEXT_SECONDARY : Theme::TEXT_MUTED;
+    QString titleColor  = L ? Theme::LIGHT_TEXT_PRIMARY   : Theme::TEXT_PRIMARY;
+
+    QWidget* card = new QWidget(overlay);
+    card->setObjectName("docsOldCard");
+    card->setStyleSheet(QString(
+        "QWidget#docsOldCard { background:%1; border:1px solid %2; border-radius:10px; }"
+    ).arg(modalBg, modalBorder));
+
+    QVBoxLayout* lay = new QVBoxLayout(card);
+    lay->setContentsMargins(24, 16, 24, 16);
+    lay->setSpacing(6);
+
+    QLabel* titleLbl = new QLabel("Sq1opt v1 Documentation");
+    titleLbl->setStyleSheet(QString(
+        "font-size:14px;font-weight:bold;color:%1;background:transparent;"
+    ).arg(titleColor));
+    lay->addWidget(titleLbl);
+
+    QTextBrowser* tb = new QTextBrowser(card);
+    tb->setReadOnly(true);
+    tb->setFrameShape(QFrame::NoFrame);
+    tb->setOpenLinks(false);
+    tb->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    tb->setStyleSheet(QString(
+        "QTextBrowser { background:transparent; border:none; color:%1; }"
+    ).arg(textColor));
+    tb->document()->setDefaultStyleSheet(
+        QString("body, pre { font-family:monospace; font-size:12px; color:%1; }").arg(textColor));
+
+    QString oldContent = loadDocText("sq1opt_old.txt");
+    if (oldContent.isEmpty()) tb->setPlainText("Could not load sq1opt_old.txt");
+    else tb->setPlainText(oldContent);
+
+    lay->addWidget(tb, 1);
+
+    card->show();
+    auto centerCard = [overlay, card, central](){
+        overlay->setGeometry(overlay->parentWidget()->rect());
+        int cw = qMin(640, central->width() - 40);
+        int ch = qMin(520, central->height() - 40);
+        card->setFixedSize(cw, ch);
+        card->move((overlay->width() - card->width()) / 2,
+                   (overlay->height() - card->height()) / 2);
+    };
+    centerCard(); card->raise();
+
+    struct F : public QObject {
+        QWidget* overlay; QWidget* card; std::function<void()> fn;
+        F(QWidget* o, QWidget* c, std::function<void()> f)
+            : QObject(o), overlay(o), card(c), fn(f) {}
+        bool eventFilter(QObject* w, QEvent* e) override {
+            if (e->type() == QEvent::Resize && w == overlay->parentWidget()) {
+                fn(); return false;
+            }
+            if (e->type() == QEvent::MouseButtonPress && w == overlay) {
+                QMouseEvent* me = static_cast<QMouseEvent*>(e);
+                if (!card->geometry().contains(me->pos()))
+                    overlay->deleteLater();
+                return true;
+            }
+            return false;
+        }
+    };
+    F* f = new F(overlay, card, centerCard);
     central->installEventFilter(f);   // watches parent for resize
     overlay->installEventFilter(f);   // watches overlay for click-outside
 }
@@ -3201,29 +3442,32 @@ void MainWindow::showHowToUseModal() {
     body->setText(QString(
         "<b style='color:%1;font-size:13px;'>Cube Controls</b><br>"
         "<b style='color:%1;'>Keyboard shortcuts:</b><br>"
-        "• <b style='color:%2;'>J</b> = U (top clockwise) &nbsp; <b style='color:%2;'>F</b> = U' (top counter-clockwise)<br>"
-        "• <b style='color:%2;'>S</b> = D (bottom clockwise) &nbsp; <b style='color:%2;'>L</b> = D' (bottom counter-clockwise)<br>"
+        "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset the cube to solved<br>"
+        "The below shortcuts are identical to those of the csTimer virtual squan.<br>"
+        "• <b style='color:%2;'>J</b> = U, but only by one piece &nbsp; <b style='color:%2;'>F</b> = U', but only by one piece <br>"
+        "• <b style='color:%2;'>S</b> = D, but only by one piece &nbsp; <b style='color:%2;'>L</b> = D', but only by one piece <br>"
         "• <b style='color:%2;'>I</b> or <b style='color:%2;'>K</b> = Slice<br>"
-        "• <b style='color:%2;'>H</b> = UU &nbsp; <b style='color:%2;'>G</b> = U'U' &nbsp; <b style='color:%2;'>W</b> = DD &nbsp; <b style='color:%2;'>O</b> = D'D'<br>"
-        "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset<br><br>"
+        "• <b style='color:%2;'>H</b> = 3,0 (U) &nbsp; <b style='color:%2;'>G</b> = -3,0 (U')<br>"
+        "• <b style='color:%2;'>W</b> = 0,3 (D) &nbsp; <b style='color:%2;'>O</b> = 0,-3 (D')<br><br>"
         "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
-        "Type a move sequence in <b style='color:%2;'>(x,y)/</b> format and click <b>Apply</b>.<br>"
-        "Toggle the mode button to switch between <b>Scram</b> (applies as-is) and <b>Alg</b> (inverts before applying).<br>"
-        "Karnotation names like <b style='color:%2;'>U</b>, <b style='color:%2;'>E</b>, <b style='color:%2;'>bjj</b> etc. are supported.<br><br>"
+        "Type some moves and hit <b>Apply</b>. Karn will be parsed correctly.<br>"
+        "Use the mode button (to the left of the alg input) to switch between <b>Scram</b> (applies moves forward) and <b>Alg</b> (inverts before applying).<br><br>"
         "<b style='color:%1;font-size:13px;'>Options</b><br>"
-        "• <b>Slice metric</b>: count only slices as moves (instead of layer turns).<br>"
-        "• <b>All optimal</b>: find all solutions at the optimal length, not just the first.<br>"
-        "• <b>+suboptimal</b>: also find solutions up to N moves longer than optimal.<br>"
-        "• <b>Specific depths</b>: search only these move counts (comma-separated).<br>"
-        "• <b>Generator alg</b>: output sets up the case; otherwise it solves it.<br>"
-        "• <b>Stay in cubeshape</b>: restricts to algs that stay in cubeshape throughout.<br>"
-        "• <b>Karnotation output</b>: display solutions using karnotation names.<br>"
-        "• <b>Max X / Y / Total</b>: limit how large layer turns can be.<br><br>"
+        "you can read the descriptions for the options by hovering over them, but here's a comprehensive list:<br>"
+        "• <b>Slice metric</b>: only count slices as moves (instead of also including U and D moves when counting the \"movecount\" of an alg).<br>"
+        "• <b>All optimal</b>: instead of stopping the solver after finding one of the shortest solutions, find all of them. (\"shortest\" means: the least \"moves\". change what a \"move\" mean with the slice metric option)<br>"
+        "• <b>+suboptimal</b>: on top of finding all the shortest solutions, also find solutions up to N moves longer than optimal.<br>"
+        "• <b>Specific depths</b>: search only for solutions that are these moves long (comma-separated). e.g. \"8,9\" will return all solutions that are 8 moves and 9 moves long.<br>"
+        "• <b>Generator alg</b>: instead of solving the case displayed in the app, output algs will set up the case.<br>"
+        "• <b>Stay in cubeshape</b>: restrict to algs that stay in cubeshape (CS) throughout.<br>"
+        "• <b>Karnotation output</b>: display solutions in karn instead of WCA notation.<br>"
+        "• <b>Max top / bottom / total turns</b>: limit how big the layer turns can be. Hover over the options to see details.<br><br>"
         "<b style='color:%1;font-size:13px;'>Output</b><br>"
-        "Solutions appear in the terminal. Use <b>⊞</b> to switch to table view.<br>"
-        "Use <b>⤢</b> to expand the terminal to full screen.<br>"
-        "Right-click a row in table view to copy the algorithm or the whole row.<br>"
-        "If <b>Stay in cubeshape</b> was active, you can enable <b>Roughly rank algs</b> to sort by ergonomics.<br>"
+        "Solutions will appear in the terminal. After you generated some algs, these buttons will appear:<br>"
+        "• the <b>⊞</b> button: switch between terminal view and table view.<br>"
+        "• the <b>⤢</b> button: expand the terminal to full screen.<br>"
+        "Right-click a row in the table view to copy the alg, or to copy the whole row.<br>"
+        "If <b>Stay in cubeshape</b> was active, you can click on <b>Roughly rank algs based on relative ergonomics</b> (located below the terminal area), which will sort the output algs by an estimate of their actual speed.<br>"
     ).arg(textPrimary, textCyan));
 
     sa->setWidget(body);

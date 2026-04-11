@@ -134,6 +134,8 @@ private:
     QTimer*       m_sliceTimer{nullptr};    // true = input alg mode (inverts before applying)
     bool          m_cubeshapeWasActive{false}; // cubeshape state captured at solve time
 
+    // Documentation content is fetched at run-time; no caching
+
     struct CubeSnapshot { QString posStr; };
     QVector<CubeSnapshot> m_undoStack;
     QVector<CubeSnapshot> m_redoStack;
@@ -153,4 +155,9 @@ private:
     void applyTheme();
     std::function<void()> m_updateLogo;
     QString buildStyleSheet();
+    // Documentation popups (readme style popups for v3/docs)
+    void showReadDocsPopup();
+    void showOldDocsPopup();
+    // Helper to load document text from docs/ directory
+    QString loadDocText(const QString& fileName);
 };

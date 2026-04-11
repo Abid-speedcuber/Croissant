@@ -102,7 +102,7 @@ static const std::map<std::string,std::string> KARN_TO_WCA = {
 // ---------------------------------------------------------------------------
 // WCA_TO_KARN  — numeric WCA slash format (space-padded) → Karnotation name
 // ---------------------------------------------------------------------------
-static const std::map<std::string,std::string> WCA_TO_KARN = {
+static const std::vector<std::pair<std::string,std::string>> WCA_TO_KARN = {
     {" U U' U U' ", " U4 "},
     {" U' U U' U ", " U4' "},
     {" D D' D D' ", " D4 "},
@@ -307,8 +307,25 @@ inline std::string dictReplace(std::string str, const std::map<std::string,std::
     std::string prev;
     do {
         prev = str;
-        for (const auto& [k, v] : dict)
+        for (const auto& [k, v] : dict) {
             str = replaceAll(str, k, v);
+            if (str != prev) break;
+        }
+    } while (str != prev);
+    return str;
+}
+
+// ---------------------------------------------------------------------------
+// replaceWithVector — repeatedly apply key→value vector to str until stable
+// ---------------------------------------------------------------------------
+inline std::string replaceWithVector(std::string str, const std::vector<std::pair<std::string,std::string>>& vec) {
+    std::string prev;
+    do {
+        prev = str;
+        for (const auto& [k, v] : vec) {
+            str = replaceAll(str, k, v);
+            if (str != prev) break;
+        }
     } while (str != prev);
     return str;
 }
