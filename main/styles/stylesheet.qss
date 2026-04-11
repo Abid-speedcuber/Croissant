@@ -253,62 +253,98 @@ QPushButton#btnScrambleMode:hover {
     background: %22;
 }
 
+/* ========== Input Bar Container (ALL spacing/sizing via QSS!) ========== */
+QWidget#inputBarOuter {
+    background: #0a0a16;
+    border-bottom: 1px solid %51;
+    padding: 0px 12px;
+    min-height: 50px;
+    max-height: 50px;
+}
+
+QWidget#inputBarOuter QHBoxLayout {
+    spacing: 0px;
+    margin: 0px;
+}
+
+/* ========== Input Bar Buttons & Input ========== */
 QPushButton#btnInputMode {
-    background: %66;
-    border: 1px solid %67;
-    border-radius: 4px 0 0 4px;
+    background: %64;
+    border: 1px solid %65;
+    border-radius: 9px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
     border-right: none;
-    color: #fff;
+    margin-left: 8px;
+    margin-right: 0;
+    color: #2db570;
     padding: 0 10px;
     font-size: 11px;
     font-weight: bold;
+    height: 32px;
+    min-width: 82px;
+    max-width: 82px;
+    letter-spacing: 0.5px;
 }
 
 QPushButton#btnInputMode:hover { 
-    background: %68;
-    border-color: %67;
+    background: %66;
+    border-color: %65;
 }
 
 QPushButton#btnInputModeArrow {
-    background: %69;
-    border: 1px solid %70;
-    border-radius: 0 4px 4px 0;
-    border-left: none;
-    color: #fff;
+    background: %64;
+    border: 1px solid %65;
+    border-radius: 9px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    color: #2db570;
     padding: 0 6px;
+    margin-right: 10px;
     font-size: 11px;
+    height: 32px;
+    min-width: 20px;
+    max-width: 20px;
 }
 
 QPushButton#btnInputModeArrow:hover { 
-    background: %71;
-    border-color: %70;
+    background: %66;
+    border-color: %65;
 }
 
 QPushButton#btnApply {
-    background: %72;
-    border: 1px solid %73;
-    border-radius: 4px;
-    margin-left: 8px;
-    color: #fff;
+    background: %64;
+    border: 1px solid %65;
+    border-radius: 9px;
+    margin-left: 10px;
+    margin-right: 8px;
+    color: #2db570;
     font-size: 11px;
     font-weight: bold;
     padding: 0 12px;
-    min-width: 52px;
+    min-width: 45px;
+    max-width: 45px;
+    height: 32px;
+    letter-spacing: 0.5px;
 }
 
 QPushButton#btnApply:hover { 
-    background: %74;
-    border-color: %73;
+    background: %72;
+    border-color: %71;
+    color: #e0e0ff;
 }
 
 QLineEdit#txtMainInput {
-    border-radius: 4px;
-    border: 1px solid %75;
-    margin-left: 6px;
+    border-radius: 9px;
+    border: 1px solid %65;
+    margin-left: 0px;
+    margin-right: 0px;
     font-family: monospace;
     font-size: 12px;
-    background: %76;
-    color: %77;
+    background: %64;
+    color: %75;
+    padding: 4px 8px;
+    height: 25px;
 }
 
 QLineEdit#txtMainInput[hasError="true"] {

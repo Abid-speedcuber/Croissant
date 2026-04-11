@@ -268,48 +268,32 @@ void MainWindow::buildUI()
     outerLayout->addWidget(topBar);
 
     // ── Full-width input bar ──────────────────────────────────────────────────
+    // All styling (padding, spacing, sizing) is controlled by QSS!
     QWidget *inputBarOuter = new QWidget();
     inputBarOuter->setObjectName("inputBarOuter");
     m_inputBarOuter = inputBarOuter;
-    inputBarOuter->setStyleSheet(QString(
-                                     "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
-                                     .arg(Theme::DARK_BG, Theme::BORDER_BOTTOM));
-    QHBoxLayout *inputBarOuterLay = new QHBoxLayout(inputBarOuter);
-    inputBarOuterLay->setContentsMargins(12, 6, 12, 6);
-    inputBarOuterLay->setSpacing(0);
-
-    QWidget *inputBarInner = new QWidget();
-    inputBarInner->setMaximumWidth(1400);
-    QHBoxLayout *inputBarLay = new QHBoxLayout(inputBarInner);
+    
+    QHBoxLayout *inputBarLay = new QHBoxLayout(inputBarOuter);
     inputBarLay->setContentsMargins(0, 0, 0, 0);
     inputBarLay->setSpacing(0);
 
     m_inputMode = new QPushButton("SCRAMBLE");
     m_inputMode->setObjectName("btnInputMode");
-    m_inputMode->setFixedHeight(32);
-    m_inputMode->setFixedWidth(82);
 
     m_inputModeArrow = new QPushButton("▾");
     m_inputModeArrow->setObjectName("btnInputModeArrow");
-    m_inputModeArrow->setFixedHeight(32);
-    m_inputModeArrow->setFixedWidth(20);
 
     m_mainInput = new QLineEdit();
     m_mainInput->setObjectName("txtMainInput");
-    m_mainInput->setFixedHeight(32);
     m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
 
     btnApply = new QPushButton("Apply");
     btnApply->setObjectName("btnApply");
-    btnApply->setFixedHeight(32);
-    btnApply->setFixedWidth(64);
 
     inputBarLay->addWidget(m_inputMode);
     inputBarLay->addWidget(m_inputModeArrow);
     inputBarLay->addWidget(m_mainInput, 1);
     inputBarLay->addWidget(btnApply);
-
-    inputBarOuterLay->addWidget(inputBarInner, 1);
 
     outerLayout->addWidget(inputBarOuter);
 
