@@ -315,18 +315,19 @@ void MainWindow::buildUI()
     connect(cubeWidget, &Sq1Widget::userInteracted, this, &MainWindow::pushUndoState);
     {
         QWidget *cubeWrapper = new QWidget();
+        cubeWrapper->setObjectName("cubeWrapper");
         cubeWrapper->setFixedSize(cubeWidget->width(), cubeWidget->height());
         cubeWidget->setParent(cubeWrapper);
         cubeWidget->move(0, 0);
 
         QWidget *cubeWithReset = new QWidget();
+        cubeWithReset->setObjectName("cubeWithReset");
         cubeWithReset->setFixedSize(cubeWrapper->width(), cubeWrapper->height());
         cubeWrapper->setParent(cubeWithReset);
         cubeWrapper->move(0, 0);
 
         btnReset = new QPushButton("Reset", cubeWithReset);
         btnReset->setObjectName("btnReset");
-        btnReset->setFixedSize(52, 52);
         btnReset->setToolTip("Reset  [Esc]");
         btnReset->move(cubeWithReset->width() - 52 - 6, 6);
         btnReset->raise();
@@ -399,7 +400,9 @@ void MainWindow::buildUI()
     lblScrambleError->setVisible(false);
     leftCol->addStretch();
 
+    leftContainer->setObjectName("leftPanel");
     leftScroll = new QScrollArea();
+    leftScroll->setObjectName("leftScroll");
     m_leftPanel = leftScroll;
     leftScroll->setWidget(leftContainer);
     leftScroll->setWidgetResizable(false);
@@ -2750,9 +2753,7 @@ void MainWindow::applyTheme()
     }
     if (m_tableVisible)
         rebuildTable();
-    // Repaint the cube widget with the right canvas bg
-    QString canvasBg = Theme::primaryBg(m_lightTheme);
-    cubeWidget->setStyleSheet(QString("background: %1;").arg(canvasBg));
+    
     // Update command line color
     QString cyan = Theme::textCyan(m_lightTheme);
     txtCommand->setStyleSheet(QString(

@@ -6,10 +6,11 @@
 #include <QDebug>
 
 Sq1Widget::Sq1Widget(QWidget* parent) : QWidget(parent) {
+    setObjectName("sq1Widget");
     setFixedSize(W, H);
     setFocusPolicy(Qt::StrongFocus);
     setAttribute(Qt::WA_StyledBackground, true);
-    setMouseTracking(true);  // Enable mouseMoveEvent even when no buttons are pressed
+    setMouseTracking(true);
     hovered = -1;
     reset();
 }
@@ -163,7 +164,7 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     QColor bg = palette().color(QPalette::Window);
-    if (!bg.isValid() || bg == Qt::black) bg = QColor(Theme::canvasBg(false));
+    if (!bg.isValid()) bg = QColor("#1a1a2e");
     p.fillRect(rect(), bg);
 
     drawLayer(p, 0,  12, {TOP_CX, TOP_CY}, -105);  // top layer, starts at -105 deg

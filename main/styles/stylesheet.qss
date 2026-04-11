@@ -370,6 +370,50 @@ QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#
     background: --pressed-bg;
 }
 
+/* ========== Left Panel & Cube Area ========== */
+QScrollArea#leftScroll {
+    background: --primary-bg;
+    border: none;
+}
+
+QWidget#leftPanel {
+    background: --primary-bg;
+}
+
+QWidget#cubeWithReset {
+    background: #ff0000;
+}
+
+QWidget#cubeWrapper {
+    background: #ffaa00;
+}
+
+QWidget#sq1Widget {
+    background: #ff22ee;
+    border-radius: 0px;
+}
+
+QPushButton#btnReset {
+    background: --button-reset-bg;
+    border: 1px solid --button-reset-border;
+    border-radius: 26px;
+    color: --text-secondary;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 0;
+    min-width: 52px;
+    max-width: 52px;
+    min-height: 52px;
+    max-height: 52px;
+    letter-spacing: -0.5px;
+}
+
+QPushButton#btnReset:hover {
+    background: --button-reset-hover;
+    border-color: --button-border;
+    color: --button-text;
+}
+
 /* ========== ProgressBar ========== */
 QProgressBar { 
     border: none;
