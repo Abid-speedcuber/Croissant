@@ -3158,10 +3158,30 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             QPoint localPos = cb->mapFromGlobal(he->globalPos());
             QStyleOptionButton opt;
             opt.initFrom(cb);
-            QRect activeRect = cb->style()->subElementRect(QStyle::SE_CheckBoxContents, &opt, cb)
-                               .united(cb->style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, cb));
+            QRect indRect  = cb->style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, cb);
+            // Use font metrics for a tight text width instead of SE_CheckBoxContents
+            QFontMetrics fm(cb->font());
+            int textW = fm.horizontalAdvance(cb->text());
+            QRect textRect(indRect.right() + 6, 0, textW, cb->height());
+            QRect activeRect = indRect.united(textRect);
             if (!activeRect.contains(localPos))
                 return true; // cursor in empty space — eat the tooltip
+        }
+    }
+
+    // ── Pointing hand only over checkbox indicator+text, arrow elsewhere ──────
+    if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove) {
+        QWidget *under = QApplication::widgetAt(QCursor::pos());
+        if (QCheckBox *cb = qobject_cast<QCheckBox*>(under)) {
+            QPoint localPos = cb->mapFromGlobal(QCursor::pos());
+            QStyleOptionButton opt;
+            opt.initFrom(cb);
+            QRect indRect = cb->style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, cb);
+            QFontMetrics fm(cb->font());
+            int textW = fm.horizontalAdvance(cb->text());
+            QRect textRect(indRect.right() + 6, 0, textW, cb->height());
+            QRect activeRect = indRect.united(textRect);
+            cb->setCursor(activeRect.contains(localPos) ? Qt::PointingHandCursor : Qt::ArrowCursor);
         }
     }
 
