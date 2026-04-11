@@ -1779,6 +1779,21 @@ QString MainWindow::buildStyleSheet() {
     QString RESET_BG        = b(Theme::BUTTON_RESET_BG,   Theme::LIGHT_BUTTON_BG);
     QString RESET_BORDER    = b(Theme::BUTTON_RESET_BORDER, Theme::LIGHT_BUTTON_BORDER);
     QString RESET_HOVER     = b(Theme::BUTTON_RESET_HOVER, Theme::LIGHT_HOVER_BG);
+    
+    // Input bar unified colors
+    QString INPUT_MODE_BG   = b(Theme::INPUT_MODE_BG,      Theme::LIGHT_INPUT_MODE_BG);
+    QString INPUT_MODE_BORDER = b(Theme::INPUT_MODE_BORDER, Theme::LIGHT_INPUT_MODE_BORDER);
+    QString INPUT_MODE_HOVER = b(Theme::INPUT_MODE_HOVER,    Theme::LIGHT_INPUT_MODE_HOVER);
+    QString INPUT_ARROW_BG  = b(Theme::INPUT_ARROW_BG,     Theme::LIGHT_INPUT_ARROW_BG);
+    QString INPUT_ARROW_BORDER = b(Theme::INPUT_ARROW_BORDER, Theme::LIGHT_INPUT_ARROW_BORDER);
+    QString INPUT_ARROW_HOVER = b(Theme::INPUT_ARROW_HOVER,  Theme::LIGHT_INPUT_ARROW_HOVER);
+    QString INPUT_APPLY_BG  = b(Theme::INPUT_APPLY_BG,     Theme::LIGHT_INPUT_APPLY_BG);
+    QString INPUT_APPLY_BORDER = b(Theme::INPUT_APPLY_BORDER, Theme::LIGHT_INPUT_APPLY_BORDER);
+    QString INPUT_APPLY_HOVER = b(Theme::INPUT_APPLY_HOVER,  Theme::LIGHT_INPUT_APPLY_HOVER);
+    QString INPUT_FIELD_BG  = b(Theme::INPUT_FIELD_BG,     Theme::LIGHT_INPUT_FIELD_BG);
+    QString INPUT_FIELD_BORDER = b(Theme::INPUT_FIELD_BORDER, Theme::LIGHT_INPUT_FIELD_BORDER);
+    QString INPUT_FIELD_TEXT = b(Theme::INPUT_FIELD_TEXT,   Theme::LIGHT_INPUT_FIELD_TEXT);
+    
     QString UNDO_REDO_DISABLED_BG = b("#1e1e2a", Theme::LIGHT_DISABLED_BG);
     QString UNDO_REDO_DISABLED_BORDER = b("#333", Theme::LIGHT_BORDER_DARK);
     QString UNDO_REDO_DISABLED_TEXT   = b("#444", Theme::LIGHT_TEXT_DISABLED);
@@ -1854,29 +1869,30 @@ QString MainWindow::buildStyleSheet() {
             border-top-left-radius: 0; border-bottom-left-radius: 0;
         }
         QPushButton#btnInputMode {
-            background: #1a6b3c; border: 1px solid #2db570;
-            border-radius: 14px 0 0 14px;
+            background: %66; border: 1px solid %67;
+            border-radius: 4px 0 0 4px;
             border-right: none; color: #fff; padding: 0 10px; font-size: 11px; font-weight: bold;
         }
-        QPushButton#btnInputMode:hover { background: #227a47; }
+        QPushButton#btnInputMode:hover { background: %68; border-color: %67; }
         QPushButton#btnInputModeArrow {
-            background: #1a6b3c; border: 1px solid #2db570;
-            border-radius: 0 14px 14px 0;
-            border-left: 1px solid rgba(255,255,255,0.25);
+            background: %69; border: 1px solid %70;
+            border-radius: 0 4px 4px 0;
+            border-left: none;
             color: #fff; padding: 0 6px; font-size: 11px;
         }
-        QPushButton#btnInputModeArrow:hover { background: #227a47; }
+        QPushButton#btnInputModeArrow:hover { background: %71; border-color: %70; }
         QPushButton#btnApply {
-            background: #1a6b3c; border: 1px solid #2db570;
-            border-radius: 14px; margin-left: 8px;
+            background: %72; border: 1px solid %73;
+            border-radius: 4px; margin-left: 8px;
             color: #fff; font-size: 11px; font-weight: bold; padding: 0 12px;
             min-width: 52px;
         }
-        QPushButton#btnApply:hover { background: #227a47; }
+        QPushButton#btnApply:hover { background: %74; border-color: %73; }
         QLineEdit#txtMainInput {
-            border-radius: 4px; border: 1px solid %12;
+            border-radius: 4px; border: 1px solid %75;
             margin-left: 6px;
             font-family: monospace; font-size: 12px;
+            background: %76; color: %77;
         }
         QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
             background: %30; border: 1px solid %31; border-radius: 4px;
@@ -2022,7 +2038,19 @@ QString MainWindow::buildStyleSheet() {
         .arg(SPINBOX_ARROW_HOVER) // %62 spinbox button hover
         .arg(UNDO_REDO_DISABLED_BG)    // %63
         .arg(UNDO_REDO_DISABLED_BORDER)// %64
-        .arg(UNDO_REDO_DISABLED_TEXT); // %65
+        .arg(UNDO_REDO_DISABLED_TEXT)  // %65
+        .arg(INPUT_MODE_BG)       // %66 input mode button bg
+        .arg(INPUT_MODE_BORDER)   // %67 input mode button border
+        .arg(INPUT_MODE_HOVER)    // %68 input mode button hover
+        .arg(INPUT_ARROW_BG)      // %69 input arrow button bg
+        .arg(INPUT_ARROW_BORDER)  // %70 input arrow button border
+        .arg(INPUT_ARROW_HOVER)   // %71 input arrow button hover
+        .arg(INPUT_APPLY_BG)      // %72 input apply button bg
+        .arg(INPUT_APPLY_BORDER)  // %73 input apply button border
+        .arg(INPUT_APPLY_HOVER)   // %74 input apply button hover
+        .arg(INPUT_FIELD_BORDER)  // %75 input field border
+        .arg(INPUT_FIELD_BG)      // %76 input field background
+        .arg(INPUT_FIELD_TEXT);   // %77 input field text color
 }
 
 // -------------------------------------------------------
@@ -2903,38 +2931,6 @@ void MainWindow::applyTheme() {
         m_inputBarOuter->setStyleSheet(QString(
             "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
             .arg(barBg, barBorder));
-    }
-    // Input bar: light theme overrides
-    if (m_lightTheme) {
-        m_inputMode->setStyleSheet(
-            "QPushButton#btnInputMode {"
-            "  background: #1a6b3c; border: 1px solid #2db570;"
-            "  border-radius: 4px 0 0 4px; border-right: none;"
-            "  color: #fff; padding: 0 8px; font-size: 11px; font-weight: bold; }"
-            "QPushButton#btnInputMode:hover { background: #227a47; }");
-        m_inputModeArrow->setStyleSheet(
-            "QPushButton#btnInputModeArrow {"
-            "  background: #1a6b3c; border: 1px solid #2db570;"
-            "  border-radius: 0; border-left: 1px solid rgba(255,255,255,0.2);"
-            "  border-right: none; color: #fff; padding: 0; font-size: 11px; }"
-            "QPushButton#btnInputModeArrow:hover { background: #227a47; }");
-        btnApply->setStyleSheet(
-            "QPushButton#btnApply {"
-            "  background: #1a6b3c; border: 2px solid #2db570;"
-            "  border-radius: 4px; margin-left: 6px;"
-            "  color: #fff; font-size: 12px; font-weight: bold; padding: 0 14px; }"
-            "QPushButton#btnApply:hover { background: #227a47; }");
-        m_mainInput->setStyleSheet(
-            "QLineEdit#txtMainInput {"
-            "  border-top-left-radius: 0; border-bottom-left-radius: 0;"
-            "  border-top-right-radius: 4px; border-bottom-right-radius: 4px;"
-            "  border-right: 1px solid #aaa; border-radius: 0;"
-            "  font-family: monospace; font-size: 12px; }");
-    } else {
-        m_inputMode->setStyleSheet("");
-        m_inputModeArrow->setStyleSheet("");
-        btnApply->setStyleSheet("");
-        m_mainInput->setStyleSheet("");
     }
 }
 
