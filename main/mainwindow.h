@@ -11,6 +11,7 @@
 #include <QScrollArea>
 #include <atomic>
 #include "styles/stylesheet.h"
+#include "sq1-core/output-converter.h"
 
 class QProcess;
 class Sq1Widget;
@@ -143,6 +144,7 @@ private:
     QVector<CubeSnapshot> m_slicePending;
     void pushUndoState();
     void showAboutModal();
+    OutputMode    m_outputMode{OutputMode::Raw};
     bool          m_lightTheme{false};
     QWidget*      m_sidebar{nullptr};
     QWidget*      m_sidebarOverlay{nullptr};

@@ -11,6 +11,7 @@ win32: CONFIG += windows
 
 SOURCES += \
     main.cpp \
+    sq1-core/output-converter.cpp \
     mainwindow.cpp \
     sq1widget.cpp \
     styles/stylesheet.cpp \
@@ -18,6 +19,7 @@ SOURCES += \
 
 HEADERS += \
     mainwindow.h \
+    sq1-core/output-converter.h \
     sq1widget.h \
     sq1-core/karnotation.h \
     styles/stylesheet.h \

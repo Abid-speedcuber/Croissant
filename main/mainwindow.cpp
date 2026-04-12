@@ -332,6 +332,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     buildUI();
     buildStyles();
+    m_outputMode = chkKarnotation->isChecked() ? OutputMode::Karnotation : OutputMode::Raw;
     updateCommand();
 
     m_sliceTimer = new QTimer(this);
@@ -853,7 +854,10 @@ void MainWindow::buildUI()
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
     connect(chkCubeshape, &QCheckBox::toggled, this, upd);
     connect(chkIgnoreMid, &QCheckBox::toggled, this, upd);
-    connect(chkKarnotation, &QCheckBox::toggled, this, upd);
+    connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool checked) {
+        m_outputMode = checked ? OutputMode::Karnotation : OutputMode::Raw;
+        upd();
+    });
     connect(chkSpecificAngle, &QCheckBox::toggled, this, upd);
     connect(chkMaxX, &QCheckBox::toggled, this, upd);
     connect(spnMaxX, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
@@ -1597,8 +1601,6 @@ QStringList MainWindow::buildArgList()
         args << "-c";
     if (chkIgnoreMid->isChecked())
         args << "-m";
-    if (chkKarnotation->isChecked())
-        args << "-k";
     if (chkSpecificAngle->isChecked())
         args << "-n";
 
@@ -1839,6 +1841,7 @@ void MainWindow::onSolverLine(QString line)
         if (m_seenSolutions.contains(algKey))
             return;
         m_seenSolutions.insert(algKey);
+        line = OutputConverter::convert(line, m_outputMode);
     }
     m_rawLines.append(line);
     if (isSolution)
