@@ -108,7 +108,7 @@ public:
                   QStyleHintReturn *ret = nullptr) const override
     {
         if (hint == QStyle::SH_ToolTip_WakeUpDelay)
-            return 0; // instant
+            return 350;
         if (hint == QStyle::SH_ToolTip_FallAsleepDelay)
             return 8000; // linger 8 s
         return QProxyStyle::styleHint(hint, opt, widget, ret);
@@ -1150,6 +1150,7 @@ void MainWindow::buildUI()
     rightCol->addWidget(outputWrapper, 1);
 
     chkRankErgo = new TightCheckBox("Roughly rank algs based on relative ergonomics");
+    chkRankErgo->setCursor(Qt::PointingHandCursor);
     chkRankErgo->setEnabled(false);
     chkRankErgo->setObjectName("chkRankErgo");
     rightCol->addWidget(chkRankErgo);
