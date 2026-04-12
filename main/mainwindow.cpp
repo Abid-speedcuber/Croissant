@@ -30,6 +30,7 @@
 #include <QMenu>
 #include <QTimer>
 #include <QPropertyAnimation>
+#include <QGraphicsOpacityEffect>
 #include <QDialog>
 #include <QShortcut>
 #include <QDateTime>
@@ -50,6 +51,7 @@
 #include <string>
 #include <map>
 #include <set>
+#include <QPainter>
 
 // ============================================================
 // TightCheckBox — only shows tooltip when hovering over indicator+text
@@ -93,6 +95,129 @@ public:
     void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &) const override {
         editor->setGeometry(option.rect);
     }
+};
+
+// ============================================================
+// FadingTooltip — singleton tooltip with fade-in, shown via hover timer
+// ============================================================
+class FadingTooltip : public QWidget {
+public:
+    // Call on MouseMove over a checkbox active area: arms the timer.
+    // Call with empty text or from outside active area: dismisses.
+    static void arm(const QString &text, const QPoint &globalPos, QWidget *parent) {
+        inst(parent).armImpl(text, globalPos);
+    }
+    static void dismiss(QWidget *parent) {
+        inst(parent).dismissImpl();
+    }
+
+private:
+    explicit FadingTooltip(QWidget *parent) : QWidget(parent, Qt::SubWindow) {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_NoSystemBackground);
+        setAutoFillBackground(false);
+
+        m_label = new QLabel(this);
+        m_label->setWordWrap(true);
+        m_label->setMaximumWidth(320);
+        m_label->setContentsMargins(8, 5, 8, 5);
+
+        QVBoxLayout *l = new QVBoxLayout(this);
+        l->setContentsMargins(0,0,0,0);
+        l->addWidget(m_label);
+
+        m_effect = new QGraphicsOpacityEffect(this);
+        setGraphicsEffect(m_effect);
+        m_effect->setOpacity(0.0);
+
+        m_hoverTimer = new QTimer(this);
+        m_hoverTimer->setSingleShot(true);
+        connect(m_hoverTimer, &QTimer::timeout, this, &FadingTooltip::showNow);
+
+        m_closeTimer = new QTimer(this);
+        m_closeTimer->setSingleShot(true);
+        connect(m_closeTimer, &QTimer::timeout, this, &FadingTooltip::dismissImpl);
+
+        hide();
+    }
+
+    static FadingTooltip &inst(QWidget *parent) {
+        static QPointer<FadingTooltip> s_inst;
+        if (!s_inst) s_inst = new FadingTooltip(parent->window());
+        return *s_inst;
+    }
+
+    void armImpl(const QString &text, const QPoint &globalPos) {
+        // If already showing the same text, do nothing
+        if (isVisible() && m_currentText == text) return;
+        m_pendingText = text;
+        m_pendingPos  = globalPos;
+        if (!m_hoverTimer->isActive())
+            m_hoverTimer->start(350);
+    }
+
+    void dismissImpl() {
+        m_hoverTimer->stop();
+        m_closeTimer->stop();
+        if (!isVisible()) return;
+        QPropertyAnimation *anim = new QPropertyAnimation(m_effect, "opacity", this);
+        anim->setDuration(200);
+        anim->setStartValue(m_effect->opacity());
+        anim->setEndValue(0.0);
+        anim->setEasingCurve(QEasingCurve::InCubic);
+        connect(anim, &QPropertyAnimation::finished, this, &QWidget::hide);
+        anim->start(QAbstractAnimation::DeleteWhenStopped);
+        m_currentText.clear();
+    }
+
+    void showNow() {
+        m_currentText = m_pendingText;
+        // Apply theme-matching style
+        m_label->setStyleSheet(
+            "QLabel { background: transparent; color: #e0e0e0; font-size: 11px; }");
+        setStyleSheet(
+            "FadingTooltip { background: #23233a; border: 1px solid #55557a; border-radius: 5px; }");
+        m_label->setText(m_currentText);
+        m_label->adjustSize();
+        adjustSize();
+
+        // Position relative to parent window
+        QWidget *win = parentWidget();
+        QPoint local = win->mapFromGlobal(m_pendingPos) + QPoint(14, 18);
+        // Keep inside window bounds
+        local.setX(qMin(local.x(), win->width()  - width()  - 8));
+        local.setY(qMin(local.y(), win->height() - height() - 8));
+        move(local);
+        raise();
+        show();
+
+        // Fade in
+        m_effect->setOpacity(0.0);
+        QPropertyAnimation *anim = new QPropertyAnimation(m_effect, "opacity", this);
+        anim->setDuration(320);
+        anim->setStartValue(0.0);
+        anim->setEndValue(1.0);
+        anim->setEasingCurve(QEasingCurve::OutCubic);
+        anim->start(QAbstractAnimation::DeleteWhenStopped);
+
+        m_closeTimer->start(8000);
+    }
+
+    void paintEvent(QPaintEvent *) override {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setBrush(QColor("#23233a"));
+        p.setPen(QColor("#55557a"));
+        p.drawRoundedRect(rect().adjusted(0,0,-1,-1), 5, 5);
+    }
+
+    QLabel                 *m_label{nullptr};
+    QGraphicsOpacityEffect *m_effect{nullptr};
+    QTimer                 *m_hoverTimer{nullptr};
+    QTimer                 *m_closeTimer{nullptr};
+    QString                 m_pendingText;
+    QPoint                  m_pendingPos;
+    QString                 m_currentText;
 };
 
 // ============================================================
@@ -2906,7 +3031,7 @@ void MainWindow::openSidebar()
 
     // Animate slide-in
     QPropertyAnimation *anim = new QPropertyAnimation(m_sidebar, "geometry");
-    anim->setDuration(180);
+    anim->setDuration(320);
     anim->setStartValue(QRect(-220, 0, 220, central->height()));
     anim->setEndValue(QRect(0, 0, 220, central->height()));
     anim->setEasingCurve(QEasingCurve::OutCubic);
@@ -3192,32 +3317,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::ToolTip && txtOutput && watched == txtOutput->viewport())
         return true;
 
-    // ── Block tooltip events outside the actual text+indicator of checkboxes ──
-    if (event->type() == QEvent::ToolTip) {
-        QHelpEvent *he = static_cast<QHelpEvent*>(event);
-        // Walk up from the widget under the global cursor position
-        QWidget *under = QApplication::widgetAt(he->globalPos());
-        if (!under) return true;
-        // Find the first ancestor (or self) that has a tooltip
-        QWidget *tipWidget = under;
-        while (tipWidget && tipWidget->toolTip().isEmpty())
-            tipWidget = tipWidget->parentWidget();
-        if (!tipWidget) return true;
-        // If it's a checkbox, verify cursor is within indicator+text bounds
-        if (QCheckBox *cb = qobject_cast<QCheckBox*>(tipWidget)) {
-            QPoint localPos = cb->mapFromGlobal(he->globalPos());
-            QStyleOptionButton opt;
-            opt.initFrom(cb);
-            QRect indRect  = cb->style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, cb);
-            // Use font metrics for a tight text width instead of SE_CheckBoxContents
-            QFontMetrics fm(cb->font());
-            int textW = fm.horizontalAdvance(cb->text());
-            QRect textRect(indRect.right() + 6, 0, textW, cb->height());
-            QRect activeRect = indRect.united(textRect);
-            if (!activeRect.contains(localPos))
-                return true; // cursor in empty space — eat the tooltip
-        }
-    }
+    // ── Suppress all native tooltips; we handle them via MouseMove ───────────
+    if (event->type() == QEvent::ToolTip)
+        return true;
 
     // ── Pointing hand only over checkbox indicator+text, arrow elsewhere ──────
     if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove) {
@@ -3228,10 +3330,18 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             opt.initFrom(cb);
             QRect indRect = cb->style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, cb);
             QFontMetrics fm(cb->font());
-            int textW = fm.horizontalAdvance(cb->text());
-            QRect textRect(indRect.right() + 6, 0, textW, cb->height());
+            QRect textRect(indRect.right() + 6, 0, fm.horizontalAdvance(cb->text()), cb->height());
             QRect activeRect = indRect.united(textRect);
-            cb->setCursor(activeRect.contains(localPos) ? Qt::PointingHandCursor : Qt::ArrowCursor);
+            if (activeRect.contains(localPos)) {
+                cb->setCursor(Qt::PointingHandCursor);
+                if (!cb->toolTip().isEmpty())
+                    FadingTooltip::arm(cb->toolTip(), QCursor::pos(), this);
+            } else {
+                cb->setCursor(Qt::ArrowCursor);
+                FadingTooltip::dismiss(this);
+            }
+        } else {
+            FadingTooltip::dismiss(this);
         }
     }
 
