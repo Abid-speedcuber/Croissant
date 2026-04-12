@@ -698,7 +698,10 @@ void MainWindow::buildUI()
 
     chkDepths = new TightCheckBox("Specific depths:");
     chkDepths->setToolTip("Search only the listed move depths instead of starting from 0 and going up.\n"
-                          "Comma-separated, e.g.\"8,9\"");
+                          "Comma-separated, e.g.\"8,9\". \n"
+                          "Write in the input box to toggle it on.");
+    chkDepths->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+    chkDepths->setFocusPolicy(Qt::NoFocus);
 
     txtDepths = new QLineEdit();
     txtDepths->setFixedWidth(80);
@@ -707,6 +710,8 @@ void MainWindow::buildUI()
     txtDepths->setValidator(new QRegularExpressionValidator(
         QRegularExpression("[0-9,]*"), txtDepths));
     txtDepths->setToolTip("Comma-separated list of depths to search, e.g. \"8,9\"");
+    chkDepths->setStyleSheet("QCheckBox { color: #707090; } QCheckBox::indicator { opacity: 0.5; }");
+    chkDepths->setCursor(Qt::ArrowCursor);
 
     chkGenerator = new TightCheckBox("Generator alg");
     chkGenerator->setToolTip("If selected, generated algs will set up to the case from a solved cube,\n"
@@ -826,8 +831,23 @@ void MainWindow::buildUI()
     connect(chkSlice, &QCheckBox::toggled, this, upd);
     connect(chkAllOptimal, &QCheckBox::toggled, this, upd);
     connect(spnSuboptimal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
-    connect(chkDepths, &QCheckBox::toggled, this, upd);
-    connect(txtDepths, &QLineEdit::textChanged, this, upd);
+    connect(chkDepths, &QCheckBox::clicked, this, [this](bool) {
+        // Clicking directly is not allowed — state is driven by txtDepths content
+        QString t = txtDepths->text().trimmed();
+        bool valid = !t.isEmpty() && QRegularExpression("^[0-9]+(,[0-9]+)*$").match(t).hasMatch();
+        chkDepths->blockSignals(true);
+        chkDepths->setChecked(valid);
+        chkDepths->blockSignals(false);
+    });
+    connect(txtDepths, &QLineEdit::textChanged, this, [this, upd](const QString &text) {
+        QString t = text.trimmed();
+        // Valid = non-empty and only digits and commas, at least one digit
+        bool valid = !t.isEmpty() && QRegularExpression("^[0-9]+(,[0-9]+)*$").match(t).hasMatch();
+        chkDepths->blockSignals(true);
+        chkDepths->setChecked(valid);
+        chkDepths->blockSignals(false);
+        upd();
+    });
     connect(chkGenerator, &QCheckBox::toggled, this, upd);
     connect(chk2gen, &QCheckBox::toggled, this, upd);
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
@@ -3333,7 +3353,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             QRect textRect(indRect.right() + 6, 0, fm.horizontalAdvance(cb->text()), cb->height());
             QRect activeRect = indRect.united(textRect);
             if (activeRect.contains(localPos)) {
-                cb->setCursor(Qt::PointingHandCursor);
+                if (cb != chkDepths)
+                    cb->setCursor(Qt::PointingHandCursor);
                 if (!cb->toolTip().isEmpty())
                     FadingTooltip::arm(cb->toolTip(), QCursor::pos(), this);
             } else {
@@ -3494,16 +3515,5 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         if (handled)
             return true; // consume — letter goes to cube, not to any text field
     }
-
-    // ── (3) Auto-enable Specific depths when a digit is typed in txtDepths ────
-    // txtDepths is kept enabled (never disabled) so it can receive focus and
-    // clicks; the user enables the option implicitly by typing a number.
-    if (txtDepths->hasFocus() && !chkDepths->isChecked())
-    {
-        const QString text = ke->text();
-        if (!text.isEmpty() && text[0].isDigit())
-            chkDepths->setChecked(true); // fires updateConstraints → updateCommand
-    }
-
     return QMainWindow::eventFilter(watched, event);
 }
