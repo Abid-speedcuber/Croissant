@@ -488,7 +488,7 @@ void MainWindow::buildUI()
         cubeWithReset->setObjectName("cubeWithReset");
         cubeWithReset->setAttribute(Qt::WA_StyledBackground, true);
         // Height: cube height + some padding for the reset button row at top
-        cubeWithReset->setFixedHeight(cubeWidget->height() + 18);
+        cubeWithReset->setFixedHeight(cubeWidget->height() + 8);
         // Width is NOT fixed — it will stretch to fill leftContainer
 
         // cubeWrapper is centered inside cubeWithReset via absolute positioning after layout
