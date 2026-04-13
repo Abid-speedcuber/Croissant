@@ -150,11 +150,16 @@ private:
     QVector<CubeSnapshot> m_slicePending;
     void pushUndoState();
     void showAboutModal();
+
+    //settings stuffs
     bool          m_lightTheme{false};
+    bool          m_smartKarn{true};
+
     QWidget*      m_sidebar{nullptr};
     QWidget*      m_sidebarOverlay{nullptr};
     bool          m_sidebarOpen{false};
     QPushButton*  btnHamburger{nullptr};
+    QCheckBox*    chkSmartKarn{nullptr};
     QWidget*      m_inputBarOuter{nullptr};
     void showSettingsModal();
     void showHowToUseModal();
@@ -163,6 +168,7 @@ private:
     void applyTheme();
     std::function<void()> m_updateLogo;
     QString buildStyleSheet();
+    QString convertLine(const QString& rawLine);
     // Documentation popups (readme style popups for v3/docs)
     void showReadDocsPopup();
     void showOldDocsPopup();

@@ -3,6 +3,7 @@
 #include "sq1-core/sq1_logic.h"
 #include "sq1-core/karnotation.h"
 #include "styles/theme.h"
+#include "sq1-core/output-converter.h"
 #include "styles/stylesheet.h"
 #include <QApplication>
 #include <QHBoxLayout>
@@ -1854,7 +1855,7 @@ void MainWindow::onSolverLine(QString line)
         m_seenSolutions.insert(algKey);
 
         // Build the karnified version from the raw line
-        karnLine = OutputConverter::convert(line, OutputMode::Karnotation);
+        karnLine = convertLine(line);
 
         // Cache both versions
         m_solutionLines.append(line);
@@ -2990,6 +2991,24 @@ void MainWindow::showOldDocsPopup()
     overlay->installEventFilter(f); // watches overlay for click-outside
 }
 
+QString MainWindow::convertLine(const QString& rawLine)
+{
+    int lb = rawLine.lastIndexOf('[');
+    int rb = rawLine.lastIndexOf(']');
+    if (lb < 0 || rb < 0) return rawLine;
+
+    QString algPart     = rawLine.left(lb).trimmed();
+    QString bracketPart = rawLine.mid(lb).trimmed();
+
+    std::string converted;
+    if (m_smartKarn) {
+        converted = karnifycs(algPart.toStdString(), m_posHex.toStdString(), chkGenerator->isChecked());
+    } else {
+        converted = karnify(algPart.toStdString());
+    }
+    return QString::fromStdString(converted) + "  " + bracketPart;
+}
+
 void MainWindow::applyTheme()
 {
     setStyleSheet(buildStyleSheet());
@@ -3215,6 +3234,36 @@ void MainWindow::showSettingsModal()
                 // Rebuild overlay style so it doesn't look stale
                 overlay->setStyleSheet("background: rgba(0,0,0,160);"); });
     lay->addWidget(chkLight);
+
+    QCheckBox *chkSmart = new QCheckBox("Use smarter karnotation");
+    chkSmart->setChecked(m_smartKarn);
+    chkSmart->setToolTip("When 'Karnotation output' is on, use cubeshape-aware karnify.\n"
+                         "Applies different karn rules depending on whether the puzzle\n"
+                         "is in cubeshape at each move.");
+    chkSmart->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
+    connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked) {
+        m_smartKarn = checked;
+        if (!m_rawLines.isEmpty()) {
+            // Rebuild karn cache with new mode
+            m_karnLines.clear();
+            m_karnSolutionLines.clear();
+            for (int i = 0; i < m_rawLines.size(); i++) {
+                bool isSol = m_rawLines[i].contains('[') && m_rawLines[i].contains(']');
+                QString karnLine = m_rawLines[i];
+                if (isSol) {
+                    karnLine = convertLine(m_rawLines[i]);
+                    m_karnSolutionLines.append(karnLine);
+                }
+                m_karnLines.append(karnLine);
+            }
+            if (chkKarnotation->isChecked()) {
+                if (m_tableVisible) rebuildTable();
+                else if (chkRankErgo->isChecked()) onRankErgoToggled(true);
+                else rebuildTerminalView();
+            }
+        }
+    });
+    lay->addWidget(chkSmart);
 
     QLabel *hint = new QLabel("More settings coming soon.");
     hint->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(textMuted));
