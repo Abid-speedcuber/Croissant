@@ -66,4 +66,4 @@ Makefile*
 # added by abid
 compile_log.txt
 main/REFACTORING.md
-*.md
+/solver-core

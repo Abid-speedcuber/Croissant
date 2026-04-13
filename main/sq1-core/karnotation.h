@@ -1,14 +1,10 @@
 #pragma once
-// Shared Karnotation tables and conversion functions.
-// Generated from karn.js by karnotation_gen.html
 // Used by sq1opt.cpp (alg printing) and mainwindow.cpp (unkarnify / ergonomics rating).
 // Edit this file once to affect both.
-//
 // Public API (all inline):
 //   karnify(algWCASlash)        — WCA numeric slash-format → Karnotation display string
 //   unkarnify(algIn)            — Karnotation / shorthand → WCA numeric slash-format
 //   karnifycs(alg, stateHex, generatorMode)
-//                               — Like karnify() but cubeshape-aware (not called yet)
 #include <string>
 #include <map>
 #include <set>
@@ -227,6 +223,8 @@ static const std::vector<std::pair<std::string,std::string>> WCA_TO_KARN_OCS = {
     {" -3,3 ", " E' "},
     {" 3,3 ", " e "},
     {" -3,-3 ", " e' "},
+    {" -2,1 ", " u' "},
+    {" 2,-1 ", " u "}
 };
 
 // ---------------------------------------------------------------------------
@@ -603,6 +601,7 @@ inline std::string karnify(const std::string& algPart) {
     std::string out = trimStr(algPart);
 
     bool startSlice = !out.empty() && (out.front() == '/' || out.front() == '\\');
+    bool endSlice   = !out.empty() && (out.back()  == '/' || out.back()  == '\\');
 
     out = replaceAll(out, "/", " ");
     out = replaceAll(out, "\\", " ");
@@ -619,6 +618,7 @@ inline std::string karnify(const std::string& algPart) {
     out = replaceAll(out, ",", "");
 
     if (startSlice) out = "/" + out;
+    if (endSlice)   out = out + "/";
     return out;
 }
 
@@ -734,56 +734,98 @@ inline std::string karnifycs(
 {
     using namespace karnifycs_detail;
 
-    // --- initialise slot state ---
     int slotState[24];
-    // Solved state: top = CC E CC E CC E CC E, bottom = E CC E CC E CC E CC
     const int solved[24] = {0,0,1,0,0,1,0,0,1,0,0,1, 1,0,0,1,0,0,1,0,0,1,0,0};
     if (generatorMode || !kcParseState(startStateHex, slotState)) {
         for (int i = 0; i < 24; i++) slotState[i] = solved[i];
     }
 
-    // --- parse alg ---
-    // An alg like "/-3,0/-1,2/4,-2/" splits on '/' into {"", "-3,0", "-1,2", "4,-2", ""}.
-    // Each empty token represents a slice boundary; each non-empty token is a (u,d) move.
-    // We track the shape state: slices change shape; layer turns don't.
-    // The cubeshape flag for each move is checked BEFORE applying the move.
+    // Split into slash-separated move groups.
+    // Each '/' is a slice. Collect consecutive moves between slices into groups,
+    // then substitute each group as a whole using the correct CS/OCS table.
+    // Groups are separated by slices in the output.
 
-    std::vector<std::string> tokens = splitStr(replaceAll(algWCA, "\\", "/"), '/');
+    // First pass: collect groups and record CS state at start of each group.
+    struct Group {
+        std::string joined; // space-separated moves e.g. "-3,0 3,0"
+        bool inCS;
+    };
+    std::vector<Group> groups;
+    std::vector<bool> sliceBefore; // sliceBefore[i] = true if there's a slash before group i
 
-    // Strip a potential leading slash by noting that tokens[0] will be empty.
-    // We'll reconstruct the output with '/' between every pair.
+    bool leadingSlash = !algWCA.empty() && (algWCA.front() == '/' || algWCA.front() == '\\');
+    if (leadingSlash) kcSlice(slotState);
 
-    std::string out;
-    bool needSlash = false;
+    // Parse move tokens between slashes
+    std::string normalized = replaceAll(algWCA, "\\", "/");
+    // split by '/'
+    auto parts = splitStr(normalized, '/');
 
-    // Emit a leading '/' if the alg starts with one (tokens[0] is empty).
-    bool leadingSlash = !tokens.empty() && tokens[0].empty();
-    if (leadingSlash) {
-        out += '/';
-        kcSlice(slotState);          // the leading slash is a real slice
-    }
+    // parts[0] is empty if leading slash, otherwise first move group
+    // Each part is either empty (extra slash) or a space-separated list of moves
+    // But our input is one move per part since cleaned = "x,y/x,y/x,y"
+    // Consecutive non-empty parts with no slash between = same group... 
+    // Actually each part IS one move. We need to group consecutive moves between slices.
+    // Since input is already "move/move/move", every '/' is a slice,
+    // so each part is exactly one inter-slice group (one move).
+    // We want to join adjacent same-CS parts for better multi-token substitution.
 
-    // Walk remaining tokens: pairs of (move, slash) where the slash is the next empty token.
-    // More precisely: tokens[0] is already handled above. We process tokens[1..n-1].
-    for (size_t i = 1; i < tokens.size(); i++) {
-        const std::string tok = trimStr(tokens[i]);
+    Group cur;
+    cur.inCS = kcInCubeshape(slotState);
+    cur.joined = "";
+    bool first = true;
+    bool prevWasSlice = leadingSlash;
 
+    for (const auto& part : parts) {
+        std::string tok = trimStr(part);
         if (tok.empty()) {
-            // Another slice
-            out += '/';
-            kcSlice(slotState);
+            // This was a leading/trailing slash already handled, skip
             continue;
         }
+        // There's a slash before this tok if it's not the very first token
+        // (leadingSlash already applied; every subsequent part has a slash before it)
+        if (!first) {
+            // flush current group before the slice
+            if (!cur.joined.empty())
+                groups.push_back(cur);
+            // do the slice
+            kcSlice(slotState);
+            cur.joined = "";
+            cur.inCS = kcInCubeshape(slotState);
+        }
+        first = false;
 
-        // Determine cubeshape at the moment this turn executes.
-        bool inCS = kcInCubeshape(slotState);
-        const auto& table = inCS ? WCA_TO_KARN : WCA_TO_KARN_OCS;
-
-        out += kcSubstituteToken(tok, table);
-
-        // Advance shape state.
+        // Add move to current group
+        if (!cur.joined.empty()) cur.joined += ' ';
+        cur.joined += tok;
         kcApplyTurnToken(slotState, tok);
     }
+    if (!cur.joined.empty())
+        groups.push_back(cur);
+
+    bool trailingSlash = !algWCA.empty() && (algWCA.back() == '/' || algWCA.back() == '\\');
+
+    // Second pass: substitute each group and join with " / "
+    std::string out;
+    if (leadingSlash) out = "/";
+
+    for (size_t gi = 0; gi < groups.size(); gi++) {
+        const auto& g = groups[gi];
+        const auto& table = g.inCS ? WCA_TO_KARN : WCA_TO_KARN_OCS;
+
+        std::string subst = replaceWithVector(" " + g.joined + " ", table);
+        subst = trimStr(subst);
+        std::string prev;
+        do { prev = subst; subst = replaceAll(subst, "  ", " "); } while (subst != prev);
+        subst = replaceAll(subst, ",", "");
+
+        if (!out.empty() && out.back() != ' ' && out.back() != '/')
+            out += ' ';
+        out += subst;
+    }
+
+    if (trailingSlash)
+        out += "/";
 
     return out;
 }

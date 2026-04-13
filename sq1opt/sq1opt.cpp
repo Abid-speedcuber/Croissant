@@ -51,7 +51,13 @@ const char* errors[]={
 	"Position can't be solved with these constraints",//19
 };
 
+#if __has_include("karnotation.h")
 #include "karnotation.h"
+#elif __has_include("../main/sq1-core/karnotation.h")
+#include "../main/sq1-core/karnotation.h"
+#else
+#error "Fatal: karnotation.h not found in ./ or ../main/sq1-core/"
+#endif
 
 int verbosity = 5;
 bool generator=false;
