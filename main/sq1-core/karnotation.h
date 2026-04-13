@@ -748,7 +748,7 @@ inline std::string karnifycs(
     // We track the shape state: slices change shape; layer turns don't.
     // The cubeshape flag for each move is checked BEFORE applying the move.
 
-    std::vector<std::string> tokens = splitStr(algWCA, '/');
+    std::vector<std::string> tokens = splitStr(replaceAll(algWCA, "\\", "/"), '/');
 
     // Strip a potential leading slash by noting that tokens[0] will be empty.
     // We'll reconstruct the output with '/' between every pair.
