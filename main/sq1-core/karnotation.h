@@ -638,52 +638,52 @@ inline std::string karnify(const std::string& algPart) {
 // ===========================================================================
 namespace karnifycs_detail {
 
-// slots[24]: 0 = corner slot, 1 = edge slot.
+// slotState[24]: 0 = corner slot, 1 = edge slot.
 // Layout matches sq1opt FullPosition: indices 0-11 = top layer, 12-23 = bottom.
 
-inline void kcTopTurn(int slots[24], int t) {
+inline void kcTopTurn(int slotState[24], int t) {
     t = ((t % 12) + 12) % 12;
     for (int k = 0; k < t; k++) {
-        int last = slots[11];
-        for (int i = 11; i > 0; i--) slots[i] = slots[i - 1];
-        slots[0] = last;
+        int last = slotState[11];
+        for (int i = 11; i > 0; i--) slotState[i] = slotState[i - 1];
+        slotState[0] = last;
     }
 }
 
-inline void kcBotTurn(int slots[24], int d) {
+inline void kcBotTurn(int slotState[24], int d) {
     d = ((d % 12) + 12) % 12;
     for (int k = 0; k < d; k++) {
-        int last = slots[23];
-        for (int i = 23; i > 12; i--) slots[i] = slots[i - 1];
-        slots[12] = last;
+        int last = slotState[23];
+        for (int i = 23; i > 12; i--) slotState[i] = slotState[i - 1];
+        slotState[12] = last;
     }
 }
 
-inline void kcSlice(int slots[24]) {
+inline void kcSlice(int slotState[24]) {
     for (int i = 6; i < 12; i++)
-        std::swap(slots[i], slots[i + 6]);
+        std::swap(slotState[i], slotState[i + 6]);
 }
 
 // A square layer: 4 corners (2 slots each = 00) + 4 edges (1 slot = 1).
 // Valid 12-slot patterns are the 3 rotations of [0,0,1, 0,0,1, 0,0,1, 0,0,1]:
 //   edges fall at positions with remainder 0, 1, or 2 (mod 3).
-inline bool kcLayerIsSquare(const int slots[], int base) {
+inline bool kcLayerIsSquare(const int slotState[], int base) {
     for (int rem = 0; rem < 3; rem++) {
         bool ok = true;
         for (int i = 0; i < 12; i++) {
-            if (slots[base + i] != (i % 3 == rem ? 1 : 0)) { ok = false; break; }
+            if (slotState[base + i] != (i % 3 == rem ? 1 : 0)) { ok = false; break; }
         }
         if (ok) return true;
     }
     return false;
 }
 
-inline bool kcInCubeshape(const int slots[24]) {
-    return kcLayerIsSquare(slots, 0) && kcLayerIsSquare(slots, 12);
+inline bool kcInCubeshape(const int slotState[24]) {
+    return kcLayerIsSquare(slotState, 0) && kcLayerIsSquare(slotState, 12);
 }
 
-// Parse a position hex string into slots[24]. Returns true on success.
-inline bool kcParseState(const std::string& posHex, int slots[24]) {
+// Parse a position hex string into slotState[24]. Returns true on success.
+inline bool kcParseState(const std::string& posHex, int slotState[24]) {
     if (posHex.size() < 16) return false;
     int j = 0;
     for (int i = 0; i < 16 && j < 24; i++) {
@@ -692,24 +692,24 @@ inline bool kcParseState(const std::string& posHex, int slots[24]) {
                         c == 'U' || c == 'V' || c == 'W';
         if (isCorner) {
             if (j + 1 >= 24) return false;
-            slots[j++] = 0; slots[j++] = 0;
+            slotState[j++] = 0; slotState[j++] = 0;
         } else {
             if (j >= 24) return false;
-            slots[j++] = 1;
+            slotState[j++] = 1;
         }
     }
     return j == 24;
 }
 
 // Apply a "t,d" move token to the slot state.
-inline void kcApplyTurnToken(int slots[24], const std::string& token) {
+inline void kcApplyTurnToken(int slotState[24], const std::string& token) {
     size_t comma = token.find(',');
     if (comma == std::string::npos) return;
     try {
         int u = std::stoi(token.substr(0, comma));
         int d = std::stoi(token.substr(comma + 1));
-        kcTopTurn(slots, u);
-        kcBotTurn(slots, d);
+        kcTopTurn(slotState, u);
+        kcBotTurn(slotState, d);
     } catch (...) {}
 }
 
@@ -735,11 +735,11 @@ inline std::string karnifycs(
     using namespace karnifycs_detail;
 
     // --- initialise slot state ---
-    int slots[24];
+    int slotState[24];
     // Solved state: top = CC E CC E CC E CC E, bottom = E CC E CC E CC E CC
     const int solved[24] = {0,0,1,0,0,1,0,0,1,0,0,1, 1,0,0,1,0,0,1,0,0,1,0,0};
-    if (generatorMode || !kcParseState(startStateHex, slots)) {
-        for (int i = 0; i < 24; i++) slots[i] = solved[i];
+    if (generatorMode || !kcParseState(startStateHex, slotState)) {
+        for (int i = 0; i < 24; i++) slotState[i] = solved[i];
     }
 
     // --- parse alg ---
@@ -760,7 +760,7 @@ inline std::string karnifycs(
     bool leadingSlash = !tokens.empty() && tokens[0].empty();
     if (leadingSlash) {
         out += '/';
-        kcSlice(slots);          // the leading slash is a real slice
+        kcSlice(slotState);          // the leading slash is a real slice
     }
 
     // Walk remaining tokens: pairs of (move, slash) where the slash is the next empty token.
@@ -771,18 +771,18 @@ inline std::string karnifycs(
         if (tok.empty()) {
             // Another slice
             out += '/';
-            kcSlice(slots);
+            kcSlice(slotState);
             continue;
         }
 
         // Determine cubeshape at the moment this turn executes.
-        bool inCS = kcInCubeshape(slots);
+        bool inCS = kcInCubeshape(slotState);
         const auto& table = inCS ? WCA_TO_KARN : WCA_TO_KARN_OCS;
 
         out += kcSubstituteToken(tok, table);
 
         // Advance shape state.
-        kcApplyTurnToken(slots, tok);
+        kcApplyTurnToken(slotState, tok);
     }
 
     return out;
