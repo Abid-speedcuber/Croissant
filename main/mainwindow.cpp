@@ -332,7 +332,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     buildUI();
     buildStyles();
-    m_outputMode = chkKarnotation->isChecked() ? OutputMode::Karnotation : OutputMode::Raw;
     updateCommand();
 
     m_sliceTimer = new QTimer(this);
@@ -854,9 +853,17 @@ void MainWindow::buildUI()
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
     connect(chkCubeshape, &QCheckBox::toggled, this, upd);
     connect(chkIgnoreMid, &QCheckBox::toggled, this, upd);
-    connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool checked) {
-        m_outputMode = checked ? OutputMode::Karnotation : OutputMode::Raw;
+    connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool /*checked*/) {
         upd();
+        // Rebuild views from cache — no re-solve needed
+        if (!m_rawLines.isEmpty()) {
+            if (m_tableVisible)
+                rebuildTable();
+            else if (chkRankErgo->isChecked())
+                onRankErgoToggled(true);
+            else
+                rebuildTerminalView();
+        }
     });
     connect(chkSpecificAngle, &QCheckBox::toggled, this, upd);
     connect(chkMaxX, &QCheckBox::toggled, this, upd);
@@ -1431,7 +1438,9 @@ void MainWindow::toggleExpand()
 void MainWindow::rebuildTerminalView()
 {
     txtOutput->clear();
-    if (m_rawLines.isEmpty())
+    // Choose which line list to display
+    const QStringList &lines = chkKarnotation->isChecked() ? m_karnLines : m_rawLines;
+    if (lines.isEmpty())
     {
         QTextCursor cur(txtOutput->document());
         QTextCharFormat fmt;
@@ -1444,7 +1453,7 @@ void MainWindow::rebuildTerminalView()
     }
     QTextCursor cur(txtOutput->document());
     int solIdx = 0;
-    for (const QString &line : std::as_const(m_rawLines))
+    for (const QString &line : std::as_const(lines))
     {
         bool isSol = line.contains('[') && line.contains(']');
         if (!cur.atStart())
@@ -1657,9 +1666,6 @@ void MainWindow::syncFlagsFromCommand(const QString &text)
     block(chkIgnoreMid, true);
     chkIgnoreMid->setChecked(has("-m"));
     block(chkIgnoreMid, false);
-    block(chkKarnotation, true);
-    chkKarnotation->setChecked(has("-k"));
-    block(chkKarnotation, false);
     block(chkSpecificAngle, true);
     chkSpecificAngle->setChecked(has("-n"));
     block(chkSpecificAngle, false);
@@ -1777,7 +1783,9 @@ void MainWindow::onSolve()
     m_stopped = false;
     txtOutput->clear();
     m_rawLines.clear();
+    m_karnLines.clear();
     m_solutionLines.clear();
+    m_karnSolutionLines.clear();
     m_seenSolutions.clear();
     // Always go back to terminal view while solving
     m_tableVisible = false;
@@ -1834,19 +1842,34 @@ void MainWindow::stopSolver()
 void MainWindow::onSolverLine(QString line)
 {
     bool isSolution = line.contains('[') && line.contains(']');
+    QString karnLine = line; // default: non-solution lines are unchanged
+
     if (isSolution)
     {
+        // Dedup on the raw WCA alg key (before any display conversion)
         int bracketPos = line.indexOf('[');
         QString algKey = (bracketPos >= 0) ? line.left(bracketPos).trimmed() : line.trimmed();
         if (m_seenSolutions.contains(algKey))
             return;
         m_seenSolutions.insert(algKey);
-        line = OutputConverter::convert(line, m_outputMode);
+
+        // Build the karnified version from the raw line
+        karnLine = OutputConverter::convert(line, OutputMode::Karnotation);
+
+        // Cache both versions
+        m_solutionLines.append(line);
+        m_karnSolutionLines.append(karnLine);
     }
+
+    // Cache into raw and karn line lists (non-solution lines are identical in both)
     m_rawLines.append(line);
+    m_karnLines.append(karnLine);
+
+    // Which version to display live?
+    const QString &displayLine = isSolution && chkKarnotation->isChecked() ? karnLine : line;
+
     if (isSolution)
     {
-        m_solutionLines.append(line);
         if (!m_hadFirstSolution)
         {
             m_hadFirstSolution = true;
@@ -1872,7 +1895,7 @@ void MainWindow::onSolverLine(QString line)
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
-            cur.insertText(line, fmt);
+            cur.insertText(displayLine, fmt);
             txtOutput->setTextCursor(cur);
         }
     }
@@ -1889,7 +1912,7 @@ void MainWindow::onSolverLine(QString line)
         QTextCharFormat fmt;
         fmt.setForeground(QColor(col));
         fmt.setFontPointSize(m_expanded ? 11 : 10);
-        cur.insertText(line, fmt);
+        cur.insertText(displayLine, fmt);
         txtOutput->setTextCursor(cur);
     }
 }
@@ -2346,11 +2369,26 @@ void MainWindow::rebuildTable()
     QVector<Row> rows;
 
     bool useKarn = chkKarnotation->isChecked();
+    // rateAndSort always rates on raw numeric; pass display lines for the alg column
+    const QStringList &displayLines = useKarn ? m_karnSolutionLines : m_solutionLines;
     auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
+    // Merge display alg text from displayLines (rated preserves original order before sort)
+    // Build a map from raw alg key -> display alg for quick lookup
+    QMap<QString, QString> displayAlgMap;
+    for (int i = 0; i < m_solutionLines.size() && i < displayLines.size(); i++) {
+        int lb = m_solutionLines[i].lastIndexOf('[');
+        QString key = lb > 0 ? m_solutionLines[i].left(lb).trimmed() : m_solutionLines[i].trimmed();
+        int dlb = displayLines[i].lastIndexOf('[');
+        displayAlgMap[key] = dlb > 0 ? displayLines[i].left(dlb).trimmed() : displayLines[i].trimmed();
+    }
     for (auto &[line, score] : rated) {
         int mv, sl;
         parseCounts(line, mv, sl);
-        rows.append({stripBracket(line), mv, sl, score});
+        // Replace the alg part of 'line' with the karn/raw display version
+        int lb = line.lastIndexOf('[');
+        QString rawKey = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+        QString displayAlg = displayAlgMap.value(rawKey, rawKey);
+        rows.append({displayAlg, mv, sl, score});
     }
 
     if (ergo && showErgo)
@@ -2464,7 +2502,20 @@ void MainWindow::onRankErgoToggled(bool checked)
         return;
     lblStatus->setText("Rating algorithms…");
 
-    auto rated = rateAndSort(m_solutionLines, m_posHex, true); // always use karn for rating
+    // Always rate on raw numeric lines; display alg in karn or raw per checkbox
+    auto rated = rateAndSort(m_solutionLines, m_posHex, true);
+    const bool useKarn = chkKarnotation->isChecked();
+
+    // Build map from raw alg key -> display alg (karn or raw)
+    const QStringList &displaySols = useKarn ? m_karnSolutionLines : m_solutionLines;
+    QMap<QString, QString> displayAlgMap;
+    for (int i = 0; i < m_solutionLines.size() && i < displaySols.size(); i++) {
+        int lb = m_solutionLines[i].lastIndexOf('[');
+        QString key = lb > 0 ? m_solutionLines[i].left(lb).trimmed() : m_solutionLines[i].trimmed();
+        int dlb = displaySols[i].lastIndexOf('[');
+        QString dispAlg = dlb > 0 ? displaySols[i].left(dlb).trimmed() : displaySols[i].trimmed();
+        displayAlgMap[key] = dispAlg;
+    }
 
     txtOutput->clear();
     QTextCursor cur(txtOutput->document());
@@ -2483,7 +2534,10 @@ void MainWindow::onRankErgoToggled(bool checked)
         fmt.setFontPointSize(ptSize);
         cur.insertText(text, fmt);
     };
-    for (const QString &line : std::as_const(m_rawLines))
+
+    // Non-solution lines first (from the appropriate display list)
+    const QStringList &displayLines = useKarn ? m_karnLines : m_rawLines;
+    for (const QString &line : std::as_const(displayLines))
     {
         bool isSol = line.contains('[') && line.contains(']');
         if (!isSol)
@@ -2492,14 +2546,23 @@ void MainWindow::onRankErgoToggled(bool checked)
             insertLine(line, col, false, m_expanded ? 11 : 10, m_expanded ? 150 : 120);
         }
     }
+
+    // Rated solution lines (sorted by score, displayed in karn/raw per checkbox)
     int solIdx = 0;
     for (auto &[line, score] : rated)
     {
+        int lb = line.lastIndexOf('[');
+        QString rawKey = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+        QString displayAlg = displayAlgMap.value(rawKey, rawKey);
+        // Reconstruct bracket part from the rated line
+        QString bracketPart = lb > 0 ? line.mid(lb) : QString();
+        QString displayLine = displayAlg + (bracketPart.isEmpty() ? QString() : "  " + bracketPart.trimmed());
+
         bool isAlt = (solIdx % 2 == 1);
         QString col = m_lightTheme
                           ? (isAlt ? "#2a6a2a" : "#1a4a8a")
                           : (isAlt ? "#cbcbcb" : Theme::textSolution(m_lightTheme));
-        QString display = QString("%1  (%2)").arg(line).arg(score, 0, 'f', 2);
+        QString display = QString("%1  (%2)").arg(displayLine).arg(score, 0, 'f', 2);
         insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         solIdx++;
     }

@@ -1106,7 +1106,6 @@ class PositionSolver {
 		if (metric == SLICE_METRIC && middle==1) l=-2;
 		// do ida
 		int optimalMoves = -1;
-		std::cout<<specificAngle<<std::endl;
 		if (!specificDepths.empty()) {
 			// Save the initial encoded state. After search() returns early (e.g. first
 			// solution found with !findAll), the rotation loops in search() are aborted
@@ -1293,19 +1292,11 @@ class PositionSolver {
 		}
 		return out;
 	}
-	std::string replaceAll(std::string str, std::string olds, std::string news) {
-		size_t pos;
-		while ((pos = str.find(olds)) != std::string::npos) {
-			str.replace(pos, olds.length(), news);
-		}
-		return str;
-	}
 	void printsol(){
 		std::string out = "";
 		int tw=0, tu=0;
 		int mu=0, md=0;
 		int angle=0;
-		std::cout << moveList << std::endl;
 		if( generator ){
 			bool isFirstOutputSlice = true;
 			for( int i=moveLen-1; i>=0; i--){
@@ -1344,31 +1335,8 @@ class PositionSolver {
 			}
 		}
 		out += printmove(mu, md, !generator);
-		std::cout << out << std::endl;
-		if (karnotation) {
-			bool startSlice = !out.empty() && (out.front() == '/' || out.front() == '\\');
-			// Replace "/" and "\" with spaces
-			out = replaceAll(out, "/", " ");
-			out = replaceAll(out, "\\", " ");
-
-			// Add padding spaces and apply wcaToKarn replacements iteratively
-			for (const auto& [k, v] : WCA_TO_KARN) {
-				std::cout << k << ": " << v << std::endl;
-			}
-			out = replaceWithVector(" " + trimStr(out) + " ", WCA_TO_KARN);
-			out = trimStr(out);
-
-			// Collapse multiple spaces iteratively
-			std::string prev;
-			do {
-				prev = out;
-				out = replaceAll(out, "  ", " ");
-			} while (out != prev);
-
-			// Remove commas
-			out = replaceAll(out, ",", "");
-			if (startSlice) out = "/" + out;
-		}
+		if (karnotation)
+			out = karnify(out);
 		std::cout << out;
 		std::cout <<"  ["<<tw<<"|"<<tu;
 		if (metric == ANGLE_METRIC) std::cout<<"|"<<angle;
@@ -1505,13 +1473,6 @@ public:
 			if( pr2.table[shp2][e2][c2]>l+1 && pr2.table[shpx2][e2][c2]>l+1) return true;
 		}
 		return false;
-	}
-	inline std::string trim(const std::string& str) {
-		const std::string whitespace = " \t\n\r\f\v";
-		const auto first = str.find_first_not_of(whitespace);
-		if (first == std::string::npos) return ""; // String is all whitespace
-		const auto last = str.find_last_not_of(whitespace);
-		return str.substr(first, (last - first + 1));
 	}
 };
 

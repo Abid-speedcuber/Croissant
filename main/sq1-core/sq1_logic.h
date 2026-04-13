@@ -9,7 +9,6 @@
 
 // ============================================================
 // Ergonomics Rating — pure C++ translation of alg_rater.html
-// Uses KARNOTATION from karnotation.h for unkarnify.
 // ============================================================
 
 struct AlgRating
@@ -19,17 +18,17 @@ struct AlgRating
 };
 
 // ─────────────────────────────────────────────────────────
-// Parsing & Conversion Functions
+// Alg Rating Functions
 // ─────────────────────────────────────────────────────────
 
-/// Converts Karnotation (e.g., "bjj", "fv") to WCA numeric notation (e.g., "1,0")
-std::string unkarnify(const std::string &algIn);
-
-/// Rates an algorithm for ergonomics based on move values and slice patterns
+/// Rates an algorithm for ergonomics based on move values and slice patterns.
+/// algRaw must be in WCA numeric slash format (or karnotation — unkarnify is called
+/// internally if alpha characters are detected).
 AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
                   double W1, double W2, double W3, double W4, double W5);
 
-/// Rates and sorts multiple solutions by ergonomic score (highest first)
+/// Rates and sorts multiple solutions by ergonomic score (highest first).
+/// solutionLines may contain karn or numeric algs; rating always uses numeric.
 std::vector<std::pair<QString, double>>
 rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKarnotation);
 
@@ -37,10 +36,5 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
 // Helper Functions (internal use, but exposed for testing)
 // ─────────────────────────────────────────────────────────
 
-std::vector<std::string> splitStr(const std::string &s, char delim);
-std::string addCommasToMove(const std::string &move);
-std::string getAlignment(bool topA, bool bottomA);
-std::string unkarnifyHelp(const std::string &scramble);
-std::string replaceShorthands(std::string scramble);
 std::pair<int, int> getOverwork(const std::vector<std::string> &moves);
 int getMoveValue(bool startA, bool upslice, const std::string &move);

@@ -117,8 +117,14 @@ private:
     void          appendStatusLine(const QString& msg);
 
     QPointer<SolverWorker> worker;
+    // m_rawLines      — every line from the solver process, raw WCA numeric format
+    // m_karnLines     — same lines after karnify() is applied to solution lines
+    // m_solutionLines — subset of m_rawLines that are solution lines (WCA numeric)
+    // m_karnSolutionLines — same subset after karnify()
     QStringList   m_rawLines;
+    QStringList   m_karnLines;
     QStringList   m_solutionLines;
+    QStringList   m_karnSolutionLines;
     QSet<QString> m_seenSolutions;
     QString       m_posHex;         // position hex captured at solve time for ergo rating
     bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
@@ -144,7 +150,6 @@ private:
     QVector<CubeSnapshot> m_slicePending;
     void pushUndoState();
     void showAboutModal();
-    OutputMode    m_outputMode{OutputMode::Raw};
     bool          m_lightTheme{false};
     QWidget*      m_sidebar{nullptr};
     QWidget*      m_sidebarOverlay{nullptr};
