@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <style>
+@font-face { font-family: 'MyFont'; src: url('bars.ttf'); }
 body { font-family: "Noto Sans", "DejaVu Sans", Arial; padding: 20px; }
 textarea { width: 100%; height: 100px; margin-bottom: 10px; }
 button { padding: 10px 20px; }
@@ -29,6 +30,9 @@ button { padding: 10px 20px; }
 <div class="output">
 <p><b>LaTeX Output:</b></p>
 <div id="latex"></div>
+
+<p><b>Custom Font Output:</b></p>
+<div id="custom" style="font-family: 'MyFont', monospace; font-size: 28px; letter-spacing: 2px; line-height: 1.6; white-space: pre-wrap;"></div>
 
 <p><b>Copyable Unicode Output:</b></p>
 <div id="unicode"></div>
@@ -52,6 +56,7 @@ function process() {
 
     let latexParts = [];
     let unicodeParts = [];
+    let customParts = [];
 
     while ((match = regex.exec(input)) !== null) {
         let a = parseInt(match[1]);
@@ -66,6 +71,21 @@ function process() {
         }
         latexParts.push(latexPair);
 
+        // CUSTOM FONT
+        let customPair = '';
+        const small = (n) => n === 6 ? '\ue015' : String.fromCodePoint(0xe000 + n);
+        const singleBar = (n) => String.fromCodePoint(0xe005 + n); // 1→e006, 2→e007...
+        const barRight = (n) => String.fromCodePoint(0xe00a + n); // 1→e00b, 2→e00c...
+        const barLeft = (n) => String.fromCodePoint(0xe00f + n); // 1→e010, 2→e011...
+        const mapDigits = (num, mapper) => String(num).split('').map(d => mapper(parseInt(d))).join('');
+
+        if (a < 0 && b < 0) {
+            customPair = mapDigits(Math.abs(a), barRight) + mapDigits(Math.abs(b), barLeft);
+        } else {
+            customPair = `${a < 0 ? mapDigits(Math.abs(a), singleBar) : mapDigits(Math.abs(a), small)}${b < 0 ? mapDigits(Math.abs(b), singleBar) : mapDigits(Math.abs(b), small)}`;
+        }
+        customParts.push(customPair);
+
         // UNICODE
         let unicodePair = '';
         if (a < 0 && b < 0) {
@@ -79,15 +99,18 @@ function process() {
     // tighter spacing using \; instead of normal space
     let latexOutput = latexParts.join('\\; ');
     let unicodeOutput = unicodeParts.join('  ');
+    let customOutput = customParts.join('  ');
 
     // make slashes text-sized and not giant math operators
     if (leadingSlash) {
         latexOutput = '\\text{/}\\; ' + latexOutput;
         unicodeOutput = '/ ' + unicodeOutput;
+        customOutput = '/ ' + customOutput;
     }
     if (trailingSlash) {
         latexOutput = latexOutput + '\\; \\text{/}';
         unicodeOutput = unicodeOutput + ' /';
+        customOutput = customOutput + ' /';
     }
 
     // Render LaTeX using MathJax
@@ -95,6 +118,7 @@ function process() {
     latexContainer.innerHTML = `\\[ ${latexOutput} \\]`;
     MathJax.typesetPromise();
 
+    document.getElementById('custom').innerText = customOutput;
     document.getElementById('unicode').innerText = unicodeOutput;
 }
 </script>
