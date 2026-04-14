@@ -764,7 +764,7 @@ inline std::string karnifycs(
     // parts[0] is empty if leading slash, otherwise first move group
     // Each part is either empty (extra slash) or a space-separated list of moves
     // But our input is one move per part since cleaned = "x,y/x,y/x,y"
-    // Consecutive non-empty parts with no slash between = same group... 
+    // Consecutive non-empty parts with no slash between = same group...
     // Actually each part IS one move. We need to group consecutive moves between slices.
     // Since input is already "move/move/move", every '/' is a slice,
     // so each part is exactly one inter-slice group (one move).
@@ -805,26 +805,43 @@ inline std::string karnifycs(
 
     bool trailingSlash = !algWCA.empty() && (algWCA.back() == '/' || algWCA.back() == '\\');
 
-    // Second pass: substitute each group and join with " / "
-    std::string out;
-    if (leadingSlash) out = "/";
-
-    for (size_t gi = 0; gi < groups.size(); gi++) {
-        const auto& g = groups[gi];
+    // Second pass: substitute each group, collect results first so we can
+    // inspect the first/last output before deciding on leading/trailing slashes.
+    std::vector<std::string> substGroups;
+    substGroups.reserve(groups.size());
+    for (const auto& g : groups) {
         const auto& table = g.inCS ? WCA_TO_KARN : WCA_TO_KARN_OCS;
-
         std::string subst = replaceWithVector(" " + g.joined + " ", table);
         subst = trimStr(subst);
         std::string prev;
         do { prev = subst; subst = replaceAll(subst, "  ", " "); } while (subst != prev);
         subst = replaceAll(subst, ",", "");
-
-        if (!out.empty() && out.back() != ' ' && out.back() != '/')
-            out += ' ';
-        out += subst;
+        substGroups.push_back(subst);
     }
 
-    if (trailingSlash)
+    // Karn tokens carry their surrounding slashes implicitly; numeric ones don't.
+    // "Karn" = the substituted string contains at least one alpha character.
+    auto hasAlpha = [](const std::string& s) {
+        for (unsigned char ch : s) if (std::isalpha(ch)) return true;
+        return false;
+    };
+    bool firstIsKarn = !substGroups.empty() && hasAlpha(substGroups.front());
+    bool lastIsKarn  = !substGroups.empty() && hasAlpha(substGroups.back());
+
+    // Leading slash: only needed if the input had one AND the first output token
+    // is numeric (karn tokens bring the slash with them).
+    // Trailing slash: same rule on the other end.
+    std::string out;
+    if (leadingSlash && !firstIsKarn)
+        out = "/";
+
+    for (const auto& s : substGroups) {
+        if (!out.empty() && out.back() != ' ' && out.back() != '/')
+            out += ' ';
+        out += s;
+    }
+
+    if (trailingSlash && !lastIsKarn)
         out += "/";
 
     return out;
