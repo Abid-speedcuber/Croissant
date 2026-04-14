@@ -158,9 +158,9 @@ QPushButton#btnSolve:hover {
 }
 
 QPushButton#btnSolve:disabled { 
-    background: #333;
-    border-color: #444;
-    color: #666;
+    background: --stop-solve-disabled-bg;
+    border-color: --stop-solve-disabled-border;
+    color: --stop-solve-disabled-text;
 }
 
 QPushButton#btnCopy { 
@@ -255,7 +255,7 @@ QPushButton#btnScrambleMode:hover {
 
 /* ========== Input Bar Container (ALL spacing/sizing via QSS!) ========== */
 QWidget#inputBarOuter {
-    background: --input-mode-bg;
+    background: --input-panel-bg;
     border-bottom: 1px solid --input-mode-border;
     padding: 0px 12px;
     min-height: 50px;
@@ -383,7 +383,7 @@ QWidget#leftPanel {
 QWidget#cubeWithReset {
     background: --primary-bg;
     border-radius: 4px;
-    border: 1px solid #27274d;
+    border: 1px solid --cube-with-reset-border;
 }
 
 QWidget#cubeWrapper {
@@ -527,7 +527,7 @@ QTableWidget#m_solutionTable::item:selected {
 
 /* ========== TopBar ========== */
 QWidget#topBar {
-    background: --dark-bg;
+    background: --topbar-bg;
     border-bottom: 2px solid --border-bottom;
     min-height: 52px;
     max-height: 52px;

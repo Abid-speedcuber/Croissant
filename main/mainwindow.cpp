@@ -174,10 +174,12 @@ private:
     void showNow() {
         m_currentText = m_pendingText;
         // Apply theme-matching style
-        m_label->setStyleSheet(
-            "QLabel { background: transparent; color: #e0e0e0; font-size: 11px; }");
-        setStyleSheet(
-            "FadingTooltip { background: #23233a; border: 1px solid #55557a; border-radius: 5px; }");
+        m_label->setStyleSheet(QString(
+            "QLabel { background: transparent; color: %1; font-size: 11px; }")
+            .arg(Theme::fadingTooltipText()));
+        setStyleSheet(QString(
+            "FadingTooltip { background: %1; border: 1px solid %2; border-radius: 5px; }")
+            .arg(Theme::fadingTooltipBg(), Theme::fadingTooltipBorder()));
         m_label->setText(m_currentText);
         m_label->adjustSize();
         adjustSize();
@@ -207,8 +209,8 @@ private:
     void paintEvent(QPaintEvent *) override {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
-        p.setBrush(QColor("#23233a"));
-        p.setPen(QColor("#55557a"));
+        p.setBrush(QColor(Theme::fadingTooltipBg()));
+        p.setPen(QColor(Theme::fadingTooltipBorder()));
         p.drawRoundedRect(rect().adjusted(0,0,-1,-1), 5, 5);
     }
 
@@ -1092,12 +1094,13 @@ void MainWindow::buildUI()
             {
                 qDebug() << "inputModeArrow clicked";
                 QMenu* menu = new QMenu(this);
-                menu->setStyleSheet(
-                    "QMenu { background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 6px; padding: 4px; color: #e0e0e0; font-size: 12px; }"
+                menu->setStyleSheet(QString(
+                    "QMenu { background: %1; border: 1px solid %2; border-radius: 6px; padding: 4px; color: %3; font-size: 12px; }"
                     "QMenu::item { padding: 6px 20px; border-radius: 4px; }"
-                    "QMenu::item:selected { background: #3a3a5e; }"
-                    "QMenu::item:checked { color: #2db570; font-weight: bold; }"
-                    );
+                    "QMenu::item:selected { background: %4; }"
+                    "QMenu::item:checked { color: %5; font-weight: bold; }"
+                    ).arg(Theme::menuBg(), Theme::menuBorder(), Theme::fadingTooltipText(),
+                          Theme::menuItemSelected(), Theme::menuItemChecked()));
                 QAction* aScram = menu->addAction("Scramble");
                 QAction* aAlg   = menu->addAction("Alg");
                 QAction* aPos   = menu->addAction("Position");
@@ -1464,8 +1467,8 @@ void MainWindow::rebuildTerminalView()
         {
             bool isAlt = (solIdx % 2 == 1);
             QString col = m_lightTheme
-                              ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                              : (isAlt ? "#cbcbcb" : Theme::textSolution(m_lightTheme));
+                              ? (isAlt ? Theme::solutionAltLight(true) : Theme::solutionPrimary(true))
+                              : (isAlt ? Theme::solutionAltLight(false) : Theme::textSolution(false));
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
@@ -1883,8 +1886,8 @@ void MainWindow::onSolverLine(QString line)
         {
             bool isAlt = (m_solutionLines.size() % 2 == 0);
             QString col = m_lightTheme
-                              ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                              : (isAlt ? "#cbcbcb" : Theme::textSolution(m_lightTheme));
+                              ? (isAlt ? Theme::solutionAltLight(true) : Theme::solutionPrimary(true))
+                              : (isAlt ? Theme::solutionAltLight(false) : Theme::textSolution(false));
             QTextCursor cur = txtOutput->textCursor();
             cur.movePosition(QTextCursor::End);
             if (!txtOutput->document()->isEmpty())
@@ -2561,8 +2564,8 @@ void MainWindow::onRankErgoToggled(bool checked)
 
         bool isAlt = (solIdx % 2 == 1);
         QString col = m_lightTheme
-                          ? (isAlt ? "#2a6a2a" : "#1a4a8a")
-                          : (isAlt ? "#cbcbcb" : Theme::textSolution(m_lightTheme));
+                          ? (isAlt ? Theme::solutionAltLight(true) : Theme::solutionPrimary(true))
+                          : (isAlt ? Theme::solutionAltLight(false) : Theme::textSolution(false));
         QString display = QString("%1  (%2)").arg(displayLine).arg(score, 0, 'f', 2);
         insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         solIdx++;
@@ -2647,29 +2650,30 @@ void MainWindow::showAboutModal()
     body->setWordWrap(true);
     body->setTextFormat(Qt::RichText);
     body->setStyleSheet("background:transparent;");
-    QString aboutBody = QString(
+    QString lnk = Theme::linkColor();
+        QString aboutBody = QString(
                             "<span style='color:%1;font-size:12px;line-height:1.7;'>"
                             "This program stemmed from the optimal Square-1 solver by "
-                            "<a href='https://www.jaapsch.net/puzzles/' style='color:#7abfe8;'>Jaap Scherphuis</a>."
+                            "<a href='https://www.jaapsch.net/puzzles/' style='color:%3;'>Jaap Scherphuis</a>."
                             "<br><br>"
                             "v2 was created by Michael Gottlieb "
-                            "(<a href='https://github.com/qqwref' style='color:#7abfe8;'>GitHub</a>, "
-                            "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:#7abfe8;'>WCA</a>), "
+                            "(<a href='https://github.com/qqwref' style='color:%3;'>GitHub</a>, "
+                            "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:%3;'>WCA</a>), "
                             "who rewrote the solver with significant improvements and optimisations."
-                            "<br><br>Read the old documentations <a href='read_old_docs'>here</a>. Note that it is largely not applicable within v3."
-                            "<br><br>This is the official <b style='color:#e0e0e0;'>v3</b>. New in v3:"
-                            "<ul style='margin:4px 0 4px 16px;padding:0;color:#b0b0c8;'>"
+                            "<br><br>Read the old documentations <a href='read_old_docs' style='color:%3;'>here</a>. Note that it is largely not applicable within v3."
+                            "<br><br>This is the official <b style='color:%4;'>v3</b>. New in v3:"
+                            "<ul style='margin:4px 0 4px 16px;padding:0;color:%5;'>"
                             "<li>Actual graphical UI</li>"
                             "<li>Ability to generate a solution from a specific angle</li>"
                             "<li>Improved karnotation support</li>"
                             "<li>Algorithm ergonomics rater</li>"
                             "</ul>"
                             "v3 is created by "
-                            "<a href='https://www.worldcubeassociation.org/persons/2024ASHR02' style='color:#7abfe8;'>Abid Ibn Ashraf</a>"
+                            "<a href='https://www.worldcubeassociation.org/persons/2024ASHR02' style='color:%3;'>Abid Ibn Ashraf</a>"
                             " and "
-                            "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:#7abfe8;'>Matt Mao</a>."
+                            "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:%3;'>Matt Mao</a>."
                             "</span>")
-                            .arg(textBody);
+                            .arg(textBody, QString(), lnk, textPrimary, Theme::textMuted(L));
     body->setText(aboutBody);
     // Enable clicking the in-text link to open the ReadDocs popup
     connect(body, &QLabel::linkActivated, this, [this](const QString &link)
@@ -3038,13 +3042,8 @@ void MainWindow::applyTheme()
 
     // Input bar background
     if (m_inputBarOuter)
-    {
-        QString barBg = Theme::darkBg(m_lightTheme);
-        QString barBorder = Theme::borderBottom(m_lightTheme);
-        m_inputBarOuter->setStyleSheet(QString(
-                                           "QWidget#inputBarOuter { background: %1; border-bottom: 1px solid %2; }")
-                                           .arg(barBg, barBorder));
-    }
+    m_inputBarOuter->setStyleSheet("");
+    cubeWidget->setLightTheme(m_lightTheme);
 }
 
 void MainWindow::openSidebar()

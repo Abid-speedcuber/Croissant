@@ -12,6 +12,20 @@ Sq1Widget::Sq1Widget(QWidget* parent) : QWidget(parent) {
     setAttribute(Qt::WA_StyledBackground, true);
     setMouseTracking(true);
     hovered = -1;
+    m_hoverTimer = new QTimer(this);
+    m_hoverTimer->setInterval(16); // ~60fps
+    connect(m_hoverTimer, &QTimer::timeout, this, [this]() {
+        bool anyActive = false;
+        const qreal step = 0.08; // speed of fade
+        for (auto it = m_hoverProgress.begin(); it != m_hoverProgress.end(); ++it) {
+            qreal target = (it.key() == hovered) ? 1.0 : 0.0;
+            qreal &val = it.value();
+            if (val < target) { val = qMin(val + step, target); anyActive = true; }
+            else if (val > target) { val = qMax(val - step, target); anyActive = true; }
+        }
+        if (!anyActive) m_hoverTimer->stop();
+        update();
+    });
     reset();
 }
 
@@ -100,14 +114,17 @@ QPointF Sq1Widget::polar(QPointF center, double angleDeg, double radius) {
     return { center.x() + qCos(rad)*radius, center.y() - qSin(rad)*radius };
 }
 
-void Sq1Widget::drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill, bool isHovered) {
-    if (isHovered) {
-        // Lighten the color by increasing lightness in HSL
-        fill = fill.lighter(130);  // 115% brightness = slightly lighter
-    }
+void Sq1Widget::drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill, qreal hoverT) {
     p.setBrush(fill);
     p.setPen(QPen(QColor(Theme::cubeBorder()), 1));
     p.drawPolygon(QPolygonF(pts));
+
+    if (hoverT > 0.0) {
+        QColor overlay(255, 255, 255, static_cast<int>(hoverT * 60));
+        p.setBrush(overlay);
+        p.setPen(Qt::NoPen);
+        p.drawPolygon(QPolygonF(pts));
+    }
 }
 
 void Sq1Widget::drawSelection(QPainter& p, QVector<QPointF> pts) {
@@ -118,45 +135,37 @@ void Sq1Widget::drawSelection(QPainter& p, QVector<QPointF> pts) {
 
 void Sq1Widget::drawLayer(QPainter& p, int start, int end, QPointF center, double startAngle) {
     double angle = startAngle;
-    QVector<QPointF> selPts;   // accumulated during geometry pass; drawn last
+    QVector<QPointF> selPts;
 
     for(int i=start; i<end; ) {
         int x = position[i];
         int pi = i;
-        bool isHov = (hovered == pi);
+        qreal hT = m_hoverProgress.value(pi, 0.0);
         if(x < 8) {
-            // corner - occupies 60 degrees
             QPointF p1 = polar(center, angle,          MAIN_LEN);
             QPointF p2 = polar(center, angle-30,       MAIN_LEN/CORNER_FACTOR);
             QPointF p3 = polar(center, angle-60,       MAIN_LEN);
             QPointF p1x= polar(center, angle,          MAIN_LEN+SUB_LEN);
             QPointF p2x= polar(center, angle-30,       (MAIN_LEN+SUB_LEN)/CORNER_FACTOR);
             QPointF p3x= polar(center, angle-60,       MAIN_LEN+SUB_LEN);
-            // top face
-            drawPoly(p, {center, p1, p2, p3}, partiality[i]>1 ? colors[6] : colors[x<4?0:1], isHov);
-            // side faces
-            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]], isHov);
-            drawPoly(p, {p2, p2x, p3x, p3}, partiality[i]>0 ? colors[6] : colors[side_colors[x][1]], isHov);
+            drawPoly(p, {center, p1, p2, p3}, partiality[i]>1 ? colors[6] : colors[x<4?0:1], hT);
+            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]], hT);
+            drawPoly(p, {p2, p2x, p3x, p3}, partiality[i]>0 ? colors[6] : colors[side_colors[x][1]], hT);
             if(selected == pi) selPts = {center, p1x, p2x, p3x};
-            i++; // skip duplicate corner slot
+            i++;
             angle -= 60;
         } else {
-            // edge - occupies 30 degrees
             QPointF p1 = polar(center, angle,    MAIN_LEN);
             QPointF p2 = polar(center, angle-30, MAIN_LEN);
             QPointF p1x= polar(center, angle,    MAIN_LEN+SUB_LEN);
             QPointF p2x= polar(center, angle-30, MAIN_LEN+SUB_LEN);
-            // top face
-            drawPoly(p, {center, p1, p2}, partiality[i]>1 ? colors[6] : colors[x<12?0:1], isHov);
-            // side face
-            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]], isHov);
+            drawPoly(p, {center, p1, p2}, partiality[i]>1 ? colors[6] : colors[x<12?0:1], hT);
+            drawPoly(p, {p1, p1x, p2x, p2}, partiality[i]>0 ? colors[6] : colors[side_colors[x][0]], hT);
             if(selected == pi) selPts = {center, p1x, p2x};
             angle -= 30;
         }
         i++;
     }
-
-    // Second pass: draw selection highlight on top of all geometry in this layer
     if (!selPts.isEmpty()) drawSelection(p, selPts);
 }
 
@@ -178,10 +187,11 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     double x2  = TOP_CX - r_len * 0.28;   // split: left strip is narrow
     double x3  = TOP_CX + r_len * 0.97;
     double x2b = TOP_CX + r_len * 0.28;   // kite end: mirrors left strip width
-    drawPoly(p, {{x1,MID_TOP},{x2,MID_TOP},{x2,MID_BOT},{x1,MID_BOT}}, colors[2], (hovered == -2));
+    qreal midT = m_hoverProgress.value(-2, 0.0);
+    drawPoly(p, {{x1,MID_TOP},{x2,MID_TOP},{x2,MID_BOT},{x1,MID_BOT}}, colors[2], midT);
     QColor rightColor = middle_partial > 0 ? colors[6] : colors[middle == 0 ? 2 : 4];
     double x_end = (middle == 0 || middle_partial > 0) ? x3 : x2b;
-    drawPoly(p, {{x2,MID_TOP},{x_end,MID_TOP},{x_end,MID_BOT},{x2,MID_BOT}}, rightColor, (hovered == -2));
+    drawPoly(p, {{x2,MID_TOP},{x_end,MID_TOP},{x_end,MID_BOT},{x2,MID_BOT}}, rightColor, midT);
 }
 
 // ------- Hit testing -------
@@ -324,8 +334,11 @@ void Sq1Widget::mouseMoveEvent(QMouseEvent* event) {
     
     // Update hover state and repaint if changed
     if (hovered != hoveredPiece) {
+        // Ensure both old and new piece have entries in the map
+        if (hovered >= -2) m_hoverProgress.insert(hovered, m_hoverProgress.value(hovered, 0.0));
+        if (hoveredPiece >= -2) m_hoverProgress.insert(hoveredPiece, m_hoverProgress.value(hoveredPiece, 0.0));
         hovered = hoveredPiece;
-        update();
+        m_hoverTimer->start();
     }
 }
 

@@ -55,6 +55,9 @@ QString buildStyleSheet(bool lightTheme) {
     variables["--button-solve-border"] = color(Theme::buttonSolveBorder(false), Theme::buttonSolveBorder(true));
     variables["--button-solve-hover"] = color(Theme::buttonSolveHover(false), Theme::buttonSolveHover(true));
 
+    // ========== TOP BAR ===================
+    variables["--topbar-bg"] = color(Theme::topBarBg(false), Theme::topBarBg(true));
+
     // ========== INPUT BAR COLORS ==========
     variables["--input-mode-bg"] = color(Theme::inputModeBg(false), Theme::inputModeBg(true));
     variables["--input-mode-border"] = color(Theme::inputModeBorder(false), Theme::inputModeBorder(true));
@@ -138,6 +141,10 @@ QString buildStyleSheet(bool lightTheme) {
     variables["--cube-border"] = Theme::cubeBorder(false);
     variables["--cube-selection"] = Theme::cubeSelection(false);
     variables["--canvas-bg"] = color(Theme::canvasBg(false), Theme::canvasBg(true));
+    variables["--cube-with-reset-border"] = Theme::cubeWithResetBorder();
+    variables["--stop-solve-disabled-bg"]     = Theme::stopSolveDisabledBg();
+    variables["--stop-solve-disabled-border"] = Theme::stopSolveDisabledBorder();
+    variables["--stop-solve-disabled-text"]   = Theme::stopSolveDisabledText();
 
     // ========== SIDEBAR / MODAL COLORS ==========
     variables["--sidebar-bg"] = color(Theme::sidebarBg(false), Theme::sidebarBg(true));

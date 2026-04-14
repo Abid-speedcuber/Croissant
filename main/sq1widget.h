@@ -4,6 +4,8 @@
 #include <QKeyEvent>
 #include <array>
 #include <functional>
+#include <QTimer>
+#include <QMap>
 #include "styles/theme.h"
 
 // -------------------------------------------------------
@@ -18,8 +20,8 @@ public:
     // Called by MainWindow to get position string for the solver
     QString getPositionString();
 
-    // Reset to solved state
     void reset();
+    void setLightTheme(bool light) { m_lightTheme = light; update(); }
     // Parse a position string and update the cube display
     bool setPositionFromString(const QString& pos);
 
@@ -42,6 +44,9 @@ private:
     int middle_partial;   // 0 or 1
     int selected;         // index of selected piece, or -1
     int hovered;          // index of hovered piece, or -1
+    QMap<int, qreal> m_hoverProgress; // 0.0 = no hover, 1.0 = full hover
+    QTimer* m_hoverTimer{nullptr};
+    bool m_lightTheme{false};
 
     // --- Drawing constants ---
     static constexpr int W = 300, H = 500;
@@ -70,7 +75,7 @@ private:
 
     // --- Helpers ---
     QPointF polar(QPointF center, double angleDeg, double radius);
-    void drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill, bool isHovered = false);
+    void drawPoly(QPainter& p, QVector<QPointF> pts, QColor fill, qreal hoverT = 0.0);
     void drawSelection(QPainter& p, QVector<QPointF> pts);
 
     void drawLayer(QPainter& p, int start, int end, QPointF center, double startAngle);
