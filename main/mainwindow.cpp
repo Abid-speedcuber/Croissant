@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include "sq1widget.h"
-#include "sq1-core/sq1_logic.h"
+#include "sq1-core/sq1-logic.h"
 #include "sq1-core/karnotation.h"
 #include "styles/theme.h"
 #include "sq1-core/output-converter.h"
@@ -2373,30 +2373,46 @@ void MainWindow::rebuildTable()
     QVector<Row> rows;
 
     bool useKarn = chkKarnotation->isChecked();
-    // rateAndSort always rates on raw numeric; pass display lines for the alg column
     const QStringList &displayLines = useKarn ? m_karnSolutionLines : m_solutionLines;
-    auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
-    // Merge display alg text from displayLines (rated preserves original order before sort)
-    // Build a map from raw alg key -> display alg for quick lookup
-    QMap<QString, QString> displayAlgMap;
-    for (int i = 0; i < m_solutionLines.size() && i < displayLines.size(); i++) {
-        int lb = m_solutionLines[i].lastIndexOf('[');
-        QString key = lb > 0 ? m_solutionLines[i].left(lb).trimmed() : m_solutionLines[i].trimmed();
-        int dlb = displayLines[i].lastIndexOf('[');
-        displayAlgMap[key] = dlb > 0 ? displayLines[i].left(dlb).trimmed() : displayLines[i].trimmed();
-    }
-    for (auto &[line, score] : rated) {
-        int mv, sl;
-        parseCounts(line, mv, sl);
-        // Replace the alg part of 'line' with the karn/raw display version
-        int lb = line.lastIndexOf('[');
-        QString rawKey = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-        QString displayAlg = displayAlgMap.value(rawKey, rawKey);
-        rows.append({displayAlg, mv, sl, score});
+
+    if (showErgo) {
+        // rateAndSort always rates on raw numeric; display lines used only for alg text
+        auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
+        // Build map from raw alg key -> display alg text
+        QMap<QString, QString> displayAlgMap;
+        for (int i = 0; i < m_solutionLines.size() && i < displayLines.size(); i++) {
+            int lb = m_solutionLines[i].lastIndexOf('[');
+            QString key = lb > 0 ? m_solutionLines[i].left(lb).trimmed() : m_solutionLines[i].trimmed();
+            int dlb = displayLines[i].lastIndexOf('[');
+            displayAlgMap[key] = dlb > 0 ? displayLines[i].left(dlb).trimmed() : displayLines[i].trimmed();
+        }
+        for (auto &[line, score] : rated) {
+            int mv, sl;
+            parseCounts(line, mv, sl);
+            int lb = line.lastIndexOf('[');
+            QString rawKey = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+            QString displayAlg = displayAlgMap.value(rawKey, rawKey);
+            rows.append({displayAlg, mv, sl, score});
+        }
+    } else {
+        // No ergo rating — build rows from display lines without calling rateAndSort
+        for (const QString &line : std::as_const(displayLines)) {
+            int mv, sl;
+            parseCounts(line, mv, sl);
+            int lb = line.lastIndexOf('[');
+            QString alg = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+            rows.append({alg, mv, sl, 0.0});
+        }
     }
 
     if (ergo && showErgo)
-        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){ return a.ergo > b.ergo; });
+        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b) {
+            bool aNaN = std::isnan(a.ergo), bNaN = std::isnan(b.ergo);
+            if (aNaN && bNaN) return false;
+            if (aNaN) return false;
+            if (bNaN) return true;
+            return a.ergo > b.ergo;
+        });
     else
         std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
             if (a.slices != b.slices) return a.slices < b.slices;
@@ -2458,8 +2474,19 @@ void MainWindow::rebuildTable()
 
         cell(2, QString::number(r.moves), true);
         cell(3, QString::number(r.slices), true);
-        if (showErgo)
-            cell(4, QString::number(r.ergo, 'f', 1), true);
+        if (showErgo) {
+            if (std::isnan(r.ergo)) {
+                // Rating failed for this alg — show a red warning icon instead of a score
+                auto *warn = new QLabel("⚠");
+                warn->setAlignment(Qt::AlignCenter);
+                warn->setStyleSheet(QString(
+                    "QLabel { color: #cc2020; background: %1; font-size: 14px; }")
+                    .arg(bg.name()));
+                m_solutionTable->setCellWidget(i, 4, warn);
+            } else {
+                cell(4, QString::number(r.ergo, 'f', 1), true);
+            }
+        }
         m_solutionTable->setRowHeight(i, rowH);
     }
 }
@@ -2503,6 +2530,9 @@ void MainWindow::onRankErgoToggled(bool checked)
         return;
     }
     if (m_solutionLines.isEmpty())
+        return;
+    // Ergo rating is only meaningful for cubeshape solves
+    if (!m_cubeshapeWasActive)
         return;
     lblStatus->setText("Rating algorithms…");
 
@@ -2566,8 +2596,13 @@ void MainWindow::onRankErgoToggled(bool checked)
         QString col = m_lightTheme
                           ? (isAlt ? Theme::solutionAltLight(true) : Theme::solutionPrimary(true))
                           : (isAlt ? Theme::solutionAltLight(false) : Theme::textSolution(false));
-        QString display = QString("%1  (%2)").arg(displayLine).arg(score, 0, 'f', 2);
-        insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
+        if (std::isnan(score)) {
+            QString display = QString("%1  (⚠)").arg(displayLine);
+            insertLine(display, "#cc2020", m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
+        } else {
+            QString display = QString("%1  (%2)").arg(displayLine).arg(score, 0, 'f', 2);
+            insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
+        }
         solIdx++;
     }
     appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
