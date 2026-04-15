@@ -1,4 +1,4 @@
-#include "sq1_logic.h"
+#include "sq1-logic.h"
 #include "karnotation.h"
 #include <algorithm>
 #include <cmath>
@@ -91,7 +91,7 @@ std::pair<int, int> getOverwork(const std::vector<std::string> &moves)
 // ============================================================
 
 AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
-                  double W1, double W2, double W3, double W4, double W5)
+                  double W1, double W2, double W3, double W4)
 {
     std::string a = algRaw;
     {
@@ -110,10 +110,10 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
         std::string pt = trimStr(rawParts[i]);
         if (i == 0 || !pt.empty()) r.push_back(pt);
     }
-    if (r.size() < 2) return {W4, ""};
+    if (r.size() < 2) return {0.0, "", false};
 
     int sliceCount = (int)r.size() - 1;
-    if (sliceCount <= 0) return {W4, ""};
+    if (sliceCount <= 0) return {0.0, "", false};
 
     double ergo_up = 0, ergo_down = 0;
     bool is_top_A = false, odd_slice = true;
@@ -149,10 +149,10 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
     auto moves = std::vector<std::string>(r.begin() + 1, r.end() - 1);
     auto [movement, bonus] = getOverwork(moves);
     double PHASE3 = W3 * movement / sliceCount;
-    double PHASE4 = bonus * W5 / sliceCount;
+    double PHASE4 = bonus * W4 / sliceCount;
 
-    double FINAL = PHASE1 - PHASE2 - PHASE3 + PHASE4 + W4;
-    return {FINAL, sliceStart};
+    double FINAL = PHASE1 - PHASE2 - PHASE3 + PHASE4;
+    return {FINAL, sliceStart, true};
 }
 
 std::vector<std::pair<QString, double>>
@@ -165,7 +165,7 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
         initial_top_A = first.isDigit() || first == 'X' || first == 'Y' || first == 'Z';
     }
 
-    const double W1 = 34, W2 = 100, W3 = 38, W4 = 500, W5 = 10;
+    const double W1 = 34, W2 = 100, W3 = 38, W4 = 10;
     std::vector<std::pair<QString, double>> results;
 
     for (const QString &lineIn : solutionLines) {
@@ -175,7 +175,7 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
         std::string algOnly = bracket != std::string::npos
                                   ? trimStr(algStr.substr(0, bracket))
                                   : trimStr(algStr);
-        double score = W4;
+        double score = std::numeric_limits<double>::quiet_NaN();
         AlgRating rating;
         bool rated = false;
         try {
@@ -186,9 +186,12 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
                 if (std::isalpha((unsigned char)ch)) { isKarn = true; break; }
             if (isKarn) numericAlg = unkarnify(algOnly);
 
-            rating = rateAlg(numericAlg, initial_top_A, W1, W2, W3, W4, W5);
-            score = rating.FINAL;
-            rated = true;
+            rating = rateAlg(numericAlg, initial_top_A, W1, W2, W3, W4);
+            if (rating.valid)
+            {
+                score = rating.FINAL;
+                rated = true;
+            }
         } catch (...) {}
 
         // Inject slice start indicator into display line
@@ -207,7 +210,37 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
         }
         results.push_back({line, score});
     }
+
+    // Median-normalise: subtract the median so half the scores are positive, half negative.
+    // NaN (failed ratings) are excluded from the median and left as NaN after normalisation.
+    if (!results.empty()) {
+        std::vector<double> valid;
+        valid.reserve(results.size());
+        for (auto &p : results)
+            if (!std::isnan(p.second)) valid.push_back(p.second);
+
+        if (!valid.empty()) {
+            std::sort(valid.begin(), valid.end());
+            double median;
+            size_t n = valid.size();
+            if (n % 2 == 0)
+                median = (valid[n / 2 - 1] + valid[n / 2]) / 2.0;
+            else
+                median = valid[n / 2];
+            for (auto &p : results)
+                if (!std::isnan(p.second)) p.second -= median;
+        }
+    }
+
+    // Sort highest first; NaN (unparseable) entries sink to the end.
     std::sort(results.begin(), results.end(),
-              [](const auto &a, const auto &b) { return a.second > b.second; });
+            [](const auto &a, const auto &b) {
+        bool aNaN = std::isnan(a.second);
+        bool bNaN = std::isnan(b.second);
+        if (aNaN && bNaN) return false;
+        if (aNaN) return false;
+        if (bNaN) return true;
+        return a.second > b.second;
+    });
     return results;
 }

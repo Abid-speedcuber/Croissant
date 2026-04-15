@@ -15,7 +15,7 @@ SOURCES += \
     mainwindow.cpp \
     sq1widget.cpp \
     styles/stylesheet.cpp \
-    sq1-core/sq1_logic.cpp
+    sq1-core/sq1-logic.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -23,4 +23,4 @@ HEADERS += \
     sq1widget.h \
     sq1-core/karnotation.h \
     styles/stylesheet.h \
-    sq1-core/sq1_logic.h
+    sq1-core/sq1-logic.h
