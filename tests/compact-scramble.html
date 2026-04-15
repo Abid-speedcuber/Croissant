@@ -8,7 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <style>
-@font-face { font-family: 'MyFont'; src: url('bars.ttf'); }
+@font-face { font-family: 'MyFont'; src: url('bars6.ttf'); }
 body { font-family: "Noto Sans", "DejaVu Sans", Arial; padding: 20px; }
 textarea { width: 100%; height: 100px; margin-bottom: 10px; }
 button { padding: 10px 20px; }
@@ -73,10 +73,10 @@ function process() {
 
         // CUSTOM FONT
         let customPair = '';
-        const small = (n) => n === 6 ? '\ue015' : String.fromCodePoint(0xe000 + n);
-        const singleBar = (n) => String.fromCodePoint(0xe005 + n); // 1→e006, 2→e007...
-        const barRight = (n) => String.fromCodePoint(0xe00a + n); // 1→e00b, 2→e00c...
-        const barLeft = (n) => String.fromCodePoint(0xe00f + n); // 1→e010, 2→e011...
+        const small = (n) => String.fromCodePoint(0xe000 + n);
+        const singleBar = (n) => String.fromCodePoint(0xe006 + n); // 1→e006, 2→e007...
+        const barRight = (n) => String.fromCodePoint(0xe00b + n); // 1→e00b, 2→e00c...
+        const barLeft = (n) => String.fromCodePoint(0xe010 + n); // 1→e010, 2→e011...
         const mapDigits = (num, mapper) => String(num).split('').map(d => mapper(parseInt(d))).join('');
 
         if (a < 0 && b < 0) {
