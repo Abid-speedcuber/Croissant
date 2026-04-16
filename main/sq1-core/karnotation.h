@@ -811,10 +811,7 @@ inline std::string karnifycs(
     auto parts = splitStr(normalized, '/');
 
     // parts[0] is empty if leading slash, otherwise first move group
-    // Each part is either empty (extra slash) or a space-separated list of moves
-    // But our input is one move per part since cleaned = "x,y/x,y/x,y"
-    // Consecutive non-empty parts with no slash between = same group...
-    // Actually each part IS one move. We need to group consecutive moves between slices.
+    // each part IS one move. We need to group consecutive moves between slices.
     // Since input is already "move/move/move", every '/' is a slice,
     // so each part is exactly one inter-slice group (one move).
     // We want to join adjacent same-CS parts for better multi-token substitution.
@@ -858,12 +855,24 @@ inline std::string karnifycs(
     // inspect the first/last output before deciding on leading/trailing slashes.
     std::vector<std::string> substGroups;
     substGroups.reserve(groups.size());
-    for (const auto& g : groups) {
-        const auto& table = g.inCS ? WCA_TO_KARN : WCA_TO_KARN_OCS;
-        std::string subst = replaceWithVector(" " + g.joined + " ", table);
-        subst = trimStr(subst);
-        std::string prev;
-        do { prev = subst; subst = replaceAll(subst, "  ", " "); } while (subst != prev);
+    for (size_t gi = 0; gi < groups.size(); gi++) {
+        const auto& g = groups[gi];
+        bool isFirst = (gi == 0);
+        bool isLast  = (gi == groups.size() - 1);
+
+        bool canKarn = (!isFirst || leadingSlash) && (!isLast || trailingSlash);
+
+        std::string subst;
+        if (canKarn) {
+            const auto& table = g.inCS ? WCA_TO_KARN : WCA_TO_KARN_OCS;
+            subst = replaceWithVector(" " + g.joined + " ", table);
+            subst = trimStr(subst);
+            std::string prev;
+            do { prev = subst; subst = replaceAll(subst, "  ", " "); } while (subst != prev);
+        } else {
+            // No surrounding slice on this side — keep numeric, just strip commas.
+            subst = g.joined;
+        }
         subst = replaceAll(subst, ",", "");
         substGroups.push_back(subst);
     }
