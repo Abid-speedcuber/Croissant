@@ -67,3 +67,5 @@ Makefile*
 compile_log.txt
 main/REFACTORING.md
 /solver-core
+main/*.rc
+main/*.stash
