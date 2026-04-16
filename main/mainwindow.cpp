@@ -804,7 +804,6 @@ void MainWindow::buildUI()
     grid->addWidget(wrapCb(chkPseudo2gen), row++, 0, 1, 2);
     grid->addWidget(wrapCb(chkCubeshape), row++, 0, 1, 2);
     grid->addWidget(wrapCb(chkIgnoreMid), row++, 0, 1, 2);
-    grid->addWidget(wrapCb(chkKarnotation), row++, 0, 1, 2);
     grid->addWidget(wrapCb(chkSpecificAngle), row++, 0, 1, 2);
     grid->addWidget(chkMaxX, row, 0);
     grid->addWidget(spnMaxX, row++, 1);
@@ -897,15 +896,14 @@ void MainWindow::buildUI()
     btnCopy->setToolTip("Copy command");
     btnCopy->setVisible(false);
 
-    connect(m_mainInput, &QLineEdit::returnPressed, this, [this]
-            { btnApply->click(); });
+    // Enter/Shift+Enter are handled in eventFilter; returnPressed is not used.
 
     m_mainInput->installEventFilter(this);
 
     connect(btnApply, &QPushButton::clicked, this, [this]
             {
                 const QString text = m_mainInput->text().trimmed();
-                if (text.isEmpty()) return;
+                if (text.isEmpty() && m_inputModeIndex == 2) return;
 
                 if (m_inputModeIndex == 2) {
                     pushUndoState();
@@ -929,7 +927,9 @@ void MainWindow::buildUI()
                     cubeWidget->reset();
                 }
 
-                QString raw = text;
+                QString raw = text.trimmed().isEmpty() ? "0,0" : text;
+                bool leadingSlash  = raw.trimmed().startsWith('/') || raw.trimmed().startsWith('\\');
+                bool trailingSlash = raw.trimmed().endsWith('/')   || raw.trimmed().endsWith('\\');
                 if (m_inputModeIndex == 1) {
                     raw = invertScrambleStr(raw);
                 }
@@ -968,6 +968,8 @@ void MainWindow::buildUI()
                 //   (bjj, fv10, kk0-1, …) which are not in KARN_TO_WCA directly.
                 {
                     std::string s = raw.toStdString();
+                    if (leadingSlash && s.front() != '/') s = "/" + s;
+                    if (trailingSlash && s.back() != '/') s = s + "/";
                     s = replaceShorthands(unkarnifyHelp(s));
                     raw = QString::fromStdString(s);
                 }
@@ -1313,6 +1315,7 @@ void MainWindow::buildUI()
     chkRankErgo->setCursor(Qt::PointingHandCursor);
     chkRankErgo->setEnabled(false);
     chkRankErgo->setObjectName("chkRankErgo");
+    rightCol->addWidget(chkKarnotation);
     rightCol->addWidget(chkRankErgo);
 
     lblStatus = new QLabel("");
@@ -3564,18 +3567,24 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (watched == cubeWidget)
         return QMainWindow::eventFilter(watched, event);
 
-    // ── Shift+Enter in m_mainInput: apply from solved state ──────────────────
+    // ── Enter / Shift+Enter in m_mainInput ───────────────────────────────────
+    // Enter        = apply from solved state
+    // Shift+Enter  = apply on current state
     if ((watched == m_mainInput) && ke->key() == Qt::Key_Return)
     {
         if (ke->modifiers() & Qt::ShiftModifier)
         {
-            m_applyFromSolved = true;
+            // Shift+Enter: apply on current state (do nothing if empty)
+            if (m_mainInput->text().trimmed().isEmpty())
+                return true;
             btnApply->click();
-            m_applyFromSolved = false;
             return true;
         }
-        // plain Enter is handled by returnPressed signal
-        return QMainWindow::eventFilter(watched, event);
+        // plain Enter: apply from solved state
+        m_applyFromSolved = true;
+        btnApply->click();
+        m_applyFromSolved = false;
+        return true;
     }
 
     // ── Text inputs get all keys — never steal from them ─────────────────────
