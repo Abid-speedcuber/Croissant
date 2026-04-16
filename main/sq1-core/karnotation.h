@@ -110,42 +110,6 @@ static const std::map<std::string,std::string> KARN_TO_WCA = {
 // Used when cube IS in cubeshape.
 // ---------------------------------------------------------------------------
 static const std::vector<std::pair<std::string,std::string>> WCA_TO_KARN = {
-    {" U U' U U' ", " U4 "},
-    {" U' U U' U ", " U4' "},
-    {" D D' D D' ", " D4 "},
-    {" D' D D' D ", " D4' "},
-    {" u u' u u' ", " u4 "},
-    {" u' u u' u ", " u4' "},
-    {" d d' d d' ", " d4 "},
-    {" d' d d' d ", " d4' "},
-    {" U U' U ", " U3 "},
-    {" U' U U' ", " U3' "},
-    {" D D' D ", " D3 "},
-    {" D' D D' ", " D3' "},
-    {" u u' u ", " u3 "},
-    {" u' u u' ", " u3' "},
-    {" d d' d ", " d3 "},
-    {" d' d d' ", " d3' "},
-    {" F F' F ", " F3 "},
-    {" F' F F' ", " F3' "},
-    {" f f' f ", " f3 "},
-    {" f' f f' ", " f3' "},
-    {" U U' ", " W "},
-    {" U' U ", " W' "},
-    {" D D' ", " B "},
-    {" D' D ", " B' "},
-    {" u u' ", " w "},
-    {" u' u ", " w' "},
-    {" d d' ", " b "},
-    {" d' d ", " b' "},
-    {" F F' ", " F2 "},
-    {" F' F ", " F2' "},
-    {" f f' ", " f2 "},
-    {" f' f ", " f2' "},
-    {" U U ", " UU "},
-    {" U' U' ", " UU' "},
-    {" D D ", " DD "},
-    {" D' D' ", " DD' "},
     {" 6,0 ", " U2 "},
     {" 6,3 ", " U2D "},
     {" 6,-3 ", " U2D' "},
@@ -187,27 +151,50 @@ static const std::vector<std::pair<std::string,std::string>> WCA_TO_KARN = {
     {" -2,-5 ", " k' "},
 };
 
+static const std::vector<std::pair<std::string,std::string>> KARN_TO_HIGHKARN = {
+    {" U U' U U' ", " U4 "},
+    {" U' U U' U ", " U4' "},
+    {" D D' D D' ", " D4 "},
+    {" D' D D' D ", " D4' "},
+    {" u u' u u' ", " u4 "},
+    {" u' u u' u ", " u4' "},
+    {" d d' d d' ", " d4 "},
+    {" d' d d' d ", " d4' "},
+    {" U U' U ", " U3 "},
+    {" U' U U' ", " U3' "},
+    {" D D' D ", " D3 "},
+    {" D' D D' ", " D3' "},
+    {" u u' u ", " u3 "},
+    {" u' u u' ", " u3' "},
+    {" d d' d ", " d3 "},
+    {" d' d d' ", " d3' "},
+    {" F F' F ", " F3 "},
+    {" F' F F' ", " F3' "},
+    {" f f' f ", " f3 "},
+    {" f' f f' ", " f3' "},
+    {" U U' ", " W "},
+    {" U' U ", " W' "},
+    {" D D' ", " B "},
+    {" D' D ", " B' "},
+    {" u u' ", " w "},
+    {" u' u ", " w' "},
+    {" d d' ", " b "},
+    {" d' d ", " b' "},
+    {" F F' ", " F2 "},
+    {" F' F ", " F2' "},
+    {" f f' ", " f2 "},
+    {" f' f ", " f2' "},
+    {" U U ", " UU "},
+    {" U' U' ", " UU' "},
+    {" D D ", " DD "},
+    {" D' D' ", " DD' "},
+};
+
 // ---------------------------------------------------------------------------
 // WCA_TO_KARN_OCS  — WCA -> Karn replacements used when OUT of cubeshape.
 // Empty for now; define entries here when OCS karnotation names are decided.
 // ---------------------------------------------------------------------------
 static const std::vector<std::pair<std::string,std::string>> WCA_TO_KARN_OCS = {
-    {" U U' U U' ", " U4 "},
-    {" U' U U' U ", " U4' "},
-    {" D D' D D' ", " D4 "},
-    {" D' D D' D ", " D4' "},
-    {" U U' U ", " U3 "},
-    {" U' U U' ", " U3' "},
-    {" D D' D ", " D3 "},
-    {" D' D D' ", " D3' "},
-    {" U U' ", " W "},
-    {" U' U ", " W' "},
-    {" D D' ", " B "},
-    {" D' D ", " B' "},
-    {" U U ", " UU "},
-    {" U' U' ", " UU' "},
-    {" D D ", " DD "},
-    {" D' D' ", " DD' "},
     {" 6,0 ", " U2 "},
     {" 6,3 ", " U2D "},
     {" 6,-3 ", " U2D' "},
@@ -225,6 +212,25 @@ static const std::vector<std::pair<std::string,std::string>> WCA_TO_KARN_OCS = {
     {" -3,-3 ", " e' "},
     {" -2,1 ", " u' "},
     {" 2,-1 ", " u "},
+};
+
+static const std::vector<std::pair<std::string,std::string>> KARN_TO_HIGHKARN_OCS = {
+    {" U U' U U' ", " U4 "},
+    {" U' U U' U ", " U4' "},
+    {" D D' D D' ", " D4 "},
+    {" D' D D' D ", " D4' "},
+    {" U U' U ", " U3 "},
+    {" U' U U' ", " U3' "},
+    {" D D' D ", " D3 "},
+    {" D' D D' ", " D3' "},
+    {" U U' ", " W "},
+    {" U' U ", " W' "},
+    {" D D' ", " B "},
+    {" D' D ", " B' "},
+    {" U U ", " UU "},
+    {" U' U' ", " UU' "},
+    {" D D ", " DD "},
+    {" D' D' ", " DD' "},
     {" u u' ", " w "},
     {" u' u ", " w' "},
     {" u u' u ", " u3 "},
@@ -607,9 +613,8 @@ inline std::string karnify(const std::string& algPart) {
     std::string in = trimStr(algPart);
     if (in.empty()) return in;
 
-    bool startSlice = (in.front() == '/' || in.front() == '\\');
-    // Issue 5: size > 1 so a lone "/" doesn't set both flags and double to "//".
-    bool endSlice   = in.size() > 1 && (in.back() == '/' || in.back() == '\\');
+    bool leadingSlash = (in.front() == '/' || in.front() == '\\');
+    bool trailingSlash   = in.size() > 1 && (in.back() == '/' || in.back() == '\\');
 
     // Split by slashes into individual move tokens.
     std::string normalized = replaceAll(in, "\\", "/");
@@ -623,7 +628,7 @@ inline std::string karnify(const std::string& algPart) {
 
     // Lone slash or empty after stripping
     if (tokens.empty())
-        return startSlice ? "/" : "";
+        return leadingSlash ? "/" : "";
 
     auto hasAlpha = [](const std::string& s) {
         for (unsigned char ch : s) if (std::isalpha(ch)) return true;
@@ -631,15 +636,11 @@ inline std::string karnify(const std::string& algPart) {
     };
 
     // Per-token karnification.
-    // Issue 2/4: a karn name implies a slice both before and after the move.
-    // The first token only has a slice before it if startSlice is set.
-    // The last token only has a slice after it if endSlice is set.
-    // Middle tokens always have slices on both sides — always karnify them.
     std::vector<std::string> out_tokens;
     for (size_t i = 0; i < tokens.size(); i++) {
         bool isFirst = (i == 0);
         bool isLast  = (i == tokens.size() - 1);
-        bool canKarn = (!isFirst || startSlice) && (!isLast || endSlice);
+        bool canKarn = (!isFirst || leadingSlash) && (!isLast || trailingSlash);
 
         if (canKarn) {
             std::string k = replaceWithVector(" " + tokens[i] + " ", WCA_TO_KARN);
@@ -658,13 +659,16 @@ inline std::string karnify(const std::string& algPart) {
     bool lastIsKarn  = hasAlpha(out_tokens.back());
 
     std::string out;
-    if (startSlice && !firstIsKarn) out = "/";
-    for (size_t i = 0; i < out_tokens.size(); i++) {
-        if (i > 0) out += ' ';
-        out += out_tokens[i];
-    }
-    if (endSlice && !lastIsKarn) out += "/";
-    return out;
+    for (size_t i = 0; i < out_tokens.size(); i++)
+        out += " " + out_tokens[i];
+
+    std::string k = replaceWithVector(" " + out + " ", KARN_TO_HIGHKARN);
+    k = trimStr(k);
+    std::string prev;
+    do { prev = k; k = replaceAll(k, "  ", " "); } while (k != prev);
+
+    return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
+        ((trailingSlash && !lastIsKarn) ? "/" : "");
 }
 
 // ===========================================================================
@@ -877,8 +881,6 @@ inline std::string karnifycs(
     // is numeric (karn tokens bring the slash with them).
     // Trailing slash: same rule on the other end.
     std::string out;
-    if (leadingSlash && !firstIsKarn)
-        out = "/";
 
     for (const auto& s : substGroups) {
         if (!out.empty() && out.back() != ' ' && out.back() != '/')
@@ -886,8 +888,13 @@ inline std::string karnifycs(
         out += s;
     }
 
-    if (trailingSlash && !lastIsKarn)
-        out += "/";
+    std::string k = replaceWithVector(" " + out + " ", KARN_TO_HIGHKARN_OCS);
+    k = trimStr(k);
+    std::string prev;
+    do { prev = k; k = replaceAll(k, "  ", " "); } while (k != prev);
+
+    return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
+        ((trailingSlash && !lastIsKarn) ? "/" : "");
 
     return out;
 }

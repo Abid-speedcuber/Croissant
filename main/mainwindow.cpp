@@ -917,8 +917,7 @@ void MainWindow::buildUI()
                 }
 
                 QString raw = text.trimmed().isEmpty() ? "0,0" : text;
-                bool leadingSlash  = raw.trimmed().startsWith('/') || raw.trimmed().startsWith('\\');
-                bool trailingSlash = raw.trimmed().endsWith('/')   || raw.trimmed().endsWith('\\');
+                raw = raw.trimmed();
                 if (m_inputModeIndex == 1) {
                     raw = invertScrambleStr(raw);
                 }
