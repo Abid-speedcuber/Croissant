@@ -585,17 +585,6 @@ void MainWindow::buildUI()
     btnSolve->setFixedHeight(48);
     leftCol->addWidget(btnSolve);
 
-    // Stub out old scramble widgets so references don't break
-    btnScrambleMode = new QPushButton();
-    btnScrambleMode->setVisible(false);
-    txtScramble = new QLineEdit();
-    txtScramble->setVisible(false);
-    btnApplyScramble = new QPushButton();
-    btnApplyScramble->setVisible(false);
-    lblScrambleError = new QLabel("");
-    lblScrambleError->setObjectName("lblScrambleError");
-    lblScrambleError->setWordWrap(true);
-    lblScrambleError->setVisible(false);
     leftCol->addStretch();
 
     leftContainer->setObjectName("leftPanel");
@@ -934,6 +923,12 @@ void MainWindow::buildUI()
                     raw = invertScrambleStr(raw);
                 }
 
+                // Capture leading/trailing slash from raw BEFORE the addComma pass
+                // replaces all '/' with spaces. We restore them after unkarnifyHelp
+                // so the move parser sees e.g. "/3,0/0,3/" correctly.
+                bool leadingSlash  = !raw.isEmpty() && (raw[0] == '/' || raw[0] == '\\');
+                bool trailingSlash = raw.size() > 1 && (raw[raw.size()-1] == '/' || raw[raw.size()-1] == '\\');
+
                 // addCommas rules
                 {
                     raw.replace('/', ' ').replace('\\', ' ');
@@ -971,6 +966,12 @@ void MainWindow::buildUI()
                     s = replaceShorthands(unkarnifyHelp(s));
                     raw = QString::fromStdString(s);
                 }
+
+                // Restore leading/trailing slashes that were stripped by the addComma pass.
+                // Karn tokens already produce their surrounding slashes via unkarnifyHelp,
+                // so only add if not already present.
+                if (leadingSlash  && !raw.startsWith('/')) raw.prepend('/');
+                if (trailingSlash && !raw.endsWith('/'))   raw.append('/');
 
                 struct Move { bool isSlice; int x, y; };
                 QVector<Move> moves;
@@ -1082,17 +1083,14 @@ void MainWindow::buildUI()
 
     connect(m_inputMode, &QPushButton::clicked, this, [this]
             {
-                qDebug() << "inputMode clicked, new index:" << ((m_inputModeIndex + 1) % 3);
                 m_inputModeIndex = (m_inputModeIndex + 1) % 3;
                 if (m_inputModeIndex == 0) { m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
                 else if (m_inputModeIndex == 1) { m_inputMode->setText("ALG");  m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
                 else                           { m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-"); }
-                m_mainInput->clear();
-                lblScrambleError->setVisible(false); });
+                m_mainInput->clear(); });
 
     connect(m_inputModeArrow, &QPushButton::clicked, this, [this]
             {
-                qDebug() << "inputModeArrow clicked";
                 QMenu* menu = new QMenu(this);
                 menu->setStyleSheet(QString(
                     "QMenu { background: %1; border: 1px solid %2; border-radius: 6px; padding: 4px; color: %3; font-size: 12px; }"
@@ -1107,14 +1105,13 @@ void MainWindow::buildUI()
                 aScram->setCheckable(true); aScram->setChecked(m_inputModeIndex == 0);
                 aAlg->setCheckable(true);   aAlg->setChecked(m_inputModeIndex == 1);
                 aPos->setCheckable(true);   aPos->setChecked(m_inputModeIndex == 2);
-                connect(aScram, &QAction::triggered, this, [this]{ m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
-                connect(aAlg,   &QAction::triggered, this, [this]{ m_inputModeIndex = 1; m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); lblScrambleError->setVisible(false); });
-                connect(aPos,   &QAction::triggered, this, [this]{ m_inputModeIndex = 2; m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-");                        m_mainInput->clear(); lblScrambleError->setVisible(false); });
+                connect(aScram, &QAction::triggered, this, [this]{ m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); });
+                connect(aAlg,   &QAction::triggered, this, [this]{ m_inputModeIndex = 1; m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); m_mainInput->clear(); });
+                connect(aPos,   &QAction::triggered, this, [this]{ m_inputModeIndex = 2; m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-");                        m_mainInput->clear(); });
                 menu->exec(m_inputModeArrow->mapToGlobal(QPoint(0, m_inputModeArrow->height()))); });
 
     connect(m_mainInput, &QLineEdit::textChanged, this, [this](const QString &text)
             {
-                lblScrambleError->setVisible(false);
                 m_mainInput->setProperty("hasError", false);
                 style()->polish(m_mainInput);
                 if (m_inputModeIndex == 2) {
@@ -1389,8 +1386,7 @@ void MainWindow::buildUI()
                     showCmdError("Invalid position string — duplicate or unrecognised pieces.");
                     return;
                 }
-                clearCmdError();
-                syncFlagsFromCommand(text); });
+                clearCmdError(); });
 
     QTimer::singleShot(0, this, [this]
                        {
@@ -1627,133 +1623,6 @@ QStringList MainWindow::buildArgList()
     return args;
 }
 
-void MainWindow::syncFlagsFromCommand(const QString &text)
-{
-    QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
-    // Remove the executable name and position string (first and last tokens)
-    if (parts.size() >= 1 && parts[0] == "sq1opt")
-        parts.removeFirst();
-    if (!parts.isEmpty() && !parts.last().startsWith('-'))
-        parts.removeLast();
-
-    auto has = [&](const QString &flag)
-    {
-        return parts.contains(flag);
-    };
-    auto hasPrefix = [&](const QString &prefix) -> QString
-    {
-        for (const QString &p : std::as_const(parts))
-            if (p.startsWith(prefix) && p.length() > prefix.length())
-                return p.mid(prefix.length());
-        return QString();
-    };
-
-    // Block all signals while we sync so updateCommand isn't re-triggered
-    auto block = [](QObject *o, bool b)
-    { o->blockSignals(b); };
-
-    block(chkSlice, true);
-    chkSlice->setChecked(has("-w"));
-    block(chkSlice, false);
-    block(chkGenerator, true);
-    chkGenerator->setChecked(has("-g"));
-    block(chkGenerator, false);
-    block(chk2gen, true);
-    chk2gen->setChecked(has("-2"));
-    block(chk2gen, false);
-    block(chkPseudo2gen, true);
-    chkPseudo2gen->setChecked(has("-p"));
-    block(chkPseudo2gen, false);
-    block(chkCubeshape, true);
-    chkCubeshape->setChecked(has("-c"));
-    block(chkCubeshape, false);
-    block(chkIgnoreMid, true);
-    chkIgnoreMid->setChecked(has("-m"));
-    block(chkIgnoreMid, false);
-    block(chkSpecificAngle, true);
-    chkSpecificAngle->setChecked(has("-n"));
-    block(chkSpecificAngle, false);
-
-    // -a / -a<n>
-    bool hasA = false;
-    int subopt = 0;
-    for (const QString &p : std::as_const(parts))
-    {
-        if (p == "-a")
-        {
-            hasA = true;
-            subopt = 0;
-            break;
-        }
-        if (p.startsWith("-a") && p.length() > 2)
-        {
-            bool ok;
-            int v = p.sliced(2).toInt(&ok);
-            if (ok)
-            {
-                hasA = true;
-                subopt = v;
-                break;
-            }
-        }
-    }
-    block(chkAllOptimal, true);
-    chkAllOptimal->setChecked(hasA);
-    block(chkAllOptimal, false);
-    block(spnSuboptimal, true);
-    spnSuboptimal->setValue(subopt);
-    block(spnSuboptimal, false);
-
-    // -d<list>
-    QString dval = hasPrefix("-d");
-    block(chkDepths, true);
-    block(txtDepths, true);
-    chkDepths->setChecked(!dval.isEmpty());
-    txtDepths->setText(dval);
-    block(chkDepths, false);
-    block(txtDepths, false);
-
-    // -X -Y -Z
-    QString xv = hasPrefix("-X"), yv = hasPrefix("-Y"), zv = hasPrefix("-Z");
-    block(chkMaxX, true);
-    block(spnMaxX, true);
-    block(chkMaxY, true);
-    block(spnMaxY, true);
-    block(chkMaxTotal, true);
-    block(spnMaxTotal, true);
-    chkMaxX->setChecked(!xv.isEmpty());
-    if (!xv.isEmpty())
-    {
-        bool ok;
-        int v = xv.toInt(&ok);
-        if (ok)
-            spnMaxX->setValue(v);
-    }
-    chkMaxY->setChecked(!yv.isEmpty());
-    if (!yv.isEmpty())
-    {
-        bool ok;
-        int v = yv.toInt(&ok);
-        if (ok)
-            spnMaxY->setValue(v);
-    }
-    chkMaxTotal->setChecked(!zv.isEmpty());
-    if (!zv.isEmpty())
-    {
-        bool ok;
-        int v = zv.toInt(&ok);
-        if (ok)
-            spnMaxTotal->setValue(v);
-    }
-    block(chkMaxX, false);
-    block(spnMaxX, false);
-    block(chkMaxY, false);
-    block(spnMaxY, false);
-    block(chkMaxTotal, false);
-    block(spnMaxTotal, false);
-
-    updateConstraints();
-}
 
 void MainWindow::updateCommand()
 {
@@ -1827,6 +1696,7 @@ void MainWindow::onSolve()
     m_solveStartMs = QDateTime::currentMSecsSinceEpoch();
     m_firstSolutionMs = 0;
     m_hadFirstSolution = false;
+    chkKarnotation->setEnabled(false);
     worker->start();
 }
 
@@ -1927,8 +1797,7 @@ void MainWindow::onSolverLine(QString line)
 void MainWindow::onSolverDone(int code)
 {
     progressBar->setVisible(false);
-
-    // Restore Solve button appearance.
+    chkKarnotation->setEnabled(true);
     btnSolve->setText("▶  Solve");
     btnSolve->setStyleSheet(""); // revert to stylesheet-defined look
 
@@ -2001,316 +1870,6 @@ void MainWindow::onReset()
 // keyPressEvent — the global eventFilter handles all routing;
 // this is kept only as a fallback for events that slip through.
 // -------------------------------------------------------
-void MainWindow::onApplyScramble()
-{
-    QString raw = txtScramble->text().trimmed();
-
-    // Empty input = reset to solved
-    if (raw.isEmpty())
-    {
-        QString before = cubeWidget->getPositionString();
-        cubeWidget->reset();
-        QString after = cubeWidget->getPositionString();
-        if (before != after)
-        {
-            m_undoStack.append({before});
-            if (m_undoStack.size() > 64)
-                m_undoStack.removeFirst();
-            btnUndo->setEnabled(true);
-            m_redoStack.clear();
-            btnRedo->setEnabled(false);
-        }
-        onReset();
-        return;
-    }
-
-    pushUndoState();
-    // Read current cube state from widget
-    QString curPosStr = cubeWidget->getPositionString();
-    // Parse it back into pos[] and mid using the same logic as setPositionFromString
-    int pos[24] = {};
-    int mid = 0;
-    {
-        std::string s = curPosStr.toStdString();
-        int j = 0;
-        int nextPartialCorner = -3;
-        int nextPartialEdge = 18;
-        for (int i = 0; i < 16 && j < 24; i++)
-        {
-            int k = (unsigned char)s[i];
-            if (k >= 'a' && k <= 'z')
-                k += ('A' - 'a');
-            if (k >= 'A' && k <= 'H')
-                k -= 'A';
-            else if (k >= '1' && k <= '8')
-                k -= ('1' - 8);
-            else if (k == 'U')
-            {
-                k = nextPartialCorner;
-                nextPartialCorner -= 3;
-            }
-            else if (k == 'V')
-            {
-                k = nextPartialCorner;
-                nextPartialCorner -= 3;
-            }
-            else if (k == 'W')
-            {
-                k = nextPartialCorner;
-                nextPartialCorner -= 3;
-            }
-            else if (k == 'X')
-            {
-                k = nextPartialEdge;
-                nextPartialEdge += 3;
-            }
-            else if (k == 'Y')
-            {
-                k = nextPartialEdge;
-                nextPartialEdge += 3;
-            }
-            else if (k == 'Z')
-            {
-                k = nextPartialEdge;
-                nextPartialEdge += 3;
-            }
-            pos[j++] = k;
-            if (k >= 0 && k < 8)
-                pos[j++] = k; // corner occupies two slots
-        }
-        if (s.size() >= 17)
-            mid = (s[16] == '/') ? 1 : 0;
-        else if (s.size() == 16)
-            mid = (s.back() == '/') ? 1 : 0;
-        // for position strings without trailing char, mid stays 0
-        if (s.size() < 16)
-        {
-            // fallback: check last char of the 15/16 char string
-            char last = s.back();
-            mid = (last == '/') ? 1 : 0;
-        }
-    }
-
-    auto doTop = [&](int m)
-    {
-        m = ((m % 12) + 12) % 12;
-        for (int moves = 0; moves < m; moves++)
-        {
-            int c = pos[11];
-            for (int i = 11; i > 0; i--)
-                pos[i] = pos[i - 1];
-            pos[0] = c;
-        }
-    };
-    auto doBot = [&](int m)
-    {
-        m = ((m % 12) + 12) % 12;
-        for (int moves = 0; moves < m; moves++)
-        {
-            int c = pos[23];
-            for (int i = 23; i > 12; i--)
-                pos[i] = pos[i - 1];
-            pos[12] = c;
-        }
-    };
-    auto isSliceable = [&]()
-    {
-        return pos[0] != pos[11] && pos[5] != pos[6] &&
-               pos[12] != pos[23] && pos[17] != pos[18];
-    };
-    auto doSlice = [&]()
-    {
-        if (!isSliceable())
-            return;
-        for (int i = 6; i < 12; i++)
-            std::swap(pos[i], pos[i + 6]);
-        mid = 1 - mid;
-    };
-
-    // ── Parse the move sequence correctly ────────────────────────────────────
-    // The format is a series of moves separated by '/'.
-    // Each '/' is a slice. A turn (x,y) precedes the slash that follows it.
-    // Examples:
-    //   "(1,0)/(3,3)"  → turn(1,0), slice, turn(3,3)          [no trailing slice]
-    //   "(1,0)/(3,3)/" → turn(1,0), slice, turn(3,3), slice
-    //   "/(1,0)"       → slice, turn(1,0)
-    //   "/"            → slice only
-    //
-    // Algorithm: scan character by character, collecting turn tokens and
-    // counting '/' separators explicitly so leading/trailing slashes are preserved.
-
-    struct Move
-    {
-        bool isSlice;
-        int x, y;
-    };
-    QVector<Move> moves;
-
-    QString s = raw;
-    int idx = 0;
-    bool ok = true;
-
-    // If the sequence starts with '/' it means a leading slice before any turn.
-    // We'll handle this by treating the string as a sequence of:
-    //   [optional leading /] (turn /) * [optional trailing turn]
-    // We do a character-level parse.
-
-    while (idx < s.size() && ok)
-    {
-        // Skip whitespace
-        while (idx < s.size() && s[idx].isSpace())
-            idx++;
-        if (idx >= s.size())
-            break;
-
-        if (s[idx] == '/')
-        {
-            // Slash = slice
-            moves.append({true, 0, 0});
-            idx++;
-        }
-        else if (s[idx] == '(' || s[idx].isDigit() || s[idx] == '-')
-        {
-            // Turn: optional '(' x ',' y optional ')'
-            if (s[idx] == '(')
-                idx++;
-            // parse x
-            while (idx < s.size() && s[idx].isSpace())
-                idx++;
-            int sign = 1;
-            if (idx < s.size() && s[idx] == '-')
-            {
-                sign = -1;
-                idx++;
-            }
-            int num = 0;
-            bool hasDigit = false;
-            while (idx < s.size() && s[idx].isDigit())
-            {
-                num = num * 10 + (s[idx].toLatin1() - '0');
-                idx++;
-                hasDigit = true;
-            }
-            if (!hasDigit)
-            {
-                ok = false;
-                break;
-            }
-            int x = sign * num;
-            while (idx < s.size() && s[idx].isSpace())
-                idx++;
-            if (idx >= s.size() || s[idx] != ',')
-            {
-                ok = false;
-                break;
-            }
-            idx++; // skip ','
-            // parse y
-            while (idx < s.size() && s[idx].isSpace())
-                idx++;
-            sign = 1;
-            if (idx < s.size() && s[idx] == '-')
-            {
-                sign = -1;
-                idx++;
-            }
-            num = 0;
-            hasDigit = false;
-            while (idx < s.size() && s[idx].isDigit())
-            {
-                num = num * 10 + (s[idx].toLatin1() - '0');
-                idx++;
-                hasDigit = true;
-            }
-            if (!hasDigit)
-            {
-                ok = false;
-                break;
-            }
-            int y = sign * num;
-            while (idx < s.size() && s[idx].isSpace())
-                idx++;
-            if (idx < s.size() && s[idx] == ')')
-                idx++;
-            moves.append({false, x, y});
-        }
-        else
-        {
-            ok = false;
-            break;
-        }
-    }
-
-    if (!ok)
-    {
-        int approxPos = idx;
-        QString ctx = raw.mid(qMax(0, approxPos - 6), 12).trimmed();
-        QString msg = QString("Parse error near \"%1\" (col %2) — expected (x,y) or /.")
-                          .arg(ctx)
-                          .arg(approxPos);
-        lblScrambleError->setText(msg);
-        lblScrambleError->setVisible(true);
-        txtScramble->setProperty("hasError", true);
-        style()->polish(txtScramble);
-        return;
-    }
-
-    // ── Optionally invert if "Input algorithm" mode ───────────────────────────
-    if (m_scrambleIsAlg)
-    {
-        // Invert: reverse the move list and negate all turns
-        QVector<Move> inv;
-        for (int i = moves.size() - 1; i >= 0; i--)
-        {
-            Move mv = moves[i];
-            if (!mv.isSlice)
-            {
-                mv.x = -mv.x;
-                mv.y = -mv.y;
-            }
-            inv.append(mv);
-        }
-        moves = inv;
-    }
-
-    // ── Apply moves ───────────────────────────────────────────────────────────
-    for (const Move &mv : std::as_const(moves))
-    {
-        if (mv.isSlice)
-            doSlice();
-        else
-        {
-            doTop(mv.x);
-            doBot(mv.y);
-        }
-    }
-
-    // Build position string
-    const QString pieceChars = "ABCDEFGH12345678";
-    QString posStr;
-    for (int i = 0; i < 24; i++)
-    {
-        posStr += pieceChars[pos[i]];
-        if (pos[i] < 8)
-            i++;
-    }
-    posStr += (mid == 0 ? '-' : '/');
-
-    bool applied = cubeWidget->setPositionFromString(posStr);
-    if (!applied)
-    {
-        lblScrambleError->setText("Resulting position is invalid — check your move sequence.");
-        lblScrambleError->setVisible(true);
-        txtScramble->setProperty("hasError", true);
-        style()->polish(txtScramble);
-        return;
-    }
-    // Clear any previous error
-    lblScrambleError->setVisible(false);
-    txtScramble->setProperty("hasError", false);
-    style()->polish(txtScramble);
-    updateCommand();
-}
 
 void MainWindow::appendStatusLine(const QString &msg)
 {
@@ -3040,7 +2599,7 @@ QString MainWindow::convertLine(const QString& rawLine)
     QString bracketPart = rawLine.mid(lb).trimmed();
 
     std::string converted;
-    if (m_smartKarn) {
+    if (m_smartKarn && !m_cubeshapeWasActive) {
         converted = karnifycs(algPart.toStdString(), m_posHex.toStdString(), chkGenerator->isChecked());
     } else {
         converted = karnify(algPart.toStdString());

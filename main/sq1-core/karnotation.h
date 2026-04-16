@@ -224,7 +224,13 @@ static const std::vector<std::pair<std::string,std::string>> WCA_TO_KARN_OCS = {
     {" 3,3 ", " e "},
     {" -3,-3 ", " e' "},
     {" -2,1 ", " u' "},
-    {" 2,-1 ", " u "}
+    {" 2,-1 ", " u "},
+    {" u u' ", " w "},
+    {" u' u ", " w' "},
+    {" u u' u ", " u3 "},
+    {" u' u u' ", " u3' "},
+    {" u u' u u' ", " u4 "},
+    {" u' u u' u ", " u4' "},
 };
 
 // ---------------------------------------------------------------------------
@@ -598,27 +604,66 @@ inline std::string unkarnify(const std::string &algIn) {
 // but with commas removed (e.g. "-1,2" -> "-12").
 // ===========================================================================
 inline std::string karnify(const std::string& algPart) {
-    std::string out = trimStr(algPart);
+    std::string in = trimStr(algPart);
+    if (in.empty()) return in;
 
-    bool startSlice = !out.empty() && (out.front() == '/' || out.front() == '\\');
-    bool endSlice   = !out.empty() && (out.back()  == '/' || out.back()  == '\\');
+    bool startSlice = (in.front() == '/' || in.front() == '\\');
+    // Issue 5: size > 1 so a lone "/" doesn't set both flags and double to "//".
+    bool endSlice   = in.size() > 1 && (in.back() == '/' || in.back() == '\\');
 
-    out = replaceAll(out, "/", " ");
-    out = replaceAll(out, "\\", " ");
+    // Split by slashes into individual move tokens.
+    std::string normalized = replaceAll(in, "\\", "/");
+    auto parts = splitStr(normalized, '/');
 
-    out = replaceWithVector(" " + trimStr(out) + " ", WCA_TO_KARN);
-    out = trimStr(out);
+    std::vector<std::string> tokens;
+    for (auto& p : parts) {
+        std::string t = trimStr(p);
+        if (!t.empty()) tokens.push_back(t);
+    }
 
-    std::string prev;
-    do {
-        prev = out;
-        out = replaceAll(out, "  ", " ");
-    } while (out != prev);
+    // Lone slash or empty after stripping
+    if (tokens.empty())
+        return startSlice ? "/" : "";
 
-    out = replaceAll(out, ",", "");
+    auto hasAlpha = [](const std::string& s) {
+        for (unsigned char ch : s) if (std::isalpha(ch)) return true;
+        return false;
+    };
 
-    if (startSlice) out = "/" + out;
-    if (endSlice)   out = out + "/";
+    // Per-token karnification.
+    // Issue 2/4: a karn name implies a slice both before and after the move.
+    // The first token only has a slice before it if startSlice is set.
+    // The last token only has a slice after it if endSlice is set.
+    // Middle tokens always have slices on both sides — always karnify them.
+    std::vector<std::string> out_tokens;
+    for (size_t i = 0; i < tokens.size(); i++) {
+        bool isFirst = (i == 0);
+        bool isLast  = (i == tokens.size() - 1);
+        bool canKarn = (!isFirst || startSlice) && (!isLast || endSlice);
+
+        if (canKarn) {
+            std::string k = replaceWithVector(" " + tokens[i] + " ", WCA_TO_KARN);
+            k = trimStr(k);
+            std::string prev;
+            do { prev = k; k = replaceAll(k, "  ", " "); } while (k != prev);
+            k = replaceAll(k, ",", "");
+            out_tokens.push_back(k);
+        } else {
+            // No surrounding slices on this side — keep numeric, strip comma.
+            out_tokens.push_back(replaceAll(tokens[i], ",", ""));
+        }
+    }
+
+    bool firstIsKarn = hasAlpha(out_tokens.front());
+    bool lastIsKarn  = hasAlpha(out_tokens.back());
+
+    std::string out;
+    if (startSlice && !firstIsKarn) out = "/";
+    for (size_t i = 0; i < out_tokens.size(); i++) {
+        if (i > 0) out += ' ';
+        out += out_tokens[i];
+    }
+    if (endSlice && !lastIsKarn) out += "/";
     return out;
 }
 
