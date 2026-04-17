@@ -568,19 +568,19 @@ void MainWindow::buildUI()
     // Row 3: Undo | Redo
     QHBoxLayout *undoResetRedoRow = new QHBoxLayout();
     undoResetRedoRow->setSpacing(4);
-    btnUndo = new QPushButton("Undo (Z)");
+    btnUndo = new QPushButton("Undo (Ctrl+Z)");
     btnUndo->setObjectName("btnUndo");
     btnUndo->setEnabled(false);
-    btnUndo->setToolTip("Undo  [Z]");
-    btnRedo = new QPushButton("Redo (Y)");
+    btnUndo->setToolTip("Undo  [Ctrl+Z]");
+    btnRedo = new QPushButton("Redo (Ctrl+Y)");
     btnRedo->setObjectName("btnRedo");
     btnRedo->setEnabled(false);
-    btnRedo->setToolTip("Redo  [Y]");
+    btnRedo->setToolTip("Redo  [Ctrl+Y]");
     undoResetRedoRow->addWidget(btnUndo, 1);
     undoResetRedoRow->addWidget(btnRedo, 1);
     leftCol->addLayout(undoResetRedoRow);
 
-    btnSolve = new QPushButton("▶  Solve");
+    btnSolve = new QPushButton("▶  Solve  [Ctrl+↵]");
     btnSolve->setObjectName("btnSolve");
     btnSolve->setFixedHeight(48);
     leftCol->addWidget(btnSolve);
@@ -888,6 +888,10 @@ void MainWindow::buildUI()
     // Enter/Shift+Enter are handled in eventFilter; returnPressed is not used.
 
     m_mainInput->installEventFilter(this);
+
+    // Ctrl+Enter triggers Solve / Stop from anywhere in the window
+    QShortcut *solveShortcut = new QShortcut(QKeySequence("Ctrl+Return"), this);
+    connect(solveShortcut, &QShortcut::activated, this, &MainWindow::onSolveButtonClicked);
 
     connect(btnApply, &QPushButton::clicked, this, [this]
             {
@@ -1661,6 +1665,11 @@ void MainWindow::onSolve()
     m_karnLines.clear();
     m_solutionLines.clear();
     m_karnSolutionLines.clear();
+    m_solutionLinesForRating.clear();
+    m_sliceIndicators.clear();
+    m_rawFinalScores.clear();
+    m_cachedRatedOrder.clear();
+    m_ratingsValid = false;
     m_seenSolutions.clear();
     // Always go back to terminal view while solving
     m_tableVisible = false;
@@ -1677,7 +1686,7 @@ void MainWindow::onSolve()
     appendStatusLine("Solving…");
 
     // Swap Solve → Stop appearance (muted dark red, not alarming).
-    btnSolve->setText("■  Stop");
+    btnSolve->setText("■  Stop  [Ctrl+↵]");
     btnSolve->setStyleSheet(QString(
                                 "QPushButton#btnSolve {"
                                 "  background: %1; border: 1px solid %2; padding-top: 0px; padding-bottom: 0px;"
@@ -1713,6 +1722,40 @@ void MainWindow::stopSolver()
 }
 
 // -------------------------------------------------------
+// injectSliceIndicatorDisplay (file-scope helper)
+// Injects sliceStr at the first slice boundary of a display line (alg part only).
+// The bracket "[x|y]" is never touched.
+//
+// Rules:
+//   Raw WCA format  "1,0/..."  → replace first '/'  → "1,0\..."
+//   Karn, numeric-first  "10 U ..."  → replace first ' ' → "10|U ..."
+//   Karn, letter-first   "U e' ..."  → prepend before first token → "|U e' ..."
+//     (a leading letter means the raw alg had a leading slash, so the implicit
+//      slice is BEFORE the first karn token, not after it)
+// -------------------------------------------------------
+static QString injectSliceIndicatorDisplay(const QString &line, const QString &sliceStr)
+{
+    if (sliceStr.isEmpty()) return line; // no indicator to inject
+
+    int lb = line.lastIndexOf('[');
+    QString algPart = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
+    QString rest    = lb > 0 ? "  " + line.mid(lb).trimmed() : QString();
+
+    if (algPart.isEmpty()) return line;
+
+    // Letter-first → implicit leading slice is before this token
+    if (algPart[0].isLetter())
+        return sliceStr + algPart + rest;
+
+    // Numeric-first: prefer first '/' (raw WCA), fall back to first ' ' (karn)
+    int p = algPart.indexOf('/');
+    if (p < 0) p = algPart.indexOf(' ');
+    if (p < 0) return line; // single-move alg — nowhere to inject
+
+    return algPart.left(p) + sliceStr + algPart.mid(p + 1) + rest;
+}
+
+// -------------------------------------------------------
 // onSolverLine
 // -------------------------------------------------------
 void MainWindow::onSolverLine(QString line)
@@ -1729,12 +1772,47 @@ void MainWindow::onSolverLine(QString line)
             return;
         m_seenSolutions.insert(algKey);
 
-        // Build the karnified version from the raw line
-        karnLine = convertLine(line);
+        // ── Step 1: store CLEAN line for normalisation pass in onSolverDone ─────
+        // Must happen before any modification of 'line'.
+        m_solutionLinesForRating.append(line);
 
-        // Cache both versions
-        m_solutionLines.append(line);
+        // ── Step 2: rating (cubeshape solves only) ────────────────────────────
+        // One rateAlg call captures both sliceStart (for display) and FINAL score
+        // (stored for the post-solve normalisation pass).  If cubeshape is off,
+        // nothing rating-related happens at all — no injection, no indicators.
+        QString sliceStr;
+        if (m_cubeshapeWasActive) {
+            bool initial_top_A = false;
+            if (!m_posHex.isEmpty()) {
+                QChar first = m_posHex[0];
+                initial_top_A = first.isDigit() || first == 'X' || first == 'Y' || first == 'Z';
+            }
+            double rawFinal = std::numeric_limits<double>::quiet_NaN();
+            try {
+                AlgRating rating = rateAlg(algKey.toStdString(), initial_top_A, 34, 100, 38, 10);
+                if (rating.valid) {
+                    sliceStr  = QString::fromStdString(rating.sliceStart);
+                    rawFinal  = rating.FINAL;
+                }
+            } catch (...) {}
+            m_sliceIndicators.append(sliceStr);  // "" if rateAlg failed
+            m_rawFinalScores.append(rawFinal);   // NaN if rateAlg failed
+        }
+
+        // ── Step 3: inject indicator into raw display line (cubeshape only) ──
+        QString injectedLine = injectSliceIndicatorDisplay(line, sliceStr);
+
+        // ── Step 4: karnify the CLEAN line, then inject (cubeshape only) ──────
+        // convertLine receives the original (unmodified) 'line' so karnify always
+        // gets valid '/' syntax.  Injection happens into the karn result afterward.
+        karnLine = injectSliceIndicatorDisplay(convertLine(line), sliceStr);
+
+        // Cache both display versions
+        m_solutionLines.append(injectedLine);
         m_karnSolutionLines.append(karnLine);
+
+        // Overwrite 'line' so the raw-display path below uses the injected version
+        line = injectedLine;
     }
 
     // Cache into raw and karn line lists (non-solution lines are identical in both)
@@ -1800,7 +1878,7 @@ void MainWindow::onSolverDone(int code)
 {
     progressBar->setVisible(false);
     chkKarnotation->setEnabled(true);
-    btnSolve->setText("▶  Solve");
+    btnSolve->setText("▶  Solve  [Ctrl+↵]");
     btnSolve->setStyleSheet(""); // revert to stylesheet-defined look
 
     const int n = m_solutionLines.size();
@@ -1829,6 +1907,47 @@ void MainWindow::onSolverDone(int code)
     }
 
     updateRankErgoState();
+
+    // ── Ergonomic rating cache (cubeshape solves only) ────────────────────────
+    // Scores were already computed per-line in onSolverLine (one rateAlg call each).
+    // Here we only normalise and sort — no rateAlg calls.
+    if (m_cubeshapeWasActive && !m_rawFinalScores.isEmpty()) {
+        // Collect valid (non-NaN) scores for median computation
+        std::vector<double> valid;
+        valid.reserve(m_rawFinalScores.size());
+        for (double s : m_rawFinalScores)
+            if (!std::isnan(s)) valid.push_back(s);
+
+        // Median-normalise
+        double median = 0.0;
+        if (!valid.empty()) {
+            std::sort(valid.begin(), valid.end());
+            size_t nv = valid.size();
+            median = (nv % 2 == 0)
+                     ? (valid[nv/2-1] + valid[nv/2]) / 2.0
+                     : valid[nv/2];
+        }
+
+        QVector<QPair<int,double>> indexScores;
+        indexScores.reserve(m_rawFinalScores.size());
+        for (int i = 0; i < m_rawFinalScores.size(); i++) {
+            double sc = m_rawFinalScores[i];
+            indexScores.append({i, std::isnan(sc) ? sc : sc - median});
+        }
+
+        // Sort highest first, NaN last
+        std::stable_sort(indexScores.begin(), indexScores.end(),
+            [](const QPair<int,double> &a, const QPair<int,double> &b){
+                bool aN = std::isnan(a.second), bN = std::isnan(b.second);
+                if (aN && bN) return false;
+                if (aN) return false;
+                if (bN) return true;
+                return a.second > b.second;
+            });
+        m_cachedRatedOrder = indexScores;
+        m_ratingsValid = true;
+    }
+
     if (!m_solutionLines.isEmpty())
     {
         qint64 elapsed = m_hadFirstSolution
@@ -1936,27 +2055,20 @@ void MainWindow::rebuildTable()
     bool useKarn = chkKarnotation->isChecked();
     const QStringList &displayLines = useKarn ? m_karnSolutionLines : m_solutionLines;
 
-    if (showErgo) {
-        // rateAndSort always rates on raw numeric; display lines used only for alg text
-        auto rated = rateAndSort(m_solutionLines, m_posHex, useKarn);
-        // Build map from raw alg key -> display alg text
-        QMap<QString, QString> displayAlgMap;
-        for (int i = 0; i < m_solutionLines.size() && i < displayLines.size(); i++) {
-            int lb = m_solutionLines[i].lastIndexOf('[');
-            QString key = lb > 0 ? m_solutionLines[i].left(lb).trimmed() : m_solutionLines[i].trimmed();
-            int dlb = displayLines[i].lastIndexOf('[');
-            displayAlgMap[key] = dlb > 0 ? displayLines[i].left(dlb).trimmed() : displayLines[i].trimmed();
-        }
-        for (auto &[line, score] : rated) {
+    if (showErgo && m_ratingsValid) {
+        // Use the pre-computed cache — no rateAlg calls here.
+        // m_cachedRatedOrder is already sorted highest-first.
+        for (auto &[idx, score] : m_cachedRatedOrder) {
+            if (idx < 0 || idx >= displayLines.size()) continue;
+            const QString &dline = displayLines[idx];
             int mv, sl;
-            parseCounts(line, mv, sl);
-            int lb = line.lastIndexOf('[');
-            QString rawKey = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-            QString displayAlg = displayAlgMap.value(rawKey, rawKey);
-            rows.append({displayAlg, mv, sl, score});
+            parseCounts(dline, mv, sl);
+            int lb = dline.lastIndexOf('[');
+            QString alg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
+            rows.append({alg, mv, sl, score});
         }
     } else {
-        // No ergo rating — build rows from display lines without calling rateAndSort
+        // No ergo rating — build rows from display lines in arrival order
         for (const QString &line : std::as_const(displayLines)) {
             int mv, sl;
             parseCounts(line, mv, sl);
@@ -1966,15 +2078,8 @@ void MainWindow::rebuildTable()
         }
     }
 
-    if (ergo && showErgo)
-        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b) {
-            bool aNaN = std::isnan(a.ergo), bNaN = std::isnan(b.ergo);
-            if (aNaN && bNaN) return false;
-            if (aNaN) return false;
-            if (bNaN) return true;
-            return a.ergo > b.ergo;
-        });
-    else
+    // Sort: ergo rank already baked into row order from cache; for non-ergo sort by moves/slices
+    if (!(ergo && showErgo && m_ratingsValid))
         std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
             if (a.slices != b.slices) return a.slices < b.slices;
             return a.moves < b.moves;
@@ -2095,22 +2200,12 @@ void MainWindow::onRankErgoToggled(bool checked)
     // Ergo rating is only meaningful for cubeshape solves
     if (!m_cubeshapeWasActive)
         return;
+    if (!m_ratingsValid)
+        return;
     lblStatus->setText("Rating algorithms…");
 
-    // Always rate on raw numeric lines; display alg in karn or raw per checkbox
-    auto rated = rateAndSort(m_solutionLines, m_posHex, true);
     const bool useKarn = chkKarnotation->isChecked();
-
-    // Build map from raw alg key -> display alg (karn or raw)
     const QStringList &displaySols = useKarn ? m_karnSolutionLines : m_solutionLines;
-    QMap<QString, QString> displayAlgMap;
-    for (int i = 0; i < m_solutionLines.size() && i < displaySols.size(); i++) {
-        int lb = m_solutionLines[i].lastIndexOf('[');
-        QString key = lb > 0 ? m_solutionLines[i].left(lb).trimmed() : m_solutionLines[i].trimmed();
-        int dlb = displaySols[i].lastIndexOf('[');
-        QString dispAlg = dlb > 0 ? displaySols[i].left(dlb).trimmed() : displaySols[i].trimmed();
-        displayAlgMap[key] = dispAlg;
-    }
 
     txtOutput->clear();
     QTextCursor cur(txtOutput->document());
@@ -2142,16 +2237,16 @@ void MainWindow::onRankErgoToggled(bool checked)
         }
     }
 
-    // Rated solution lines (sorted by score, displayed in karn/raw per checkbox)
+    // Rated solution lines — read from cache (already sorted, no re-rating)
     int solIdx = 0;
-    for (auto &[line, score] : rated)
+    for (auto &[idx, score] : m_cachedRatedOrder)
     {
-        int lb = line.lastIndexOf('[');
-        QString rawKey = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-        QString displayAlg = displayAlgMap.value(rawKey, rawKey);
-        // Reconstruct bracket part from the rated line
-        QString bracketPart = lb > 0 ? line.mid(lb) : QString();
-        QString displayLine = displayAlg + (bracketPart.isEmpty() ? QString() : "  " + bracketPart.trimmed());
+        if (idx < 0 || idx >= displaySols.size()) { solIdx++; continue; }
+        const QString &dline = displaySols[idx];
+        int lb = dline.lastIndexOf('[');
+        QString displayAlg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
+        QString bracketPart = lb > 0 ? dline.mid(lb).trimmed() : QString();
+        QString displayLine = displayAlg + (bracketPart.isEmpty() ? QString() : "  " + bracketPart);
 
         bool isAlt = (solIdx % 2 == 1);
         QString col = m_lightTheme
@@ -2166,7 +2261,7 @@ void MainWindow::onRankErgoToggled(bool checked)
         }
         solIdx++;
     }
-    appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)rated.size()));
+    appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)m_cachedRatedOrder.size()));
     txtOutput->verticalScrollBar()->setValue(0);
     if (m_tableVisible)
         rebuildTable();
@@ -2839,15 +2934,24 @@ void MainWindow::showSettingsModal()
     connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked) {
         m_smartKarn = checked;
         if (!m_rawLines.isEmpty()) {
-            // Rebuild karn cache with new mode
+            // Rebuild karn cache with new mode.
+            // m_rawLines[i] is the injected raw display line for solutions, or the plain
+            // status text for non-solutions. We need the CLEAN line for karnification;
+            // those are in m_solutionLinesForRating (parallel to m_solutionLines).
             m_karnLines.clear();
             m_karnSolutionLines.clear();
+            int solIdx = 0;
             for (int i = 0; i < m_rawLines.size(); i++) {
                 bool isSol = m_rawLines[i].contains('[') && m_rawLines[i].contains(']');
-                QString karnLine = m_rawLines[i];
-                if (isSol) {
-                    karnLine = convertLine(m_rawLines[i]);
+                QString karnLine = m_rawLines[i]; // default for non-solutions
+                if (isSol && solIdx < m_solutionLinesForRating.size()) {
+                    // Karnify from the clean (uninjected) line, then re-inject the stored indicator
+                    QString cleanLine = m_solutionLinesForRating[solIdx];
+                    karnLine = convertLine(cleanLine);
+                    if (solIdx < m_sliceIndicators.size())
+                        karnLine = injectSliceIndicatorDisplay(karnLine, m_sliceIndicators[solIdx]);
                     m_karnSolutionLines.append(karnLine);
+                    solIdx++;
                 }
                 m_karnLines.append(karnLine);
             }
@@ -3120,24 +3224,45 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         return QMainWindow::eventFilter(watched, event);
     }
 
+    // ── Ctrl+Z / Ctrl+Y — undo / redo (work from any widget, including inputs) ─
+    if (ke->modifiers() == Qt::ControlModifier)
+    {
+        if (ke->key() == Qt::Key_Z) {
+            if (!m_undoStack.isEmpty()) btnUndo->click();
+            return true;
+        }
+        if (ke->key() == Qt::Key_Y) {
+            if (!m_redoStack.isEmpty()) btnRedo->click();
+            return true;
+        }
+    }
+
     // ── Events already targeting cubeWidget: let cubeWidget handle them. ─────
     // (sendEvent below will re-enter here with watched == cubeWidget.)
     if (watched == cubeWidget)
         return QMainWindow::eventFilter(watched, event);
 
+    // ── Esc from m_mainInput — reset cube without stealing focus ─────────────
+    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput)
+        && ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier)
+    {
+        m_undoStack.clear();
+        m_redoStack.clear();
+        btnUndo->setEnabled(false);
+        btnRedo->setEnabled(false);
+        QKeyEvent escEv(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QApplication::sendEvent(cubeWidget, &escEv);
+        return true;
+    }
+
     // ── Enter / Shift+Enter in m_mainInput ───────────────────────────────────
-    // Enter        = apply from solved state
-    // Shift+Enter  = apply on current state
-    if ((watched == m_mainInput) && ke->key() == Qt::Key_Return)
+    // Enter        = apply alg/scramble from solved state
+    // Shift+Enter  = do nothing (consumed)
+    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput)
+        && ke->key() == Qt::Key_Return)
     {
         if (ke->modifiers() & Qt::ShiftModifier)
-        {
-            // Shift+Enter: apply on current state (do nothing if empty)
-            if (m_mainInput->text().trimmed().isEmpty())
-                return true;
-            btnApply->click();
-            return true;
-        }
+            return true; // Shift+Enter: swallow, no action
         // plain Enter: apply from solved state
         m_applyFromSolved = true;
         btnApply->click();
@@ -3145,7 +3270,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         return true;
     }
 
-    // ── Text inputs get all keys — never steal from them ─────────────────────
+    // ── Text inputs get all remaining keys — never steal from them ────────────
     {
         QWidget *fw = QApplication::focusWidget();
         if (fw == txtCommand || fw == txtScramble || fw == txtDepths || fw == m_mainInput ||
@@ -3195,14 +3320,6 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             btnUndo->setEnabled(false);
             btnRedo->setEnabled(false);
             sendCube(Qt::Key_Escape);
-            break;
-        case Qt::Key_Z:
-            if (!m_undoStack.isEmpty())
-                btnUndo->click();
-            break;
-        case Qt::Key_Y:
-            if (!m_redoStack.isEmpty())
-                btnRedo->click();
             break;
         case Qt::Key_H:
             pushUndoState();

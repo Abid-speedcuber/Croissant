@@ -143,7 +143,7 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
     if ((std::abs(ergo_up - ergo_down) / sliceCount) > 2)
         sliceStart = (ergo_up > ergo_down) ? "/" : "\\";
     else
-        sliceStart = " ";
+        sliceStart = "|";
 
     double PHASE2 = W2 * sliceCount;
     auto moves = std::vector<std::string>(r.begin() + 1, r.end() - 1);
@@ -194,18 +194,16 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
             }
         } catch (...) {}
 
-        // Inject slice start indicator into display line
+        // Inject slice start indicator into display line (always: /, \, or |)
         if (rated) {
             QString sliceStr = QString::fromStdString(rating.sliceStart);
-            if (sliceStr == "/" || sliceStr == "\\") {
-                int slashPos = line.indexOf('/');
-                if (slashPos >= 0)
-                    line = line.left(slashPos) + sliceStr + line.mid(slashPos + 1);
-                else {
-                    int spacePos = line.indexOf(' ');
-                    if (spacePos >= 0)
-                        line = line.left(spacePos) + sliceStr + line.mid(spacePos + 1);
-                }
+            int slashPos = line.indexOf('/');
+            if (slashPos >= 0)
+                line = line.left(slashPos) + sliceStr + line.mid(slashPos + 1);
+            else {
+                int spacePos = line.indexOf(' ');
+                if (spacePos >= 0)
+                    line = line.left(spacePos) + sliceStr + line.mid(spacePos + 1);
             }
         }
         results.push_back({line, score});

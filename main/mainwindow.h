@@ -57,7 +57,6 @@ private slots:
     void updateConstraints();       // enforces option incompatibilities + enables/disables fields
     void onRankErgoToggled(bool checked);
     void stopSolver();              // kill worker and update UI
-    void onApplyScramble();
     void toggleExpand();            // expand / shrink the output terminal
 
 private:
@@ -123,8 +122,16 @@ private:
     // m_karnSolutionLines — same subset after karnify()
     QStringList   m_rawLines;
     QStringList   m_karnLines;
-    QStringList   m_solutionLines;
-    QStringList   m_karnSolutionLines;
+    QStringList   m_solutionLines;         // slice-indicator-injected raw WCA lines
+    QStringList   m_karnSolutionLines;     // slice-indicator-injected karn lines
+    QStringList   m_solutionLinesForRating; // clean numeric WCA lines (no injection) for rateAlg input
+    // Ergonomic rating cache — populated once in onSolverDone when cubeshape was active.
+    // Each entry: {index into m_solutionLines, median-normalised score}.
+    // Sorted highest-score first; NaN (unratable) entries at end.
+    QVector<QPair<int,double>> m_cachedRatedOrder;
+    bool          m_ratingsValid{false};
+    QStringList   m_sliceIndicators;  // per-solution slice indicator ("/", "\", or "|"), parallel to m_solutionLines
+    QVector<double> m_rawFinalScores; // unormalized FINAL scores from onSolverLine, parallel to m_solutionLinesForRating
     QSet<QString> m_seenSolutions;
     QString       m_posHex;         // position hex captured at solve time for ergo rating
     bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
