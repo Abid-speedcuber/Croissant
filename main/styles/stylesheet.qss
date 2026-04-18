@@ -6,6 +6,161 @@ QMainWindow, QWidget {
     font-size: 13px; 
 }
 
+/* ========== Options Panel Rows (div-style flex rows) ========== */
+QWidget#optionsInner {
+    background: transparent;
+    padding: 2px 0px;
+}
+
+/* --- base row --- */
+QWidget[objectName^="optionRow_"] {
+    background: transparent;
+    min-height: 28px;
+    max-height: 40px;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+QWidget#optionRowLeft {
+    background: transparent;
+    padding: 0;
+}
+
+QWidget#optionRowRight {
+    background: transparent;
+    padding: 0;
+    padding-right: 2px;
+}
+
+/* --- per-row overrides (you can customize each line here) --- */
+QWidget#optionRow_metric        { min-height: 30px; max-height: 36px; margin-bottom: 3px; }
+QWidget#optionRow_allopt        { min-height: 28px; }
+QWidget#optionRow_depths        { min-height: 28px; }
+QWidget#optionRow_generator     { min-height: 28px; margin-top: 3px; }
+QWidget#optionRow_2gen          { min-height: 28px; }
+QWidget#optionRow_pseudo2gen    { min-height: 28px; }
+QWidget#optionRow_cubeshape     { min-height: 28px; }
+QWidget#optionRow_ignoremid     { min-height: 28px; margin-bottom: 3px; }
+QWidget#optionRow_angle         { min-height: 30px; max-height: 36px; margin-top: 3px; }
+QWidget#optionRow_normalizeabf  { min-height: 30px; max-height: 36px; }
+QWidget#optionRow_maxx          { min-height: 28px; margin-top: 3px; }
+QWidget#optionRow_maxy          { min-height: 28px; }
+QWidget#optionRow_maxtotal      { min-height: 28px; }
+
+/* --- checkbox styling by name --- */
+QCheckBox#chkAllOptimal,
+QCheckBox#chkGenerator,
+QCheckBox#chk2gen,
+QCheckBox#chkPseudo2gen,
+QCheckBox#chkCubeshape,
+QCheckBox#chkIgnoreMid,
+QCheckBox#chkKarnotation,
+QCheckBox#chkMaxX,
+QCheckBox#chkMaxY,
+QCheckBox#chkMaxTotal {
+    font-size: 12px;
+    color: --text-secondary;
+    spacing: 6px;
+}
+
+QCheckBox#chkDepths {
+    font-size: 12px;
+    color: --text-disabled;
+    spacing: 6px;
+}
+
+/* --- spinbox sizing by name --- */
+QSpinBox#spnSuboptimal,
+QSpinBox#spnMaxX,
+QSpinBox#spnMaxY,
+QSpinBox#spnMaxTotal {
+    min-width: 48px;
+    max-width: 48px;
+    min-height: 24px;
+    max-height: 24px;
+    font-size: 12px;
+}
+
+/* --- txtDepths sizing --- */
+QLineEdit#txtDepths {
+    min-width: 80px;
+    max-width: 80px;
+    min-height: 24px;
+    max-height: 24px;
+    font-size: 12px;
+}
+
+QLineEdit#txtDepths[inactive="true"] {
+    color: --text-disabled;
+    background: --disabled-bg;
+    border-color: --border-dark;
+}
+
+/* --- radio pill containers --- */
+QWidget#metricPill,
+QWidget#anglePill,
+QWidget#normalizeAbfPill {
+    background: --radio-pill-bg;
+    border-radius: 7px;
+}
+
+/* --- radio pill buttons base --- */
+QWidget#metricPill > QPushButton,
+QWidget#anglePill  > QPushButton,
+QWidget#normalizeAbfPill > QPushButton {
+    background: transparent;
+    border: none;
+    color: --radio-btn-text;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 0;
+    min-width: 0;
+}
+
+/* --- first/last rounding --- */
+QWidget#metricPill > QPushButton#metricPill_first,
+QWidget#anglePill  > QPushButton#anglePill_first,
+QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_first {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}
+
+QWidget#metricPill > QPushButton#metricPill_last,
+QWidget#anglePill  > QPushButton#anglePill_last,
+QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_last {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+/* --- checked state --- */
+QWidget#metricPill > QPushButton:checked,
+QWidget#anglePill  > QPushButton:checked,
+QWidget#normalizeAbfPill > QPushButton:checked {
+    background: --radio-btn-checked-bg;
+    color: --radio-btn-checked-text;
+    border-radius: 5px;
+    border: 1px solid --radio-btn-checked-border;
+}
+
+/* --- hover unchecked --- */
+QWidget#metricPill > QPushButton:hover:!checked,
+QWidget#anglePill  > QPushButton:hover:!checked,
+QWidget#normalizeAbfPill > QPushButton:hover:!checked {
+    background: --radio-btn-hover-bg;
+    border-radius: 5px;
+}
+
+/* --- radio row labels --- */
+QLabel#metricRadioRow_label,
+QLabel#angleRadioRow_label,
+QLabel#normalizeAbfRow_label {
+    font-size: 12px;
+    color: --text-secondary;
+}
+
 /* ========== GroupBox ========== */
 QGroupBox { 
     border: 1px solid --border-group; 

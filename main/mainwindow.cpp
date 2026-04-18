@@ -58,17 +58,20 @@
 // ============================================================
 // TightCheckBox — only shows tooltip when hovering over indicator+text
 // ============================================================
-class TightCheckBox : public QCheckBox {
+class TightCheckBox : public QCheckBox
+{
 public:
     using QCheckBox::QCheckBox;
-    bool event(QEvent *e) override {
-        if (e->type() == QEvent::ToolTip) {
+    bool event(QEvent *e) override
+    {
+        if (e->type() == QEvent::ToolTip)
+        {
             QStyleOptionButton opt;
             opt.initFrom(this);
             QRect textRect = style()->subElementRect(QStyle::SE_CheckBoxContents, &opt, this);
-            QRect indRect  = style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, this);
+            QRect indRect = style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, this);
             QRect activeRect = textRect.united(indRect);
-            QHelpEvent *he = static_cast<QHelpEvent*>(e);
+            QHelpEvent *he = static_cast<QHelpEvent *>(e);
             if (!activeRect.contains(he->pos()))
                 return true; // swallow
         }
@@ -79,10 +82,12 @@ public:
 // ============================================================
 // SelectableDelegate — makes table cells selectable by mouse drag
 // ============================================================
-class SelectableDelegate : public QStyledItemDelegate {
+class SelectableDelegate : public QStyledItemDelegate
+{
 public:
     explicit SelectableDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
-    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &) const override {
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &) const override
+    {
         QLineEdit *ed = new QLineEdit(parent);
         ed->setReadOnly(true);
         ed->setFrame(false);
@@ -90,11 +95,13 @@ public:
         ed->setCursor(Qt::IBeamCursor);
         return ed;
     }
-    void setEditorData(QWidget *editor, const QModelIndex &index) const override {
-        static_cast<QLineEdit*>(editor)->setText(index.data().toString());
+    void setEditorData(QWidget *editor, const QModelIndex &index) const override
+    {
+        static_cast<QLineEdit *>(editor)->setText(index.data().toString());
     }
     void setModelData(QWidget *, QAbstractItemModel *, const QModelIndex &) const override {}
-    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &) const override {
+    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &) const override
+    {
         editor->setGeometry(option.rect);
     }
 };
@@ -102,20 +109,25 @@ public:
 // ============================================================
 // FadingTooltip — singleton tooltip with fade-in, shown via hover timer
 // ============================================================
-class FadingTooltip : public QWidget {
+class FadingTooltip : public QWidget
+{
 public:
-    static void arm(const QString &text, const QPoint &globalPos, QWidget *parent) {
+    static void arm(const QString &text, const QPoint &globalPos, QWidget *parent)
+    {
         inst(parent).armImpl(text, globalPos);
     }
-    static void dismiss(QWidget *parent) {
+    static void dismiss(QWidget *parent)
+    {
         inst(parent).dismissImpl();
     }
-    static void setLightTheme(bool light, QWidget *parent) {
+    static void setLightTheme(bool light, QWidget *parent)
+    {
         inst(parent).m_lightTheme = light;
     }
 
 private:
-    explicit FadingTooltip(QWidget *parent) : QWidget(parent, Qt::SubWindow) {
+    explicit FadingTooltip(QWidget *parent) : QWidget(parent, Qt::SubWindow)
+    {
         setAttribute(Qt::WA_TransparentForMouseEvents);
         setAttribute(Qt::WA_NoSystemBackground);
         setAutoFillBackground(false);
@@ -126,7 +138,7 @@ private:
         m_label->setContentsMargins(8, 5, 8, 5);
 
         QVBoxLayout *l = new QVBoxLayout(this);
-        l->setContentsMargins(0,0,0,0);
+        l->setContentsMargins(0, 0, 0, 0);
         l->addWidget(m_label);
 
         m_effect = new QGraphicsOpacityEffect(this);
@@ -144,24 +156,34 @@ private:
         hide();
     }
 
-    static FadingTooltip &inst(QWidget *parent) {
+    static FadingTooltip &inst(QWidget *parent)
+    {
         static QPointer<FadingTooltip> s_inst;
-        if (!s_inst) s_inst = new FadingTooltip(parent->window());
+        if (!s_inst)
+            s_inst = new FadingTooltip(parent->window());
         return *s_inst;
     }
 
-    void stopAnim() {
-        if (m_anim) { m_anim->stop(); m_anim = nullptr; }
+    void stopAnim()
+    {
+        if (m_anim)
+        {
+            m_anim->stop();
+            m_anim = nullptr;
+        }
     }
 
-    void armImpl(const QString &text, const QPoint &globalPos) {
+    void armImpl(const QString &text, const QPoint &globalPos)
+    {
         m_pendingText = text;
-        m_pendingPos  = globalPos;
+        m_pendingPos = globalPos;
         // Same text already visible — nothing to do
-        if (isVisible() && m_currentText == text) return;
+        if (isVisible() && m_currentText == text)
+            return;
         // Different text already visible (mouse moved between options):
         // skip delay, update immediately
-        if (isVisible()) {
+        if (isVisible())
+        {
             stopAnim();
             m_hoverTimer->stop();
             showNow();
@@ -172,10 +194,12 @@ private:
         m_hoverTimer->start(200);
     }
 
-    void dismissImpl() {
+    void dismissImpl()
+    {
         m_hoverTimer->stop();
         m_closeTimer->stop();
-        if (!isVisible()) return;
+        if (!isVisible())
+            return;
         stopAnim();
         m_currentText.clear();
         QPropertyAnimation *anim = new QPropertyAnimation(m_effect, "opacity", this);
@@ -184,28 +208,31 @@ private:
         anim->setStartValue(m_effect->opacity());
         anim->setEndValue(0.0);
         anim->setEasingCurve(QEasingCurve::InCubic);
-        connect(anim, &QPropertyAnimation::finished, this, [this, anim]{
-            if (m_anim == anim) { hide(); m_anim = nullptr; }
-        });
+        connect(anim, &QPropertyAnimation::finished, this, [this, anim]
+                {
+            if (m_anim == anim) { hide(); m_anim = nullptr; } });
         anim->start(QAbstractAnimation::DeleteWhenStopped);
     }
 
-    void applyThemeStyle() {
+    void applyThemeStyle()
+    {
         // Light: white card, subtle border, near-black text
         // Dark:  existing theme colours
         const bool L = m_lightTheme;
-        m_cachedBg     = L ? "#ffffff"  : Theme::fadingTooltipBg();
-        m_cachedBorder = L ? "#c4c8dc"  : Theme::fadingTooltipBorder();
+        m_cachedBg = L ? "#ffffff" : Theme::fadingTooltipBg();
+        m_cachedBorder = L ? "#c4c8dc" : Theme::fadingTooltipBorder();
         QString textCol = L ? "#2a2a3a" : Theme::fadingTooltipText();
         m_label->setStyleSheet(QString(
-            "QLabel { background: transparent; color: %1; font-size: 11px; }").arg(textCol));
+                                   "QLabel { background: transparent; color: %1; font-size: 11px; }")
+                                   .arg(textCol));
         setStyleSheet(QString(
-            "FadingTooltip { background: %1; border: 1px solid %2; border-radius: 5px; }")
-            .arg(m_cachedBg, m_cachedBorder));
+                          "FadingTooltip { background: %1; border: 1px solid %2; border-radius: 5px; }")
+                          .arg(m_cachedBg, m_cachedBorder));
         update();
     }
 
-    void showNow() {
+    void showNow()
+    {
         m_currentText = m_pendingText;
         applyThemeStyle();
         m_label->setText(m_currentText);
@@ -214,7 +241,7 @@ private:
 
         QWidget *win = parentWidget();
         QPoint local = win->mapFromGlobal(m_pendingPos) + QPoint(14, 18);
-        local.setX(qMin(local.x(), win->width()  - width()  - 8));
+        local.setX(qMin(local.x(), win->width() - width() - 8));
         local.setY(qMin(local.y(), win->height() - height() - 8));
         move(local);
         raise();
@@ -229,33 +256,34 @@ private:
         anim->setStartValue(startOpacity);
         anim->setEndValue(1.0);
         anim->setEasingCurve(QEasingCurve::OutCubic);
-        connect(anim, &QPropertyAnimation::finished, this, [this, anim]{
-            if (m_anim == anim) m_anim = nullptr;
-        });
+        connect(anim, &QPropertyAnimation::finished, this, [this, anim]
+                {
+            if (m_anim == anim) m_anim = nullptr; });
         anim->start(QAbstractAnimation::DeleteWhenStopped);
 
         m_closeTimer->start(8000);
     }
 
-    void paintEvent(QPaintEvent *) override {
+    void paintEvent(QPaintEvent *) override
+    {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
-        p.setBrush(QColor(m_cachedBg.isEmpty()     ? Theme::fadingTooltipBg()     : m_cachedBg));
-        p.setPen(QColor(m_cachedBorder.isEmpty()   ? Theme::fadingTooltipBorder() : m_cachedBorder));
-        p.drawRoundedRect(rect().adjusted(0,0,-1,-1), 5, 5);
+        p.setBrush(QColor(m_cachedBg.isEmpty() ? Theme::fadingTooltipBg() : m_cachedBg));
+        p.setPen(QColor(m_cachedBorder.isEmpty() ? Theme::fadingTooltipBorder() : m_cachedBorder));
+        p.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 5, 5);
     }
 
-    QLabel                  *m_label{nullptr};
-    QGraphicsOpacityEffect  *m_effect{nullptr};
-    QTimer                  *m_hoverTimer{nullptr};
-    QTimer                  *m_closeTimer{nullptr};
-    QPropertyAnimation      *m_anim{nullptr};
-    QString                  m_pendingText;
-    QPoint                   m_pendingPos;
-    QString                  m_currentText;
-    QString                  m_cachedBg;
-    QString                  m_cachedBorder;
-    bool                     m_lightTheme{false};
+    QLabel *m_label{nullptr};
+    QGraphicsOpacityEffect *m_effect{nullptr};
+    QTimer *m_hoverTimer{nullptr};
+    QTimer *m_closeTimer{nullptr};
+    QPropertyAnimation *m_anim{nullptr};
+    QString m_pendingText;
+    QPoint m_pendingPos;
+    QString m_currentText;
+    QString m_cachedBg;
+    QString m_cachedBorder;
+    bool m_lightTheme{false};
 };
 
 // ============================================================
@@ -546,14 +574,17 @@ void MainWindow::buildUI()
         btnReset->raise();
 
         // Use a resize event filter to keep cubeWrapper centered and btnReset at top-right
-        struct CubeResizeFilter : public QObject {
+        struct CubeResizeFilter : public QObject
+        {
             QWidget *cubeWithReset;
             QWidget *cubeWrapper;
             QPushButton *btnReset;
             CubeResizeFilter(QWidget *p, QWidget *cwr, QWidget *cwrap, QPushButton *btn)
                 : QObject(p), cubeWithReset(cwr), cubeWrapper(cwrap), btnReset(btn) {}
-            bool eventFilter(QObject *watched, QEvent *e) override {
-                if (e->type() == QEvent::Resize && watched == cubeWithReset) {
+            bool eventFilter(QObject *watched, QEvent *e) override
+            {
+                if (e->type() == QEvent::Resize && watched == cubeWithReset)
+                {
                     int cx = (cubeWithReset->width() - cubeWrapper->width()) / 2;
                     cubeWrapper->move(cx, 9);
                     btnReset->move(cubeWithReset->width() - 58, 6);
@@ -569,7 +600,7 @@ void MainWindow::buildUI()
 
         QHBoxLayout *centerRow = new QHBoxLayout();
         centerRow->setContentsMargins(0, 0, 0, 0);
-        centerRow->addWidget(cubeWithReset);  // stretches to fill
+        centerRow->addWidget(cubeWithReset); // stretches to fill
         leftCol->addLayout(centerRow);
     }
 
@@ -694,24 +725,64 @@ void MainWindow::buildUI()
     grpOptions->setMinimumHeight(200);
 
     QWidget *optionsInner = new QWidget();
-    QGridLayout *grid = new QGridLayout(optionsInner);
-    grid->setVerticalSpacing(2);
+    optionsInner->setObjectName("optionsInner");
+    QVBoxLayout *grid = new QVBoxLayout(optionsInner);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setSpacing(0);
+
+    auto makeRow = [](const QString &objName = "optionRow") -> QWidget *
+    {
+        QWidget *row = new QWidget();
+        row->setObjectName(objName);
+        row->setAttribute(Qt::WA_StyledBackground, true);
+        QHBoxLayout *l = new QHBoxLayout(row);
+        l->setContentsMargins(0, 0, 0, 0);
+        l->setSpacing(0);
+        return row;
+    };
+    auto rowLeft = [](QWidget *row) -> QHBoxLayout *
+    {
+        QWidget *left = new QWidget();
+        left->setObjectName("optionRowLeft");
+        left->setAttribute(Qt::WA_StyledBackground, true);
+        QHBoxLayout *ll = new QHBoxLayout(left);
+        ll->setContentsMargins(0, 0, 0, 0);
+        ll->setSpacing(0);
+        static_cast<QHBoxLayout *>(row->layout())->addWidget(left, 1);
+        return ll;
+    };
+    auto rowRight = [](QWidget *row) -> QHBoxLayout *
+    {
+        QWidget *right = new QWidget();
+        right->setObjectName("optionRowRight");
+        right->setAttribute(Qt::WA_StyledBackground, true);
+        QHBoxLayout *rl = new QHBoxLayout(right);
+        rl->setContentsMargins(0, 0, 0, 0);
+        rl->setSpacing(0);
+        static_cast<QHBoxLayout *>(row->layout())->addWidget(right);
+        return rl;
+    };
 
     // ── Widgets ──────────────────────────────────────────────────────────────
     // ── Metric radio: Slice (default) | Move | Angle ─────────────────────────
     auto makeRadioRow = [this](const QString &labelText, const QStringList &opts,
-                               int defaultId, QButtonGroup *&groupOut) -> QWidget*
+                               int defaultId, QButtonGroup *&groupOut,
+                               const QString &rowName, const QString &pillName) -> QWidget *
     {
         QWidget *row = new QWidget();
+        row->setObjectName(rowName);
+        row->setAttribute(Qt::WA_StyledBackground, true);
         QHBoxLayout *rLay = new QHBoxLayout(row);
-        rLay->setContentsMargins(0, 2, 0, 2);
-        rLay->setSpacing(6);
+        rLay->setContentsMargins(0, 0, 0, 0);
+        rLay->setSpacing(0);
 
         QLabel *lbl = new QLabel(labelText);
+        lbl->setObjectName(rowName + "_label");
         rLay->addWidget(lbl);
         rLay->addStretch();
 
         QWidget *pill = new QWidget();
+        pill->setObjectName(pillName);
         pill->setAttribute(Qt::WA_StyledBackground, true);
         QHBoxLayout *pLay = new QHBoxLayout(pill);
         pLay->setContentsMargins(2, 2, 2, 2);
@@ -719,15 +790,18 @@ void MainWindow::buildUI()
 
         groupOut = new QButtonGroup(this);
         groupOut->setExclusive(true);
-        for (int i = 0; i < opts.size(); i++) {
+        for (int i = 0; i < opts.size(); i++)
+        {
             QPushButton *btn = new QPushButton(opts[i]);
             btn->setCheckable(true);
             btn->setChecked(i == defaultId);
             btn->setCursor(Qt::PointingHandCursor);
-            // object name drives the corner-radius QSS
-            if (i == 0)                btn->setObjectName("radioBtnFirst");
-            else if (i == opts.size()-1) btn->setObjectName("radioBtnLast");
-            else                         btn->setObjectName("radioBtnMid");
+            if (i == 0)
+                btn->setObjectName(pillName + "_first");
+            else if (i == opts.size() - 1)
+                btn->setObjectName(pillName + "_last");
+            else
+                btn->setObjectName(pillName + "_mid");
             groupOut->addButton(btn, i);
             pLay->addWidget(btn);
         }
@@ -735,38 +809,28 @@ void MainWindow::buildUI()
         return row;
     };
 
-    QWidget *metricRadioRow = makeRadioRow("Metric", {"Slice","Move","Angle"}, 0, m_metricGroup);
+    QWidget *metricRadioRow = makeRadioRow("Metric", {"Slice", "Move", "Angle"}, 0, m_metricGroup, "metricRadioRow", "metricPill");
     metricRadioRow->setToolTip("Choose how move length is counted:\n"
                                "Slice – only slices count\n"
                                "Move  – layer turns count too\n"
                                "Angle – turns weighted by angle amount");
-    // The pill is the last direct QWidget child that is not a QLabel
-    for (QWidget *ch : metricRadioRow->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
-        if (!qobject_cast<QLabel*>(ch)) { ch->setObjectName("metricRadio"); break; }
+    // (pill objectName set inside makeRadioRow)
 
     chkAllOptimal = new TightCheckBox("All optimal");
+    chkAllOptimal->setObjectName("chkAllOptimal");
     chkAllOptimal->setToolTip("Find all the optimal solutions, not just the first one.");
 
     spnSuboptimal = new QSpinBox();
+    spnSuboptimal->setObjectName("spnSuboptimal");
     spnSuboptimal->setRange(0, 9);
     spnSuboptimal->setValue(0);
-    spnSuboptimal->setFixedWidth(48);
-    spnSuboptimal->setFixedHeight(26);
     spnSuboptimal->setToolTip("Extra moves beyond optimal to *also* find (0 = optimal only).");
 
-    QWidget *allOptRow = new QWidget();
-    allOptRow->setFixedHeight(28);
-    QHBoxLayout *allOptLayout = new QHBoxLayout(allOptRow);
-    allOptLayout->setContentsMargins(0, 0, 0, 0);
-    allOptLayout->setSpacing(4);
-    allOptLayout->addWidget(chkAllOptimal);
-    allOptLayout->addStretch(1);
     QLabel *lblSuboptLabel = new QLabel("+suboptimal:");
     lblSuboptLabel->setObjectName("lblSuboptLabel");
-    allOptLayout->addWidget(lblSuboptLabel);
-    allOptLayout->addWidget(spnSuboptimal);
 
     chkDepths = new TightCheckBox("Specific depths:");
+    chkDepths->setObjectName("chkDepths");
     chkDepths->setToolTip("Search only the listed move depths instead of starting from 0 and going up.\n"
                           "Comma-separated, e.g.\"8,9\". \n"
                           "Write in the input box to toggle it on.");
@@ -774,129 +838,181 @@ void MainWindow::buildUI()
     chkDepths->setFocusPolicy(Qt::NoFocus);
 
     txtDepths = new QLineEdit();
-    txtDepths->setFixedWidth(80);
-    txtDepths->setFixedHeight(26);
+    txtDepths->setObjectName("txtDepths");
     txtDepths->setPlaceholderText("e.g. 8,9");
     txtDepths->setValidator(new QRegularExpressionValidator(
         QRegularExpression("[0-9,]*"), txtDepths));
     txtDepths->setToolTip("Comma-separated list of depths to search, e.g. \"8,9\"");
-    chkDepths->setStyleSheet("QCheckBox { color: #707090; } QCheckBox::indicator { opacity: 0.5; }");
-    chkDepths->setCursor(Qt::ArrowCursor);
 
     chkGenerator = new TightCheckBox("Generator alg");
+    chkGenerator->setObjectName("chkGenerator");
     chkGenerator->setToolTip("If selected, generated algs will set up to the case from a solved cube,\n"
                              "else the algs will solve the case.");
 
     chk2gen = new TightCheckBox("2Gen  (top layer + slices only)");
+    chk2gen->setObjectName("chk2gen");
     chk2gen->setToolTip("Restrict to 2-gen moves: top-layer turns and slices only.\n"
                         "Requires the bottom left pieces to already be solved.\n"
                         "You cannot demand both 2-gen and stay-in-cubeshape.");
 
     chkPseudo2gen = new TightCheckBox("Pseudo 2Gen  (bottom: ±1 only)");
+    chkPseudo2gen->setObjectName("chkPseudo2gen");
     chkPseudo2gen->setToolTip("Restrict bottom-layer turns to ±1 only (2-gen with bottom 1 moves).\n");
 
     chkCubeshape = new TightCheckBox("Stay in cubeshape");
+    chkCubeshape->setObjectName("chkCubeshape");
     chkCubeshape->setToolTip("Only generate algs that keep the puzzle in cubeshape throughout.");
 
     chkIgnoreMid = new TightCheckBox("Ignore middle layer");
+    chkIgnoreMid->setObjectName("chkIgnoreMid");
     chkIgnoreMid->setToolTip("Ignore bar states. Equivalent to clicking on the bar until it is gray.");
 
     chkKarnotation = new TightCheckBox("Karnotation output");
+    chkKarnotation->setObjectName("chkKarnotation");
     chkKarnotation->setToolTip("Display solutions in karnotation instead of WCA notation.");
 
     QWidget *angleRadioRow = makeRadioRow("Lock layer angle on preabf",
-                                          {"Both","Top","Bottom","None"}, 3, m_angleGroup);
+                                          {"Both", "Top", "Bottom", "None"}, 3, m_angleGroup, "angleRadioRow", "anglePill");
     angleRadioRow->setToolTip("Lock the pre-ABF angle move to ±1 (or 0).\n"
                               "Both   – restricts top and bottom\n"
                               "Top    – restricts top layer only\n"
                               "Bottom – restricts bottom layer only\n"
                               "None   – no restriction (default)");
-    for (QWidget *ch : angleRadioRow->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
-        if (!qobject_cast<QLabel*>(ch)) { ch->setObjectName("angleRadio"); break; }
 
     QWidget *normalizeAbfRow = makeRadioRow("Normalize ABF",
-                                            {"Both","PreABF","PostABF","None"}, 3, m_normalizeAbfGroup);
+                                            {"Both", "PreABF", "PostABF", "None"}, 3, m_normalizeAbfGroup, "normalizeAbfRow", "normalizeAbfPill");
     // TODO: update this tooltip text with a precise description of what normalizing does
     normalizeAbfRow->setToolTip("Control which AUF moves are normalized in the output.\n"
                                 "PreABF  – normalize the move before the first slice\n"
                                 "PostABF – normalize the move after the last slice\n"
                                 "Both    – normalize both ends\n"
                                 "None    – no normalization (default)");
-    for (QWidget *ch : normalizeAbfRow->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
-        if (!qobject_cast<QLabel*>(ch)) { ch->setObjectName("normalizeAbfRadio"); break; }
 
     chkMaxX = new TightCheckBox("Max top turn:");
+    chkMaxX->setObjectName("chkMaxX");
     chkMaxX->setToolTip("Limit the maximum top-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"4\", that means algs can do -4 to 4 on top.");
     spnMaxX = new QSpinBox();
+    spnMaxX->setObjectName("spnMaxX");
     spnMaxX->setRange(0, 6);
     spnMaxX->setValue(3);
-    spnMaxX->setFixedWidth(48);
-    spnMaxX->setFixedHeight(26);
     spnMaxX->setToolTip("Maximum top-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"4\", that means algs can do -4 to 4 on top.");
 
     chkMaxY = new TightCheckBox("Max bottom turn:");
+    chkMaxY->setObjectName("chkMaxY");
     chkMaxY->setToolTip("Limit the maximum bottom-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"3\", that means algs can do -3 to 3 on bottom.");
     spnMaxY = new QSpinBox();
+    spnMaxY->setObjectName("spnMaxY");
     spnMaxY->setRange(0, 6);
     spnMaxY->setValue(3);
-    spnMaxY->setFixedWidth(48);
-    spnMaxY->setFixedHeight(26);
     spnMaxY->setToolTip("Maximum bottom-layer turn in either direction (0–6).\n"
                         "e.g. if you put \"3\", that means algs can do -3 to 3 on bottom.");
 
     chkMaxTotal = new TightCheckBox("Max total turn:");
+    chkMaxTotal->setObjectName("chkMaxTotal");
     chkMaxTotal->setToolTip("Limit the maximum combined |top|+|bottom| turn per move pair (1–12).\n"
                             "e.g. if you put \"6\", (3,-3) is allowed in algs (3+3<=6),\n"
                             "but (-5,-2) is not (5+2>6).");
     spnMaxTotal = new QSpinBox();
+    spnMaxTotal->setObjectName("spnMaxTotal");
     spnMaxTotal->setRange(1, 12);
     spnMaxTotal->setValue(6);
-    spnMaxTotal->setFixedWidth(48);
-    spnMaxTotal->setFixedHeight(26);
     spnMaxTotal->setToolTip("Maximum combined |top|+|bottom| turn per move pair (1–12).\n"
                             "e.g. if you put \"6\", (3,-3) is allowed in algs (3+3<=6),\n"
                             "but (-5,-2) is not (5+2>6).");
 
     chkKarnotation->setChecked(true);
 
-    // ── Grid layout ──────────────────────────────────────────────────────────
-    // Wrap full-width checkboxes in a container so they only occupy
-    // natural width — prevents tooltip firing on empty space to the right.
-    auto wrapCb = [](QCheckBox *cb) -> QWidget* {
-        QWidget *w = new QWidget();
-        w->setToolTip(""); // no tooltip on the spacer area
-        QHBoxLayout *l = new QHBoxLayout(w);
-        l->setContentsMargins(0,0,0,0);
-        l->setSpacing(0);
-        l->addWidget(cb);
-        l->addStretch();
-        return w;
-    };
-
-    int row = 0;
-    grid->addWidget(metricRadioRow, row++, 0, 1, 2);
-    grid->addWidget(allOptRow, row++, 0, 1, 2);
-    grid->addWidget(chkDepths, row, 0);
-    grid->addWidget(txtDepths, row++, 1);
-    grid->addWidget(wrapCb(chkGenerator), row++, 0, 1, 2);
-    grid->addWidget(wrapCb(chk2gen), row++, 0, 1, 2);
-    grid->addWidget(wrapCb(chkPseudo2gen), row++, 0, 1, 2);
-    grid->addWidget(wrapCb(chkCubeshape), row++, 0, 1, 2);
-    grid->addWidget(wrapCb(chkIgnoreMid), row++, 0, 1, 2);
-    grid->addWidget(angleRadioRow, row++, 0, 1, 2);
-    grid->addWidget(normalizeAbfRow, row++, 0, 1, 2);
-    grid->addWidget(chkMaxX, row, 0);
-    grid->addWidget(spnMaxX, row++, 1);
-    grid->addWidget(chkMaxY, row, 0);
-    grid->addWidget(spnMaxY, row++, 1);
-    grid->addWidget(chkMaxTotal, row, 0);
-    grid->addWidget(spnMaxTotal, row++, 1);
-
-    for (int r = 0; r < row; r++)
-        grid->setRowMinimumHeight(r, 28);
+    // ── Div-style rows ───────────────────────────────────────────────────────
+    // Row: Metric radio (full width)
+    {
+        QWidget *row = makeRow("optionRow_metric");
+        rowLeft(row)->addWidget(metricRadioRow, 1);
+        grid->addWidget(row);
+    }
+    // Row: All optimal + suboptimal
+    {
+        QWidget *row = makeRow("optionRow_allopt");
+        rowLeft(row)->addWidget(chkAllOptimal);
+        QHBoxLayout *rr = rowRight(row);
+        rr->addWidget(lblSuboptLabel);
+        rr->addSpacing(4);
+        rr->addWidget(spnSuboptimal);
+        grid->addWidget(row);
+    }
+    // Row: Specific depths
+    {
+        QWidget *row = makeRow("optionRow_depths");
+        rowLeft(row)->addWidget(chkDepths);
+        rowRight(row)->addWidget(txtDepths);
+        grid->addWidget(row);
+    }
+    // Row: Generator alg (full width)
+    {
+        QWidget *row = makeRow("optionRow_generator");
+        rowLeft(row)->addWidget(chkGenerator);
+        grid->addWidget(row);
+    }
+    // Row: 2Gen (full width)
+    {
+        QWidget *row = makeRow("optionRow_2gen");
+        rowLeft(row)->addWidget(chk2gen);
+        grid->addWidget(row);
+    }
+    // Row: Pseudo 2Gen (full width)
+    {
+        QWidget *row = makeRow("optionRow_pseudo2gen");
+        rowLeft(row)->addWidget(chkPseudo2gen);
+        grid->addWidget(row);
+    }
+    // Row: Stay in cubeshape (full width)
+    {
+        QWidget *row = makeRow("optionRow_cubeshape");
+        rowLeft(row)->addWidget(chkCubeshape);
+        grid->addWidget(row);
+    }
+    // Row: Ignore middle layer (full width)
+    {
+        QWidget *row = makeRow("optionRow_ignoremid");
+        rowLeft(row)->addWidget(chkIgnoreMid);
+        grid->addWidget(row);
+    }
+    // Row: Angle radio (full width)
+    {
+        QWidget *row = makeRow("optionRow_angle");
+        rowLeft(row)->addWidget(angleRadioRow, 1);
+        grid->addWidget(row);
+    }
+    // Row: Normalize ABF radio (full width)
+    {
+        QWidget *row = makeRow("optionRow_normalizeabf");
+        rowLeft(row)->addWidget(normalizeAbfRow, 1);
+        grid->addWidget(row);
+    }
+    // Row: Max top turn
+    {
+        QWidget *row = makeRow("optionRow_maxx");
+        rowLeft(row)->addWidget(chkMaxX);
+        rowRight(row)->addWidget(spnMaxX);
+        grid->addWidget(row);
+    }
+    // Row: Max bottom turn
+    {
+        QWidget *row = makeRow("optionRow_maxy");
+        rowLeft(row)->addWidget(chkMaxY);
+        rowRight(row)->addWidget(spnMaxY);
+        grid->addWidget(row);
+    }
+    // Row: Max total turn
+    {
+        QWidget *row = makeRow("optionRow_maxtotal");
+        rowLeft(row)->addWidget(chkMaxTotal);
+        rowRight(row)->addWidget(spnMaxTotal);
+        grid->addWidget(row);
+    }
+    grid->addStretch();
 
     QScrollArea *optionsScroll = new QScrollArea();
     optionsScroll->setWidget(optionsInner);
@@ -913,32 +1029,34 @@ void MainWindow::buildUI()
     auto upd = [this]
     { updateConstraints(); updateCommand(); };
 
-    connect(m_metricGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int){ upd(); });
+    connect(m_metricGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int)
+            { upd(); });
     connect(chkAllOptimal, &QCheckBox::toggled, this, upd);
     connect(spnSuboptimal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
-    connect(chkDepths, &QCheckBox::clicked, this, [this](bool) {
+    connect(chkDepths, &QCheckBox::clicked, this, [this](bool)
+            {
         // Clicking directly is not allowed — state is driven by txtDepths content
         QString t = txtDepths->text().trimmed();
         bool valid = !t.isEmpty() && QRegularExpression("^[0-9]+(,[0-9]+)*$").match(t).hasMatch();
         chkDepths->blockSignals(true);
         chkDepths->setChecked(valid);
-        chkDepths->blockSignals(false);
-    });
-    connect(txtDepths, &QLineEdit::textChanged, this, [this, upd](const QString &text) {
+        chkDepths->blockSignals(false); });
+    connect(txtDepths, &QLineEdit::textChanged, this, [this, upd](const QString &text)
+            {
         QString t = text.trimmed();
         // Valid = non-empty and only digits and commas, at least one digit
         bool valid = !t.isEmpty() && QRegularExpression("^[0-9]+(,[0-9]+)*$").match(t).hasMatch();
         chkDepths->blockSignals(true);
         chkDepths->setChecked(valid);
         chkDepths->blockSignals(false);
-        upd();
-    });
+        upd(); });
     connect(chkGenerator, &QCheckBox::toggled, this, upd);
     connect(chk2gen, &QCheckBox::toggled, this, upd);
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
     connect(chkCubeshape, &QCheckBox::toggled, this, upd);
     connect(chkIgnoreMid, &QCheckBox::toggled, this, upd);
-    connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool /*checked*/) {
+    connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool /*checked*/)
+            {
         upd();
         // Rebuild views from cache — no re-solve needed
         if (!m_rawLines.isEmpty()) {
@@ -948,18 +1066,17 @@ void MainWindow::buildUI()
                 onRankErgoToggled(true);
             else
                 rebuildTerminalView();
-        }
-    });
-    connect(m_angleGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int){ upd(); });
-    connect(m_normalizeAbfGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int){ upd(); });
+        } });
+    connect(m_angleGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int)
+            { upd(); });
+    connect(m_normalizeAbfGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int)
+            { upd(); });
     connect(chkMaxX, &QCheckBox::toggled, this, upd);
     connect(spnMaxX, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkMaxY, &QCheckBox::toggled, this, upd);
     connect(spnMaxY, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkMaxTotal, &QCheckBox::toggled, this, upd);
     connect(spnMaxTotal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
-
-    allOptRow->setToolTip("");
 
     // ── Pack options/command/solve/progress into one hideable wrapper ─────────
     m_topSection = new QWidget();
@@ -1645,18 +1762,8 @@ void MainWindow::updateConstraints()
 
     // txtDepths is always enabled so the user can click into it and activate the option.
     // Style it to look inactive when the checkbox is off.
-    if (isDepthsNow)
-    {
-        txtDepths->setStyleSheet(""); // revert to global style
-    }
-    else
-    {
-        txtDepths->setStyleSheet(QString(
-                                     "QLineEdit { color: %1; background: %2; border-color: %3; }")
-                                     .arg(Theme::textSecondary(m_lightTheme),
-                                          Theme::disabledBg(m_lightTheme),
-                                          Theme::borderDark(m_lightTheme)));
-    }
+    txtDepths->setProperty("inactive", !isDepthsNow);
+    txtDepths->style()->polish(txtDepths);
 
     spnMaxX->setEnabled(chkMaxX->isChecked());
     spnMaxY->setEnabled(chkMaxY->isChecked());
@@ -1678,73 +1785,6 @@ QString MainWindow::buildStyleSheet()
     QString ss = ::buildStyleSheet(m_lightTheme);
     bool l = m_lightTheme;
 
-    // ── Toggle radio-button groups ────────────────────────────────────────────
-    ss += QString(
-        // Container background
-        "QWidget#metricRadio, QWidget#angleRadio, QWidget#normalizeAbfRadio {"
-        "  background: %1;"
-        "  border-radius: 7px;"
-        "}"
-        // All buttons — base reset
-        "QWidget#metricRadio > QPushButton,"
-        "QWidget#angleRadio  > QPushButton,"
-        "QWidget#normalizeAbfRadio > QPushButton {"
-        "  background: transparent;"
-        "  border: none;"
-        "  color: %2;"
-        "  padding: 3px 10px;"
-        "  font-size: 11px;"
-        "  font-weight: 600;"
-        "  border-radius: 0;"
-        "  min-width: 0;"
-        "}"
-        // First button — rounded left end
-        "QWidget#metricRadio > QPushButton#radioBtnFirst,"
-        "QWidget#angleRadio  > QPushButton#radioBtnFirst,"
-        "QWidget#normalizeAbfRadio > QPushButton#radioBtnFirst {"
-        "  border-top-left-radius: 5px;"
-        "  border-bottom-left-radius: 5px;"
-        "}"
-        // Last button — rounded right end
-        "QWidget#metricRadio > QPushButton#radioBtnLast,"
-        "QWidget#angleRadio  > QPushButton#radioBtnLast,"
-        "QWidget#normalizeAbfRadio > QPushButton#radioBtnLast {"
-        "  border-top-right-radius: 5px;"
-        "  border-bottom-right-radius: 5px;"
-        "}"
-        // Checked state — filled chip
-        // Dark: muted blue-indigo (brighter than Apply, not glaring)
-        // Light: soft blue chip with a border, matching the move buttons' accent
-        "QWidget#metricRadio > QPushButton:checked,"
-        "QWidget#angleRadio  > QPushButton:checked,"
-        "QWidget#normalizeAbfRadio > QPushButton:checked {"
-        "  background: %3;"
-        "  color: %4;"
-        "  border-radius: 5px;"
-        "  border: 1px solid %5;"
-        "}"
-        // Hover on unchecked buttons
-        "QWidget#metricRadio > QPushButton:hover:!checked,"
-        "QWidget#angleRadio  > QPushButton:hover:!checked,"
-        "QWidget#normalizeAbfRadio > QPushButton:hover:!checked {"
-        "  background: %6;"
-        "  border-radius: 5px;"
-        "}"
-    ).arg(
-        // %1 container bg
-        l ? "rgba(0,0,0,0.09)"        : "rgba(255,255,255,0.11)",
-        // %2 unselected text
-        l ? "rgba(30,30,55,0.52)"     : "rgba(210,215,240,0.70)",
-        // %3 checked chip bg  — dark: steel-blue at ~55% opacity; light: pale blue
-        l ? "#dce8fa"                 : "rgba(78,112,175,0.55)",
-        // %4 checked chip text
-        l ? "#1e3060"                 : "#ccd6f0",
-        // %5 checked chip border — dark: transparent (colour alone is enough); light: blue ring
-        l ? "#7aa0d4"                 : "transparent",
-        // %6 hover bg
-        l ? "rgba(0,0,0,0.055)"       : "rgba(255,255,255,0.09)"
-    );
-
     return ss;
 }
 
@@ -1759,8 +1799,10 @@ QStringList MainWindow::buildArgList()
     // Slice is the UI default but the solver defaults to TURN_METRIC, so always emit the flag.
     {
         int id = m_metricGroup ? m_metricGroup->checkedId() : 0;
-        if      (id == 0) args << "-es"; // slice
-        else if (id == 2) args << "-ea"; // angle
+        if (id == 0)
+            args << "-es"; // slice
+        else if (id == 2)
+            args << "-ea"; // angle
         // id == 1 (move/turn): no flag — solver default
     }
 
@@ -1790,18 +1832,24 @@ QStringList MainWindow::buildArgList()
     // Angle lock radio: 0=Both, 1=Top, 2=Bottom, 3=None (default — no flag)
     {
         int id = m_angleGroup ? m_angleGroup->checkedId() : 3;
-        if      (id == 0) args << "-nb";
-        else if (id == 1) args << "-nu";
-        else if (id == 2) args << "-nd";
+        if (id == 0)
+            args << "-nb";
+        else if (id == 1)
+            args << "-nu";
+        else if (id == 2)
+            args << "-nd";
         // id == 3 (None): no flag
     }
 
     // Normalize ABF radio: 0=Both, 1=PreABF, 2=PostABF, 3=None (default — no flag)
     {
         int id = m_normalizeAbfGroup ? m_normalizeAbfGroup->checkedId() : 3;
-        if      (id == 0) args << "-ob";
-        else if (id == 1) args << "-oe";
-        else if (id == 2) args << "-os";
+        if (id == 0)
+            args << "-ob";
+        else if (id == 1)
+            args << "-oe";
+        else if (id == 2)
+            args << "-os";
         // id == 3 (None): no flag
     }
 
@@ -1814,7 +1862,6 @@ QStringList MainWindow::buildArgList()
 
     return args;
 }
-
 
 void MainWindow::updateCommand()
 {
@@ -1921,13 +1968,15 @@ void MainWindow::stopSolver()
 // -------------------------------------------------------
 static QString injectSliceIndicatorDisplay(const QString &line, const QString &sliceStr)
 {
-    if (sliceStr.isEmpty()) return line; // no indicator to inject
+    if (sliceStr.isEmpty())
+        return line; // no indicator to inject
 
     int lb = line.lastIndexOf('[');
     QString algPart = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-    QString rest    = lb > 0 ? "  " + line.mid(lb).trimmed() : QString();
+    QString rest = lb > 0 ? "  " + line.mid(lb).trimmed() : QString();
 
-    if (algPart.isEmpty()) return line;
+    if (algPart.isEmpty())
+        return line;
 
     // Letter-first → implicit leading slice is before this token
     if (algPart[0].isLetter())
@@ -1935,8 +1984,10 @@ static QString injectSliceIndicatorDisplay(const QString &line, const QString &s
 
     // Numeric-first: prefer first '/' (raw WCA), fall back to first ' ' (karn)
     int p = algPart.indexOf('/');
-    if (p < 0) p = algPart.indexOf(' ');
-    if (p < 0) return line; // single-move alg — nowhere to inject
+    if (p < 0)
+        p = algPart.indexOf(' ');
+    if (p < 0)
+        return line; // single-move alg — nowhere to inject
 
     return algPart.left(p) + sliceStr + algPart.mid(p + 1) + rest;
 }
@@ -1967,22 +2018,29 @@ void MainWindow::onSolverLine(QString line)
         // (stored for the post-solve normalisation pass).  If cubeshape is off,
         // nothing rating-related happens at all — no injection, no indicators.
         QString sliceStr;
-        if (m_cubeshapeWasActive) {
+        if (m_cubeshapeWasActive)
+        {
             bool initial_top_A = false;
-            if (!m_posHex.isEmpty()) {
+            if (!m_posHex.isEmpty())
+            {
                 QChar first = m_posHex[0];
                 initial_top_A = first.isDigit() || first == 'X' || first == 'Y' || first == 'Z';
             }
             double rawFinal = std::numeric_limits<double>::quiet_NaN();
-            try {
+            try
+            {
                 AlgRating rating = rateAlg(algKey.toStdString(), initial_top_A, 34, 100, 38, 10);
-                if (rating.valid) {
-                    sliceStr  = QString::fromStdString(rating.sliceStart);
-                    rawFinal  = rating.FINAL;
+                if (rating.valid)
+                {
+                    sliceStr = QString::fromStdString(rating.sliceStart);
+                    rawFinal = rating.FINAL;
                 }
-            } catch (...) {}
-            m_sliceIndicators.append(sliceStr);  // "" if rateAlg failed
-            m_rawFinalScores.append(rawFinal);   // NaN if rateAlg failed
+            }
+            catch (...)
+            {
+            }
+            m_sliceIndicators.append(sliceStr); // "" if rateAlg failed
+            m_rawFinalScores.append(rawFinal);  // NaN if rateAlg failed
         }
 
         // ── Step 3: inject indicator into raw display line (cubeshape only) ──
@@ -2017,11 +2075,16 @@ void MainWindow::onSolverLine(QString line)
             // Wipe the "Initializing…" / "searching depth N" / "Flags: …" / "Position: …"
             // lines from both the display and the raw/karn caches.  We keep only entries
             // that are themselves solution lines (contain '[' and ']').
-            auto isSol = [](const QString &s){ return s.contains('[') && s.contains(']'); };
+            auto isSol = [](const QString &s)
+            { return s.contains('[') && s.contains(']'); };
             m_rawLines.erase(std::remove_if(m_rawLines.begin(), m_rawLines.end(),
-                [&](const QString &s){ return !isSol(s); }), m_rawLines.end());
+                                            [&](const QString &s)
+                                            { return !isSol(s); }),
+                             m_rawLines.end());
             m_karnLines.erase(std::remove_if(m_karnLines.begin(), m_karnLines.end(),
-                [&](const QString &s){ return !isSol(s); }), m_karnLines.end());
+                                             [&](const QString &s)
+                                             { return !isSol(s); }),
+                              m_karnLines.end());
             txtOutput->clear();
         }
         btnExpand->setVisible(true);
@@ -2106,39 +2169,47 @@ void MainWindow::onSolverDone(int code)
     // ── Ergonomic rating cache (cubeshape solves only) ────────────────────────
     // Scores were already computed per-line in onSolverLine (one rateAlg call each).
     // Here we only normalise and sort — no rateAlg calls.
-    if (m_cubeshapeWasActive && !m_rawFinalScores.isEmpty()) {
+    if (m_cubeshapeWasActive && !m_rawFinalScores.isEmpty())
+    {
         // Collect valid (non-NaN) scores for median computation
         std::vector<double> valid;
         valid.reserve(m_rawFinalScores.size());
         for (double s : m_rawFinalScores)
-            if (!std::isnan(s)) valid.push_back(s);
+            if (!std::isnan(s))
+                valid.push_back(s);
 
         // Median-normalise
         double median = 0.0;
-        if (!valid.empty()) {
+        if (!valid.empty())
+        {
             std::sort(valid.begin(), valid.end());
             size_t nv = valid.size();
             median = (nv % 2 == 0)
-                     ? (valid[nv/2-1] + valid[nv/2]) / 2.0
-                     : valid[nv/2];
+                         ? (valid[nv / 2 - 1] + valid[nv / 2]) / 2.0
+                         : valid[nv / 2];
         }
 
-        QVector<QPair<int,double>> indexScores;
+        QVector<QPair<int, double>> indexScores;
         indexScores.reserve(m_rawFinalScores.size());
-        for (int i = 0; i < m_rawFinalScores.size(); i++) {
+        for (int i = 0; i < m_rawFinalScores.size(); i++)
+        {
             double sc = m_rawFinalScores[i];
             indexScores.append({i, std::isnan(sc) ? sc : sc - median});
         }
 
         // Sort highest first, NaN last
         std::stable_sort(indexScores.begin(), indexScores.end(),
-            [](const QPair<int,double> &a, const QPair<int,double> &b){
-                bool aN = std::isnan(a.second), bN = std::isnan(b.second);
-                if (aN && bN) return false;
-                if (aN) return false;
-                if (bN) return true;
-                return a.second > b.second;
-            });
+                         [](const QPair<int, double> &a, const QPair<int, double> &b)
+                         {
+                             bool aN = std::isnan(a.second), bN = std::isnan(b.second);
+                             if (aN && bN)
+                                 return false;
+                             if (aN)
+                                 return false;
+                             if (bN)
+                                 return true;
+                             return a.second > b.second;
+                         });
         m_cachedRatedOrder = indexScores;
         m_ratingsValid = true;
     }
@@ -2226,15 +2297,18 @@ void MainWindow::rebuildTable()
 
     auto parseCounts = [](const QString &line, int &moves, int &slices)
     {
-        moves = 0; slices = 0;
+        moves = 0;
+        slices = 0;
         int lb = line.lastIndexOf('[');
         int rb = line.lastIndexOf(']');
-        if (lb < 0 || rb < 0) return;
+        if (lb < 0 || rb < 0)
+            return;
         QString bracket = line.mid(lb + 1, rb - lb - 1);
         QStringList parts = bracket.split('|');
-        if (parts.size() >= 2) {
+        if (parts.size() >= 2)
+        {
             slices = parts[0].trimmed().toInt();
-            moves  = parts[1].trimmed().toInt();
+            moves = parts[1].trimmed().toInt();
         }
     };
 
@@ -2244,17 +2318,26 @@ void MainWindow::rebuildTable()
         return lb > 0 ? line.left(lb).trimmed() : line.trimmed();
     };
 
-    struct Row { QString alg; int moves; int slices; double ergo; };
+    struct Row
+    {
+        QString alg;
+        int moves;
+        int slices;
+        double ergo;
+    };
     QVector<Row> rows;
 
     bool useKarn = chkKarnotation->isChecked();
     const QStringList &displayLines = useKarn ? m_karnSolutionLines : m_solutionLines;
 
-    if (showErgo && m_ratingsValid) {
+    if (showErgo && m_ratingsValid)
+    {
         // Use the pre-computed cache — no rateAlg calls here.
         // m_cachedRatedOrder is already sorted highest-first.
-        for (auto &[idx, score] : m_cachedRatedOrder) {
-            if (idx < 0 || idx >= displayLines.size()) continue;
+        for (auto &[idx, score] : m_cachedRatedOrder)
+        {
+            if (idx < 0 || idx >= displayLines.size())
+                continue;
             const QString &dline = displayLines[idx];
             int mv, sl;
             parseCounts(dline, mv, sl);
@@ -2262,9 +2345,12 @@ void MainWindow::rebuildTable()
             QString alg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
             rows.append({alg, mv, sl, score});
         }
-    } else {
+    }
+    else
+    {
         // No ergo rating — build rows from display lines in arrival order
-        for (const QString &line : std::as_const(displayLines)) {
+        for (const QString &line : std::as_const(displayLines))
+        {
             int mv, sl;
             parseCounts(line, mv, sl);
             int lb = line.lastIndexOf('[');
@@ -2275,29 +2361,32 @@ void MainWindow::rebuildTable()
 
     // Sort: ergo rank already baked into row order from cache; for non-ergo sort by moves/slices
     if (!(ergo && showErgo && m_ratingsValid))
-        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
+        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b)
+                         {
             if (a.slices != b.slices) return a.slices < b.slices;
-            return a.moves < b.moves;
-        });
+            return a.moves < b.moves; });
 
     const QColor rowA = QColor(Theme::rowAltDark(m_lightTheme));
     const QColor rowB = m_lightTheme ? rowA : QColor(Theme::rowAltLight(m_lightTheme));
-    const QColor textCol    = QColor(Theme::textSolution(m_lightTheme));
-    const QColor metaCol    = QColor(Theme::textSecondary(m_lightTheme));
-    const int rowH    = m_expanded ? 36 : 24;
+    const QColor textCol = QColor(Theme::textSolution(m_lightTheme));
+    const QColor metaCol = QColor(Theme::textSecondary(m_lightTheme));
+    const int rowH = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
     m_solutionTable->setRowCount(rows.size());
-    for (int i = 0; i < rows.size(); i++) {
+    for (int i = 0; i < rows.size(); i++)
+    {
         const Row &r = rows[i];
         QColor bg = (i % 2 == 0) ? rowA : rowB;
 
-        auto cell = [&](int col, const QString &txt, bool isMeta = false) {
+        auto cell = [&](int col, const QString &txt, bool isMeta = false)
+        {
             QTableWidgetItem *item = new QTableWidgetItem(txt);
             item->setBackground(bg);
             item->setForeground(isMeta ? metaCol : textCol);
-            item->setFlags(Qt::ItemIsEnabled);  // not selectable
-            if (m_expanded) {
+            item->setFlags(Qt::ItemIsEnabled); // not selectable
+            if (m_expanded)
+            {
                 QFont f = item->font();
                 f.setPointSize(fontSize);
                 item->setFont(f);
@@ -2326,25 +2415,29 @@ void MainWindow::rebuildTable()
         algLabel->setCursor(Qt::ArrowCursor);
         algLabel->setContentsMargins(4, 0, 4, 0);
         algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
-            .arg(bg.name(),
-                 textCol.name(),
-                 m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
+                                    .arg(bg.name(),
+                                         textCol.name(),
+                                         m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
         // Install event filter to show IBeam only when hovering over the text itself
         algLabel->installEventFilter(this);
         m_solutionTable->setCellWidget(i, 1, algLabel);
 
         cell(2, QString::number(r.moves), true);
         cell(3, QString::number(r.slices), true);
-        if (showErgo) {
-            if (std::isnan(r.ergo)) {
+        if (showErgo)
+        {
+            if (std::isnan(r.ergo))
+            {
                 // Rating failed for this alg — show a red warning icon instead of a score
                 auto *warn = new QLabel("⚠");
                 warn->setAlignment(Qt::AlignCenter);
                 warn->setStyleSheet(QString(
-                    "QLabel { color: #cc2020; background: %1; font-size: 14px; }")
-                    .arg(bg.name()));
+                                        "QLabel { color: #cc2020; background: %1; font-size: 14px; }")
+                                        .arg(bg.name()));
                 m_solutionTable->setCellWidget(i, 4, warn);
-            } else {
+            }
+            else
+            {
                 cell(4, QString::number(r.ergo, 'f', 1), true);
             }
         }
@@ -2436,7 +2529,11 @@ void MainWindow::onRankErgoToggled(bool checked)
     int solIdx = 0;
     for (auto &[idx, score] : m_cachedRatedOrder)
     {
-        if (idx < 0 || idx >= displaySols.size()) { solIdx++; continue; }
+        if (idx < 0 || idx >= displaySols.size())
+        {
+            solIdx++;
+            continue;
+        }
         const QString &dline = displaySols[idx];
         int lb = dline.lastIndexOf('[');
         QString displayAlg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
@@ -2447,10 +2544,13 @@ void MainWindow::onRankErgoToggled(bool checked)
         QString col = m_lightTheme
                           ? (isAlt ? Theme::solutionAltLight(true) : Theme::solutionPrimary(true))
                           : (isAlt ? Theme::solutionAltLight(false) : Theme::textSolution(false));
-        if (std::isnan(score)) {
+        if (std::isnan(score))
+        {
             QString display = QString("%1  (⚠)").arg(displayLine);
             insertLine(display, "#cc2020", m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
-        } else {
+        }
+        else
+        {
             QString display = QString("%1  (%2)").arg(displayLine).arg(score, 0, 'f', 2);
             insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         }
@@ -2537,7 +2637,7 @@ void MainWindow::showAboutModal()
     body->setTextFormat(Qt::RichText);
     body->setStyleSheet("background:transparent;");
     QString lnk = Theme::linkColor();
-        QString aboutBody = QString(
+    QString aboutBody = QString(
                             "<span style='color:%1;font-size:12px;line-height:1.7;'>"
                             "This program stemmed from the optimal Square-1 solver by "
                             "<a href='https://www.jaapsch.net/puzzles/' style='color:%3;'>Jaap Scherphuis</a>."
@@ -2881,19 +2981,23 @@ void MainWindow::showOldDocsPopup()
     overlay->installEventFilter(f); // watches overlay for click-outside
 }
 
-QString MainWindow::convertLine(const QString& rawLine)
+QString MainWindow::convertLine(const QString &rawLine)
 {
     int lb = rawLine.lastIndexOf('[');
     int rb = rawLine.lastIndexOf(']');
-    if (lb < 0 || rb < 0) return rawLine;
+    if (lb < 0 || rb < 0)
+        return rawLine;
 
-    QString algPart     = rawLine.left(lb).trimmed();
+    QString algPart = rawLine.left(lb).trimmed();
     QString bracketPart = rawLine.mid(lb).trimmed();
 
     std::string converted;
-    if (m_smartKarn && !m_cubeshapeWasActive) {
+    if (m_smartKarn && !m_cubeshapeWasActive)
+    {
         converted = karnifycs(algPart.toStdString(), m_posHex.toStdString(), chkGenerator->isChecked());
-    } else {
+    }
+    else
+    {
         converted = karnify(algPart.toStdString());
     }
     return QString::fromStdString(converted) + "  " + bracketPart;
@@ -2928,7 +3032,7 @@ void MainWindow::applyTheme()
 
     // Input bar background
     if (m_inputBarOuter)
-    m_inputBarOuter->setStyleSheet("");
+        m_inputBarOuter->setStyleSheet("");
     cubeWidget->setLightTheme(m_lightTheme);
     FadingTooltip::setLightTheme(m_lightTheme, this);
 }
@@ -3129,7 +3233,8 @@ void MainWindow::showSettingsModal()
                          "Applies different karn rules depending on whether the puzzle\n"
                          "is in cubeshape at each move.");
     chkSmart->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
-    connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked) {
+    connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked)
+            {
         m_smartKarn = checked;
         if (!m_rawLines.isEmpty()) {
             // Rebuild karn cache with new mode.
@@ -3158,8 +3263,7 @@ void MainWindow::showSettingsModal()
                 else if (chkRankErgo->isChecked()) onRankErgoToggled(true);
                 else rebuildTerminalView();
             }
-        }
-    });
+        } });
     lay->addWidget(chkSmart);
 
     QLabel *hint = new QLabel("More settings coming soon.");
@@ -3354,9 +3458,11 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         return true;
 
     // ── Pointing hand only over checkbox indicator+text, arrow elsewhere ──────
-    if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove) {
+    if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove)
+    {
         QWidget *under = QApplication::widgetAt(QCursor::pos());
-        if (QCheckBox *cb = qobject_cast<QCheckBox*>(under)) {
+        if (QCheckBox *cb = qobject_cast<QCheckBox *>(under))
+        {
             QPoint localPos = cb->mapFromGlobal(QCursor::pos());
             QStyleOptionButton opt;
             opt.initFrom(cb);
@@ -3364,25 +3470,33 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             QFontMetrics fm(cb->font());
             QRect textRect(indRect.right() + 6, 0, fm.horizontalAdvance(cb->text()), cb->height());
             QRect activeRect = indRect.united(textRect);
-            if (activeRect.contains(localPos)) {
+            if (activeRect.contains(localPos))
+            {
                 if (cb != chkDepths)
                     cb->setCursor(Qt::PointingHandCursor);
                 if (!cb->toolTip().isEmpty())
                     FadingTooltip::arm(cb->toolTip(), QCursor::pos(), this);
-            } else {
+            }
+            else
+            {
                 cb->setCursor(Qt::ArrowCursor);
                 FadingTooltip::dismiss(this);
             }
-        } else {
+        }
+        else
+        {
             FadingTooltip::dismiss(this);
         }
     }
 
     // ── IBeam cursor only over actual label text ──────────────────────────────
-    if (event->type() == QEvent::MouseMove) {
-        if (QLabel *lbl = qobject_cast<QLabel*>(watched)) {
-            if (lbl->parent() && qobject_cast<QTableWidget*>(lbl->parent()->parent())) {
-                QMouseEvent *me = static_cast<QMouseEvent*>(event);
+    if (event->type() == QEvent::MouseMove)
+    {
+        if (QLabel *lbl = qobject_cast<QLabel *>(watched))
+        {
+            if (lbl->parent() && qobject_cast<QTableWidget *>(lbl->parent()->parent()))
+            {
+                QMouseEvent *me = static_cast<QMouseEvent *>(event);
                 // Check if the mouse is within the bounding rect of the actual text
                 QFontMetrics fm(lbl->font());
                 QRect textRect = fm.boundingRect(
@@ -3425,12 +3539,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── Ctrl+Z / Ctrl+Y — undo / redo (work from any widget, including inputs) ─
     if (ke->modifiers() == Qt::ControlModifier)
     {
-        if (ke->key() == Qt::Key_Z) {
-            if (!m_undoStack.isEmpty()) btnUndo->click();
+        if (ke->key() == Qt::Key_Z)
+        {
+            if (!m_undoStack.isEmpty())
+                btnUndo->click();
             return true;
         }
-        if (ke->key() == Qt::Key_Y) {
-            if (!m_redoStack.isEmpty()) btnRedo->click();
+        if (ke->key() == Qt::Key_Y)
+        {
+            if (!m_redoStack.isEmpty())
+                btnRedo->click();
             return true;
         }
     }
@@ -3441,8 +3559,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         return QMainWindow::eventFilter(watched, event);
 
     // ── Esc from m_mainInput — reset cube without stealing focus ─────────────
-    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput)
-        && ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier)
+    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput) && ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier)
     {
         m_undoStack.clear();
         m_redoStack.clear();
@@ -3456,8 +3573,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── Enter / Shift+Enter in m_mainInput ───────────────────────────────────
     // Enter        = apply alg/scramble from solved state
     // Shift+Enter  = do nothing (consumed)
-    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput)
-        && ke->key() == Qt::Key_Return)
+    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput) && ke->key() == Qt::Key_Return)
     {
         if (ke->modifiers() & Qt::ShiftModifier)
             return true; // Shift+Enter: swallow, no action

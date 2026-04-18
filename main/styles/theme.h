@@ -149,6 +149,12 @@ namespace Theme {
     inline QString menuItemSelected()              { return "#3a3a5e"; }
     inline QString menuItemChecked()               { return "#2db570"; }
     inline QString linkColor()                     { return "#7abfe8"; }
+    inline QString radioPillBg(bool light = false)           { return light ? "rgba(0,0,0,0.09)"    : "rgba(255,255,255,0.11)"; }
+    inline QString radioBtnText(bool light = false)          { return light ? "rgba(30,30,55,0.52)"  : "rgba(210,215,240,0.70)"; }
+    inline QString radioBtnCheckedBg(bool light = false)     { return light ? "#dce8fa"              : "rgba(78,112,175,0.55)"; }
+    inline QString radioBtnCheckedText(bool light = false)   { return light ? "#1e3060"              : "#ccd6f0"; }
+    inline QString radioBtnCheckedBorder(bool light = false) { return light ? "#7aa0d4"              : "transparent"; }
+    inline QString radioBtnHoverBg(bool light = false)       { return light ? "rgba(0,0,0,0.055)"   : "rgba(255,255,255,0.09)"; }
     inline QString stopSolveDisabledBg()           { return "#333333"; }
     inline QString stopSolveDisabledBorder()       { return "#444444"; }
     inline QString stopSolveDisabledText()         { return "#666666"; }

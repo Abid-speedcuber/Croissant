@@ -147,6 +147,12 @@ QString buildStyleSheet(bool lightTheme) {
     variables["--stop-solve-disabled-text"]   = Theme::stopSolveDisabledText();
 
     // ========== SIDEBAR / MODAL COLORS ==========
+    variables["--radio-pill-bg"]            = color(Theme::radioPillBg(false),           Theme::radioPillBg(true));
+    variables["--radio-btn-text"]           = color(Theme::radioBtnText(false),          Theme::radioBtnText(true));
+    variables["--radio-btn-checked-bg"]     = color(Theme::radioBtnCheckedBg(false),     Theme::radioBtnCheckedBg(true));
+    variables["--radio-btn-checked-text"]   = color(Theme::radioBtnCheckedText(false),   Theme::radioBtnCheckedText(true));
+    variables["--radio-btn-checked-border"] = color(Theme::radioBtnCheckedBorder(false), Theme::radioBtnCheckedBorder(true));
+    variables["--radio-btn-hover-bg"]       = color(Theme::radioBtnHoverBg(false),       Theme::radioBtnHoverBg(true));
     variables["--sidebar-bg"] = color(Theme::sidebarBg(false), Theme::sidebarBg(true));
     variables["--sidebar-border"] = color(Theme::sidebarBorder(false), Theme::sidebarBorder(true));
     variables["--modal-bg"] = color(Theme::modalBg(false), Theme::modalBg(true));
