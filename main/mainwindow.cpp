@@ -19,6 +19,7 @@
 #include <QSpinBox>
 #include <QProgressBar>
 #include <QGroupBox>
+#include <QButtonGroup>
 #include <QClipboard>
 #include <QSet>
 #include <QProcess>
@@ -103,13 +104,14 @@ public:
 // ============================================================
 class FadingTooltip : public QWidget {
 public:
-    // Call on MouseMove over a checkbox active area: arms the timer.
-    // Call with empty text or from outside active area: dismisses.
     static void arm(const QString &text, const QPoint &globalPos, QWidget *parent) {
         inst(parent).armImpl(text, globalPos);
     }
     static void dismiss(QWidget *parent) {
         inst(parent).dismissImpl();
+    }
+    static void setLightTheme(bool light, QWidget *parent) {
+        inst(parent).m_lightTheme = light;
     }
 
 private:
@@ -148,59 +150,88 @@ private:
         return *s_inst;
     }
 
+    void stopAnim() {
+        if (m_anim) { m_anim->stop(); m_anim = nullptr; }
+    }
+
     void armImpl(const QString &text, const QPoint &globalPos) {
-        // If already showing the same text, do nothing
-        if (isVisible() && m_currentText == text) return;
         m_pendingText = text;
         m_pendingPos  = globalPos;
-        if (!m_hoverTimer->isActive())
-            m_hoverTimer->start(350);
+        // Same text already visible — nothing to do
+        if (isVisible() && m_currentText == text) return;
+        // Different text already visible (mouse moved between options):
+        // skip delay, update immediately
+        if (isVisible()) {
+            stopAnim();
+            m_hoverTimer->stop();
+            showNow();
+            return;
+        }
+        // Not yet visible: always restart the timer so the position updates
+        // as the user moves, and we always show from the correct final spot
+        m_hoverTimer->start(200);
     }
 
     void dismissImpl() {
         m_hoverTimer->stop();
         m_closeTimer->stop();
         if (!isVisible()) return;
+        stopAnim();
+        m_currentText.clear();
         QPropertyAnimation *anim = new QPropertyAnimation(m_effect, "opacity", this);
-        anim->setDuration(200);
+        m_anim = anim;
+        anim->setDuration(150);
         anim->setStartValue(m_effect->opacity());
         anim->setEndValue(0.0);
         anim->setEasingCurve(QEasingCurve::InCubic);
-        connect(anim, &QPropertyAnimation::finished, this, &QWidget::hide);
+        connect(anim, &QPropertyAnimation::finished, this, [this, anim]{
+            if (m_anim == anim) { hide(); m_anim = nullptr; }
+        });
         anim->start(QAbstractAnimation::DeleteWhenStopped);
-        m_currentText.clear();
+    }
+
+    void applyThemeStyle() {
+        // Light: white card, subtle border, near-black text
+        // Dark:  existing theme colours
+        const bool L = m_lightTheme;
+        m_cachedBg     = L ? "#ffffff"  : Theme::fadingTooltipBg();
+        m_cachedBorder = L ? "#c4c8dc"  : Theme::fadingTooltipBorder();
+        QString textCol = L ? "#2a2a3a" : Theme::fadingTooltipText();
+        m_label->setStyleSheet(QString(
+            "QLabel { background: transparent; color: %1; font-size: 11px; }").arg(textCol));
+        setStyleSheet(QString(
+            "FadingTooltip { background: %1; border: 1px solid %2; border-radius: 5px; }")
+            .arg(m_cachedBg, m_cachedBorder));
+        update();
     }
 
     void showNow() {
         m_currentText = m_pendingText;
-        // Apply theme-matching style
-        m_label->setStyleSheet(QString(
-            "QLabel { background: transparent; color: %1; font-size: 11px; }")
-            .arg(Theme::fadingTooltipText()));
-        setStyleSheet(QString(
-            "FadingTooltip { background: %1; border: 1px solid %2; border-radius: 5px; }")
-            .arg(Theme::fadingTooltipBg(), Theme::fadingTooltipBorder()));
+        applyThemeStyle();
         m_label->setText(m_currentText);
         m_label->adjustSize();
         adjustSize();
 
-        // Position relative to parent window
         QWidget *win = parentWidget();
         QPoint local = win->mapFromGlobal(m_pendingPos) + QPoint(14, 18);
-        // Keep inside window bounds
         local.setX(qMin(local.x(), win->width()  - width()  - 8));
         local.setY(qMin(local.y(), win->height() - height() - 8));
         move(local);
         raise();
         show();
 
-        // Fade in
-        m_effect->setOpacity(0.0);
+        // Fade in from current opacity so switching tooltips never resets to 0
+        stopAnim();
+        double startOpacity = m_effect->opacity();
         QPropertyAnimation *anim = new QPropertyAnimation(m_effect, "opacity", this);
-        anim->setDuration(320);
-        anim->setStartValue(0.0);
+        m_anim = anim;
+        anim->setDuration(static_cast<int>(160 * (1.0 - startOpacity)));
+        anim->setStartValue(startOpacity);
         anim->setEndValue(1.0);
         anim->setEasingCurve(QEasingCurve::OutCubic);
+        connect(anim, &QPropertyAnimation::finished, this, [this, anim]{
+            if (m_anim == anim) m_anim = nullptr;
+        });
         anim->start(QAbstractAnimation::DeleteWhenStopped);
 
         m_closeTimer->start(8000);
@@ -209,18 +240,22 @@ private:
     void paintEvent(QPaintEvent *) override {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
-        p.setBrush(QColor(Theme::fadingTooltipBg()));
-        p.setPen(QColor(Theme::fadingTooltipBorder()));
+        p.setBrush(QColor(m_cachedBg.isEmpty()     ? Theme::fadingTooltipBg()     : m_cachedBg));
+        p.setPen(QColor(m_cachedBorder.isEmpty()   ? Theme::fadingTooltipBorder() : m_cachedBorder));
         p.drawRoundedRect(rect().adjusted(0,0,-1,-1), 5, 5);
     }
 
-    QLabel                 *m_label{nullptr};
-    QGraphicsOpacityEffect *m_effect{nullptr};
-    QTimer                 *m_hoverTimer{nullptr};
-    QTimer                 *m_closeTimer{nullptr};
-    QString                 m_pendingText;
-    QPoint                  m_pendingPos;
-    QString                 m_currentText;
+    QLabel                  *m_label{nullptr};
+    QGraphicsOpacityEffect  *m_effect{nullptr};
+    QTimer                  *m_hoverTimer{nullptr};
+    QTimer                  *m_closeTimer{nullptr};
+    QPropertyAnimation      *m_anim{nullptr};
+    QString                  m_pendingText;
+    QPoint                   m_pendingPos;
+    QString                  m_currentText;
+    QString                  m_cachedBg;
+    QString                  m_cachedBorder;
+    bool                     m_lightTheme{false};
 };
 
 // ============================================================
@@ -663,8 +698,51 @@ void MainWindow::buildUI()
     grid->setVerticalSpacing(2);
 
     // ── Widgets ──────────────────────────────────────────────────────────────
-    chkSlice = new TightCheckBox("Slice metric");
-    chkSlice->setToolTip("If selected, only slices count as \"moves\", else layer turns count too.");
+    // ── Metric radio: Slice (default) | Move | Angle ─────────────────────────
+    auto makeRadioRow = [this](const QString &labelText, const QStringList &opts,
+                               int defaultId, QButtonGroup *&groupOut) -> QWidget*
+    {
+        QWidget *row = new QWidget();
+        QHBoxLayout *rLay = new QHBoxLayout(row);
+        rLay->setContentsMargins(0, 2, 0, 2);
+        rLay->setSpacing(6);
+
+        QLabel *lbl = new QLabel(labelText);
+        rLay->addWidget(lbl);
+        rLay->addStretch();
+
+        QWidget *pill = new QWidget();
+        pill->setAttribute(Qt::WA_StyledBackground, true);
+        QHBoxLayout *pLay = new QHBoxLayout(pill);
+        pLay->setContentsMargins(2, 2, 2, 2);
+        pLay->setSpacing(0);
+
+        groupOut = new QButtonGroup(this);
+        groupOut->setExclusive(true);
+        for (int i = 0; i < opts.size(); i++) {
+            QPushButton *btn = new QPushButton(opts[i]);
+            btn->setCheckable(true);
+            btn->setChecked(i == defaultId);
+            btn->setCursor(Qt::PointingHandCursor);
+            // object name drives the corner-radius QSS
+            if (i == 0)                btn->setObjectName("radioBtnFirst");
+            else if (i == opts.size()-1) btn->setObjectName("radioBtnLast");
+            else                         btn->setObjectName("radioBtnMid");
+            groupOut->addButton(btn, i);
+            pLay->addWidget(btn);
+        }
+        rLay->addWidget(pill);
+        return row;
+    };
+
+    QWidget *metricRadioRow = makeRadioRow("Metric", {"Slice","Move","Angle"}, 0, m_metricGroup);
+    metricRadioRow->setToolTip("Choose how move length is counted:\n"
+                               "Slice – only slices count\n"
+                               "Move  – layer turns count too\n"
+                               "Angle – turns weighted by angle amount");
+    // The pill is the last direct QWidget child that is not a QLabel
+    for (QWidget *ch : metricRadioRow->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
+        if (!qobject_cast<QLabel*>(ch)) { ch->setObjectName("metricRadio"); break; }
 
     chkAllOptimal = new TightCheckBox("All optimal");
     chkAllOptimal->setToolTip("Find all the optimal solutions, not just the first one.");
@@ -726,10 +804,26 @@ void MainWindow::buildUI()
     chkKarnotation = new TightCheckBox("Karnotation output");
     chkKarnotation->setToolTip("Display solutions in karnotation instead of WCA notation.");
 
-    chkSpecificAngle = new TightCheckBox("Generate alg from this specific angle");
-    chkSpecificAngle->setObjectName("chkSpecificAngle");
-    chkSpecificAngle->setToolTip("Generate algs from this angle and this angle only.\n"
-                                 "Essentially restricting the move before the first slice to 1 moves only.");
+    QWidget *angleRadioRow = makeRadioRow("Lock layer angle on preabf",
+                                          {"Both","Top","Bottom","None"}, 3, m_angleGroup);
+    angleRadioRow->setToolTip("Lock the pre-ABF angle move to ±1 (or 0).\n"
+                              "Both   – restricts top and bottom\n"
+                              "Top    – restricts top layer only\n"
+                              "Bottom – restricts bottom layer only\n"
+                              "None   – no restriction (default)");
+    for (QWidget *ch : angleRadioRow->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
+        if (!qobject_cast<QLabel*>(ch)) { ch->setObjectName("angleRadio"); break; }
+
+    QWidget *normalizeAbfRow = makeRadioRow("Normalize ABF",
+                                            {"Both","PreABF","PostABF","None"}, 3, m_normalizeAbfGroup);
+    // TODO: update this tooltip text with a precise description of what normalizing does
+    normalizeAbfRow->setToolTip("Control which AUF moves are normalized in the output.\n"
+                                "PreABF  – normalize the move before the first slice\n"
+                                "PostABF – normalize the move after the last slice\n"
+                                "Both    – normalize both ends\n"
+                                "None    – no normalization (default)");
+    for (QWidget *ch : normalizeAbfRow->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
+        if (!qobject_cast<QLabel*>(ch)) { ch->setObjectName("normalizeAbfRadio"); break; }
 
     chkMaxX = new TightCheckBox("Max top turn:");
     chkMaxX->setToolTip("Limit the maximum top-layer turn in either direction (0–6).\n"
@@ -766,7 +860,6 @@ void MainWindow::buildUI()
                             "e.g. if you put \"6\", (3,-3) is allowed in algs (3+3<=6),\n"
                             "but (-5,-2) is not (5+2>6).");
 
-    chkSlice->setChecked(true);
     chkKarnotation->setChecked(true);
 
     // ── Grid layout ──────────────────────────────────────────────────────────
@@ -784,7 +877,7 @@ void MainWindow::buildUI()
     };
 
     int row = 0;
-    grid->addWidget(wrapCb(chkSlice), row++, 0, 1, 2);
+    grid->addWidget(metricRadioRow, row++, 0, 1, 2);
     grid->addWidget(allOptRow, row++, 0, 1, 2);
     grid->addWidget(chkDepths, row, 0);
     grid->addWidget(txtDepths, row++, 1);
@@ -793,7 +886,8 @@ void MainWindow::buildUI()
     grid->addWidget(wrapCb(chkPseudo2gen), row++, 0, 1, 2);
     grid->addWidget(wrapCb(chkCubeshape), row++, 0, 1, 2);
     grid->addWidget(wrapCb(chkIgnoreMid), row++, 0, 1, 2);
-    grid->addWidget(wrapCb(chkSpecificAngle), row++, 0, 1, 2);
+    grid->addWidget(angleRadioRow, row++, 0, 1, 2);
+    grid->addWidget(normalizeAbfRow, row++, 0, 1, 2);
     grid->addWidget(chkMaxX, row, 0);
     grid->addWidget(spnMaxX, row++, 1);
     grid->addWidget(chkMaxY, row, 0);
@@ -819,7 +913,7 @@ void MainWindow::buildUI()
     auto upd = [this]
     { updateConstraints(); updateCommand(); };
 
-    connect(chkSlice, &QCheckBox::toggled, this, upd);
+    connect(m_metricGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int){ upd(); });
     connect(chkAllOptimal, &QCheckBox::toggled, this, upd);
     connect(spnSuboptimal, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkDepths, &QCheckBox::clicked, this, [this](bool) {
@@ -856,7 +950,8 @@ void MainWindow::buildUI()
                 rebuildTerminalView();
         }
     });
-    connect(chkSpecificAngle, &QCheckBox::toggled, this, upd);
+    connect(m_angleGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int){ upd(); });
+    connect(m_normalizeAbfGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int){ upd(); });
     connect(chkMaxX, &QCheckBox::toggled, this, upd);
     connect(spnMaxX, QOverload<int>::of(&QSpinBox::valueChanged), this, upd);
     connect(chkMaxY, &QCheckBox::toggled, this, upd);
@@ -1580,7 +1675,77 @@ void MainWindow::buildStyles()
 
 QString MainWindow::buildStyleSheet()
 {
-    return ::buildStyleSheet(m_lightTheme);
+    QString ss = ::buildStyleSheet(m_lightTheme);
+    bool l = m_lightTheme;
+
+    // ── Toggle radio-button groups ────────────────────────────────────────────
+    ss += QString(
+        // Container background
+        "QWidget#metricRadio, QWidget#angleRadio, QWidget#normalizeAbfRadio {"
+        "  background: %1;"
+        "  border-radius: 7px;"
+        "}"
+        // All buttons — base reset
+        "QWidget#metricRadio > QPushButton,"
+        "QWidget#angleRadio  > QPushButton,"
+        "QWidget#normalizeAbfRadio > QPushButton {"
+        "  background: transparent;"
+        "  border: none;"
+        "  color: %2;"
+        "  padding: 3px 10px;"
+        "  font-size: 11px;"
+        "  font-weight: 600;"
+        "  border-radius: 0;"
+        "  min-width: 0;"
+        "}"
+        // First button — rounded left end
+        "QWidget#metricRadio > QPushButton#radioBtnFirst,"
+        "QWidget#angleRadio  > QPushButton#radioBtnFirst,"
+        "QWidget#normalizeAbfRadio > QPushButton#radioBtnFirst {"
+        "  border-top-left-radius: 5px;"
+        "  border-bottom-left-radius: 5px;"
+        "}"
+        // Last button — rounded right end
+        "QWidget#metricRadio > QPushButton#radioBtnLast,"
+        "QWidget#angleRadio  > QPushButton#radioBtnLast,"
+        "QWidget#normalizeAbfRadio > QPushButton#radioBtnLast {"
+        "  border-top-right-radius: 5px;"
+        "  border-bottom-right-radius: 5px;"
+        "}"
+        // Checked state — filled chip
+        // Dark: muted blue-indigo (brighter than Apply, not glaring)
+        // Light: soft blue chip with a border, matching the move buttons' accent
+        "QWidget#metricRadio > QPushButton:checked,"
+        "QWidget#angleRadio  > QPushButton:checked,"
+        "QWidget#normalizeAbfRadio > QPushButton:checked {"
+        "  background: %3;"
+        "  color: %4;"
+        "  border-radius: 5px;"
+        "  border: 1px solid %5;"
+        "}"
+        // Hover on unchecked buttons
+        "QWidget#metricRadio > QPushButton:hover:!checked,"
+        "QWidget#angleRadio  > QPushButton:hover:!checked,"
+        "QWidget#normalizeAbfRadio > QPushButton:hover:!checked {"
+        "  background: %6;"
+        "  border-radius: 5px;"
+        "}"
+    ).arg(
+        // %1 container bg
+        l ? "rgba(0,0,0,0.09)"        : "rgba(255,255,255,0.11)",
+        // %2 unselected text
+        l ? "rgba(30,30,55,0.52)"     : "rgba(210,215,240,0.70)",
+        // %3 checked chip bg  — dark: steel-blue at ~55% opacity; light: pale blue
+        l ? "#dce8fa"                 : "rgba(78,112,175,0.55)",
+        // %4 checked chip text
+        l ? "#1e3060"                 : "#ccd6f0",
+        // %5 checked chip border — dark: transparent (colour alone is enough); light: blue ring
+        l ? "#7aa0d4"                 : "transparent",
+        // %6 hover bg
+        l ? "rgba(0,0,0,0.055)"       : "rgba(255,255,255,0.09)"
+    );
+
+    return ss;
 }
 
 // -------------------------------------------------------
@@ -1590,8 +1755,14 @@ QStringList MainWindow::buildArgList()
 {
     QStringList args;
 
-    if (chkSlice->isChecked())
-        args << "-w";
+    // Metric radio: 0=Slice (default/UI), 1=Move (solver default), 2=Angle
+    // Slice is the UI default but the solver defaults to TURN_METRIC, so always emit the flag.
+    {
+        int id = m_metricGroup ? m_metricGroup->checkedId() : 0;
+        if      (id == 0) args << "-es"; // slice
+        else if (id == 2) args << "-ea"; // angle
+        // id == 1 (move/turn): no flag — solver default
+    }
 
     if (chkAllOptimal->isChecked())
     {
@@ -1616,8 +1787,23 @@ QStringList MainWindow::buildArgList()
         args << "-c";
     if (chkIgnoreMid->isChecked())
         args << "-m";
-    if (chkSpecificAngle->isChecked())
-        args << "-n";
+    // Angle lock radio: 0=Both, 1=Top, 2=Bottom, 3=None (default — no flag)
+    {
+        int id = m_angleGroup ? m_angleGroup->checkedId() : 3;
+        if      (id == 0) args << "-nb";
+        else if (id == 1) args << "-nu";
+        else if (id == 2) args << "-nd";
+        // id == 3 (None): no flag
+    }
+
+    // Normalize ABF radio: 0=Both, 1=PreABF, 2=PostABF, 3=None (default — no flag)
+    {
+        int id = m_normalizeAbfGroup ? m_normalizeAbfGroup->checkedId() : 3;
+        if      (id == 0) args << "-ob";
+        else if (id == 1) args << "-oe";
+        else if (id == 2) args << "-os";
+        // id == 3 (None): no flag
+    }
 
     if (chkMaxX->isChecked())
         args << QString("-X%1").arg(spnMaxX->value());
@@ -1828,6 +2014,15 @@ void MainWindow::onSolverLine(QString line)
         {
             m_hadFirstSolution = true;
             m_firstSolutionMs = QDateTime::currentMSecsSinceEpoch();
+            // Wipe the "Initializing…" / "searching depth N" / "Flags: …" / "Position: …"
+            // lines from both the display and the raw/karn caches.  We keep only entries
+            // that are themselves solution lines (contain '[' and ']').
+            auto isSol = [](const QString &s){ return s.contains('[') && s.contains(']'); };
+            m_rawLines.erase(std::remove_if(m_rawLines.begin(), m_rawLines.end(),
+                [&](const QString &s){ return !isSol(s); }), m_rawLines.end());
+            m_karnLines.erase(std::remove_if(m_karnLines.begin(), m_karnLines.end(),
+                [&](const QString &s){ return !isSol(s); }), m_karnLines.end());
+            txtOutput->clear();
         }
         btnExpand->setVisible(true);
         btnCopyTerminal->setVisible(true);
@@ -2735,6 +2930,7 @@ void MainWindow::applyTheme()
     if (m_inputBarOuter)
     m_inputBarOuter->setStyleSheet("");
     cubeWidget->setLightTheme(m_lightTheme);
+    FadingTooltip::setLightTheme(m_lightTheme, this);
 }
 
 void MainWindow::openSidebar()
@@ -2917,6 +3113,8 @@ void MainWindow::showSettingsModal()
     QCheckBox *chkLight = new QCheckBox("Light theme");
     chkLight->setChecked(m_lightTheme);
     chkLight->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
+    chkLight->setToolTip("Switch between dark (default) and light theme.\n"
+                         "The change applies immediately.");
     connect(chkLight, &QCheckBox::toggled, this, [this, overlay](bool checked)
             {
                 m_lightTheme = checked;

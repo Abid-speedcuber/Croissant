@@ -64,8 +64,12 @@ bool generator=false;
 bool usenegative=false;
 bool usebrackets=false;
 bool karnotation=false;
-bool specificAngle=false;
+bool specificAngleTop=false;
+bool specificAngleBot=false;
 int metric = TURN_METRIC;
+// 0=both  1=preABF  2=postABF  3=none (default — matches old solver-mode behaviour of
+// normalizing postABF, but the UI default is "none" so the user opts in explicitly)
+int normalizeAbf = 3;
 int maxX = 6;
 int maxY = 6;
 int maxTotal = 12;
@@ -1133,7 +1137,7 @@ class PositionSolver {
 					std::cout << "depth "<<depth<<" does not match the barflip state" << std::endl<<std::flush;
 					continue;
 				}
-				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngle);
+				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 			}
 		} else {
 		while(true){
@@ -1141,7 +1145,7 @@ class PositionSolver {
 			if (metric == SLICE_METRIC && middle!=0) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
-			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngle);
+			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
 				if (l >= optimalMoves + extraMoves || (metric == SLICE_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
@@ -1161,7 +1165,7 @@ class PositionSolver {
 		if( pr2.table[shp2][e2][c2]>l+1 ) return true;
 		return false;
 	}
-	int search( const int l, const int lm, unsigned long *nodes, int twoGen, bool keepCubeShape, bool keepAngle){
+	int search( const int l, const int lm, unsigned long *nodes, int twoGen, bool keepCubeShape, bool keepAngleTop, bool keepAngleBot){
 		int i,r=0;
 
 		// search for l more moves. previous move was lm.
@@ -1210,10 +1214,10 @@ class PositionSolver {
 				// qq note: Jaap's solver pruned the transformation by only allowing U moves between
 				// 0 and 5. I think it's better to do this on D, see below. We then allow any (x,0).
 				int absTopMove = i>6 ? 12-i : i;
-				if (absTopMove <= maxX && absTopMove <= maxTotal && (!keepAngle || absTopMove < 2)) {
+				if (absTopMove <= maxX && absTopMove <= maxTotal && (!keepAngleTop || absTopMove < 2)) {
 					moveList[moveLen++]=i;
 					lastTurns[4]=i;
-					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absTopMove:l, 0, nodes, twoGen, keepCubeShape, keepAngle);
+					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absTopMove:l, 0, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
 					moveLen--;
 					if(r!=0 && !findAll) return(r);
 				}
@@ -1232,11 +1236,11 @@ class PositionSolver {
 				int topMove = lastTurns[4];
 				int absTopMove = topMove>6 ? 12-topMove : topMove;
 				int absBottomMove = i>6 ? 12-i : i;
-				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || l<2 || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngle || absBottomMove < 2)) {
+				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || l<2 || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngleBot || absBottomMove < 2)) {
 					moveList[moveLen++]=i+12;
 					lastTurns[5]=i;
 					if (twoGen != 1 || i==1 || i==11) {
-						r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape, keepAngle);
+						r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
 					}
 					moveLen--;
 					if(r!=0 && !findAll) return(r);
@@ -1261,7 +1265,7 @@ class PositionSolver {
 			if (!keepCubeShape || ((shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163))) {
 				moveList[moveLen++]=0;
 				// note that if angle metric is defined to count slices as 0, it will sometimes miss the optimal solution because the current pruning tables count how many slices a position is away from solved
-				r+=search(l-1, 2, nodes, twoGen, keepCubeShape, false);
+				r+=search(l-1, 2, nodes, twoGen, keepCubeShape, false, false);
 				moveLen--;
 				if(r!=0 && !findAll) return(r);
 			}
@@ -1303,11 +1307,21 @@ class PositionSolver {
 		int tw=0, tu=0;
 		int mu=0, md=0;
 		int angle=0;
+
+		// Whether to strip AUF from the pre- and post-ABF moves.
+		// "Pre-ABF"  = the move that appears BEFORE the first '/' in the output.
+		// "Post-ABF" = the move that appears AFTER  the last  '/' in the output.
+		// When generator is on sq1opt iterates moveList backwards, so the first
+		// printed move is still the pre-ABF display move — the semantics are
+		// purely about position in the output string, not the internal move order.
+		const bool normPre  = (normalizeAbf == 0 || normalizeAbf == 1);
+		const bool normPost = (normalizeAbf == 0 || normalizeAbf == 2);
+
 		if( generator ){
 			bool isFirstOutputSlice = true;
 			for( int i=moveLen-1; i>=0; i--){
 				if( moveList[i]==0 ) {
-					out += printmove(mu, md, isFirstOutputSlice);
+					out += printmove(mu, md, isFirstOutputSlice && normPre);
 					isFirstOutputSlice = false;
 					mu = md = 0;
 					out += "/";
@@ -1323,9 +1337,11 @@ class PositionSolver {
 				}
 			}
 		}else{
+			bool isFirstOutputSlice = true;
 			for( int i=0; i<moveLen; i++){
 				if( moveList[i]==0 ) {
-					out += printmove(mu, md, false);
+					out += printmove(mu, md, isFirstOutputSlice && normPre);
+					isFirstOutputSlice = false;
 					mu = md = 0;
 					out += "/";
 					tu++; tw++; angle++;
@@ -1340,7 +1356,7 @@ class PositionSolver {
 				}
 			}
 		}
-		out += printmove(mu, md, !generator);
+		out += printmove(mu, md, normPost);
 		if (karnotation)
 			out = karnify(out);
 		std::cout << out;
@@ -1446,7 +1462,7 @@ public:
 					std::cout << "depth "<<depth<<" does not match the barflip state" << std::endl<<std::flush;
 					continue;
 				}
-				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngle);
+				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 			}
 		} else {
 		while(true){
@@ -1454,7 +1470,7 @@ public:
 			if( metric==SLICE_METRIC && middle!=0 ) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
-			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngle);
+			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
 				if (l >= optimalMoves + extraMoves || (metric==SLICE_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
@@ -1516,7 +1532,9 @@ void help(){
 	std::cout<<"   bottom layers are turned by x and y twelths of a full circle. Positive"<<std::endl;
 	std::cout<<"   numbers are clockwise turns, negative anti-clockwise."<<std::endl;
 	std::cout<<"<switches> are one of more of the following command line switches:"<<std::endl;
-	std::cout<<"   -w     Use only the number of slices to measure length, not layer turns."<<std::endl;
+	std::cout<<"   -es    Use slice metric (only slices count as moves)."<<std::endl;
+	std::cout<<"   -em    Use move/turn metric (layer turns count; this is the default)."<<std::endl;
+	std::cout<<"   -ea    Use angle metric."<<std::endl;
 	std::cout<<"   -a<n>  Generate all optimal sequences, not just the first one found."<<std::endl;
 	std::cout<<"          If n is given, also find solutions with up to n extra moves."<<std::endl;
 	std::cout<<"   -x     Ignore the equivalence a,b/c,d/e,f = 6+a,6+b/d,c/6+e,6+f"<<std::endl;
@@ -1531,6 +1549,13 @@ void help(){
 	std::cout<<"   -p     Pseudo 2gen - only allow bottom layer moves of 1, 0, -1."<<std::endl;
 	std::cout<<"   -c     Only generate algs that stay in a square/square cubeshape."<<std::endl;
 	std::cout<<"   -k     Output algs in Karnotation. Ignores ABF."<<std::endl;
+	std::cout<<"   -ob    Normalize AUF on both pre-ABF and post-ABF moves."<<std::endl;
+	std::cout<<"   -oe    Normalize AUF on the pre-ABF move only (before first slice)."<<std::endl;
+	std::cout<<"   -os    Normalize AUF on the post-ABF move only (after last slice)."<<std::endl;
+	std::cout<<"   -nb    Lock both layer angles on pre-ABF (top and bottom)."<<std::endl;
+	std::cout<<"   -nu    Lock top layer angle on pre-ABF only."<<std::endl;
+	std::cout<<"   -nd    Lock bottom layer angle on pre-ABF only."<<std::endl;
+	std::cout<<"   -nn    No layer angle lock (default)."<<std::endl;
 	std::cout<<"   -X>n>  Only allow top layer turns of a maximum of n in either direction."<<std::endl;
 	std::cout<<"   -Y>n>  Only allow bottom layer turns of a maximum of n in either direction."<<std::endl;
 	std::cout<<"   -Z>n>  Only allow turns of a maximum of n total turn amount (abs(X) + abs(Y))."<<std::endl;
@@ -1553,12 +1578,13 @@ int main(int argc, char* argv[]){
 	for( int i=1; i<argc; i++){
 		if( argv[i][0]=='-' ){
 			switch( argv[i][1] ){
-				case 'w':
-				case 'W':
-					metric=SLICE_METRIC; break;
-				case 'l':
-				case 'L':
-					metric=ANGLE_METRIC; break;
+				case 'e':
+				case 'E':
+					if (argv[i][2]=='s'||argv[i][2]=='S') metric=SLICE_METRIC;
+					else if (argv[i][2]=='m'||argv[i][2]=='M') metric=TURN_METRIC;
+					else if (argv[i][2]=='a'||argv[i][2]=='A') metric=ANGLE_METRIC;
+					else return show(1);
+					break;
 				case 'x':
 					ignoreTrans=true; break;
 				case 'a':
@@ -1609,9 +1635,20 @@ int main(int argc, char* argv[]){
 				case 'K':
 					karnotation = true;
 					break;
+				case 'o':
+				case 'O':
+					if      (argv[i][2]=='b'||argv[i][2]=='B') normalizeAbf=0;
+					else if (argv[i][2]=='e'||argv[i][2]=='E') normalizeAbf=1;
+					else if (argv[i][2]=='s'||argv[i][2]=='S') normalizeAbf=2;
+					else return show(1);
+					break;
 				case 'n':
 				case 'N':
-					specificAngle = true;
+					if (argv[i][2]=='b'||argv[i][2]=='B') { specificAngleTop=true; specificAngleBot=true; }
+					else if (argv[i][2]=='u'||argv[i][2]=='U') specificAngleTop=true;
+					else if (argv[i][2]=='d'||argv[i][2]=='D') specificAngleBot=true;
+					else if (argv[i][2]=='n'||argv[i][2]=='N') { specificAngleTop=false; specificAngleBot=false; }
+					else return show(1);
 					break;
 				case 'X':
 					parsedValue = parseInteger(argv[i]+2);
@@ -1690,7 +1727,7 @@ int main(int argc, char* argv[]){
 	PartialPositionSolver pps( st, scte, sctc, pr1, pr2 );
 
 	if(verbosity>=2){
-		std::cout<<"Flags: "<<(metric==TURN_METRIC? "Turn":"Slice")<<" Metric, ";
+		std::cout<<"Flags: "<<(metric==TURN_METRIC?"Move":metric==SLICE_METRIC?"Slice":"Angle")<<" Metric, ";
 		std::cout<<"Find "<< (findAll? "every ":"first ");
 		std::cout<< (generator? "generator":"solution");
 		if (twoGen == 1) {

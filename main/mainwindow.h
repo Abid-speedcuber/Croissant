@@ -16,6 +16,7 @@
 class QProcess;
 class Sq1Widget;
 class QCheckBox;
+class QButtonGroup;
 class QLineEdit;
 class QTextEdit;
 class QPushButton;
@@ -67,7 +68,7 @@ private:
     void syncFlagsFromCommand(const QString& text);
 
     Sq1Widget*    cubeWidget;
-    QCheckBox*    chkSlice;
+    QButtonGroup*  m_metricGroup{nullptr};  // 0=Slice(default) 1=Move 2=Angle
     QCheckBox*    chkAllOptimal;
     QSpinBox*     spnSuboptimal;    // extra moves beyond optimal (0 = optimal only); hidden with -d
     QCheckBox*    chkDepths;
@@ -78,7 +79,8 @@ private:
     QCheckBox*    chkCubeshape;
     QCheckBox*    chkIgnoreMid;     // -m: ignore middle-layer shape
     QCheckBox*    chkKarnotation;
-    QCheckBox*    chkSpecificAngle;
+    QButtonGroup*  m_angleGroup{nullptr};   // 0=Both 1=Top 2=Bottom 3=None(default)
+    QButtonGroup*  m_normalizeAbfGroup{nullptr}; // 0=Both 1=PreABF 2=PostABF 3=None(default)
     QCheckBox*    chkMaxX;
     QSpinBox*     spnMaxX;
     QCheckBox*    chkMaxY;
