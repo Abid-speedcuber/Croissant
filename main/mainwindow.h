@@ -11,7 +11,9 @@
 #include <QScrollArea>
 #include <QGraphicsView>
 #include <QGraphicsScene>
+#include <QVector>
 #include <atomic>
+#include <functional>
 #include "styles/stylesheet.h"
 #include "sq1-core/output-converter.h"
 

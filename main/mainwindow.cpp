@@ -2474,9 +2474,11 @@ void MainWindow::applyZoom()
     m_zoomProxy->resize(inner);
     m_zoomScene->setSceneRect(0, 0, inner.width(), inner.height());
 
-    // Recompute left panel width based on logical (unscaled) inner width
+    // Treat logical width exactly like a browser viewport:
+    // zoom in = smaller logical width = smaller left panel
+    // zoom out = larger logical width = larger left panel
     int logicalW = static_cast<int>(inner.width());
-    int leftW = qBound(320, 320 + (logicalW - 860) / 6, 400);
+    int leftW = qBound(260, 260 + (logicalW - 760) / 5, 420);
     leftScroll->setFixedWidth(leftW);
     if (auto *lc = leftScroll->widget())
         lc->setFixedWidth(leftW - 4);
@@ -3470,23 +3472,6 @@ void MainWindow::showHowToUseModal()
     F *f = new F(overlay, card, center);
     central->installEventFilter(f);
     overlay->installEventFilter(f);
-}
-
-void MainWindow::applyZoom()
-{
-    if (!m_zoomProxy || !m_zoomScene || !m_zoomView) return;
-    QTransform t;
-    t.scale(m_zoomScale, m_zoomScale);
-    m_zoomView->setTransform(t);
-    QSizeF inner(width() / m_zoomScale, height() / m_zoomScale);
-    m_zoomProxy->resize(inner);
-    m_zoomScene->setSceneRect(0, 0, inner.width(), inner.height());
-
-    int logicalW = static_cast<int>(inner.width());
-    int leftW = qBound(320, 320 + (logicalW - 860) / 6, 400);
-    leftScroll->setFixedWidth(leftW);
-    if (auto *lc = leftScroll->widget())
-        lc->setFixedWidth(leftW - 4);
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
