@@ -283,6 +283,7 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
             middle = 0;
             middle_partial = 0;
         }
+        emit middleStateChanged(middle_partial > 0 ? 2 : middle);
     } else if(piece >= 0) {
         if(event->button() == Qt::RightButton) {
             emit userInteracted();

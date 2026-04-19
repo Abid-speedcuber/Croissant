@@ -157,6 +157,7 @@ private:
     int           m_sliceCount{0};
     QTimer*       m_sliceTimer{nullptr};    // true = input alg mode (inverts before applying)
     bool          m_cubeshapeWasActive{false}; // cubeshape state captured at solve time
+    int           m_preIgnoreMidState{0}; // equator state before "ignore middle" was turned on
 
     // Documentation content is fetched at run-time; no caching
 

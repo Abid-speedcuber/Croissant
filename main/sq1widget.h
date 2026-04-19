@@ -22,12 +22,20 @@ public:
 
     void reset();
     void setLightTheme(bool light) { m_lightTheme = light; update(); }
+    int  getMiddleState() const { return middle_partial > 0 ? 2 : middle; }
+    void setMiddleState(int state) {
+        if (state == 2) { middle_partial = 1; }
+        else { middle_partial = 0; middle = state; }
+        update();
+        emit positionChanged();
+    }
     // Parse a position string and update the cube display
     bool setPositionFromString(const QString& pos);
 
 signals:
     void positionChanged(); // emitted whenever cube state changes
     void userInteracted();  // emitted on mouse-driven piece swap/state change (for undo)
+    void middleStateChanged(int state); // 0=square, 1=kite, 2=gray
 
 protected:
     void paintEvent(QPaintEvent*) override;

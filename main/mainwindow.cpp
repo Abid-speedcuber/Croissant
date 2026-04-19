@@ -562,6 +562,20 @@ void MainWindow::buildUI()
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
     connect(cubeWidget, &Sq1Widget::userInteracted, this, &MainWindow::pushUndoState);
+    connect(cubeWidget, &Sq1Widget::middleStateChanged, this, [this](int state) {
+        bool shouldBeChecked = (state == 2);
+        if (chkIgnoreMid->isChecked() != shouldBeChecked) {
+            if (!shouldBeChecked) {
+                // leaving gray state — remember nothing, just uncheck
+                m_preIgnoreMidState = 0;
+            }
+            chkIgnoreMid->blockSignals(true);
+            chkIgnoreMid->setChecked(shouldBeChecked);
+            chkIgnoreMid->blockSignals(false);
+            updateConstraints();
+            updateCommand();
+        }
+    });
     {
         // cubeWithReset fills the full width of leftContainer; reset button overlaps absolutely
         QWidget *cubeWithReset = new QWidget();
@@ -1068,7 +1082,15 @@ void MainWindow::buildUI()
     connect(chk2gen, &QCheckBox::toggled, this, upd);
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
     connect(chkCubeshape, &QCheckBox::toggled, this, upd);
-    connect(chkIgnoreMid, &QCheckBox::toggled, this, upd);
+    connect(chkIgnoreMid, &QCheckBox::toggled, this, [this, upd](bool checked) {
+        if (checked) {
+            m_preIgnoreMidState = cubeWidget->getMiddleState();
+            cubeWidget->setMiddleState(2); // gray / partial
+        } else {
+            cubeWidget->setMiddleState(m_preIgnoreMidState);
+        }
+        upd();
+    });
     connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool /*checked*/)
             {
         upd();
