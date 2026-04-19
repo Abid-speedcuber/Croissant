@@ -9,6 +9,8 @@
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QScrollArea>
+#include <QGraphicsView>
+#include <QGraphicsScene>
 #include <atomic>
 #include "styles/stylesheet.h"
 #include "sq1-core/output-converter.h"
@@ -88,16 +90,13 @@ private:
     QCheckBox*    chkMaxTotal;
     QSpinBox*     spnMaxTotal;
     QLineEdit*    txtCommand;
+    QLineEdit*    txtScramble;
     QPushButton*  btnSolve;
     QPushButton*  btnCopy;
     QPushButton*  btnApply{nullptr};
     QPushButton*  btnReset;
     QPushButton*  btnUndo;
     QPushButton*  btnRedo;
-    QLineEdit*    txtScramble;
-    QPushButton*  btnApplyScramble;
-    QPushButton*  btnScrambleMode;  // toggles scramble / algorithm mode
-    QLabel*       lblScrambleError; // red error shown below the input bar
     QLabel*       lblCommandError;  // red error shown below the command line
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
@@ -141,6 +140,12 @@ private:
     bool          m_hadFirstSolution{false};
     qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
+    qreal         m_zoomScale{1.0};
+    QWidget*      m_mainWidget{nullptr}; // inner widget for zoom scaffold
+    QGraphicsView*  m_zoomView{nullptr};
+    QGraphicsScene* m_zoomScene{nullptr};
+    QGraphicsProxyWidget* m_zoomProxy{nullptr};
+    void          applyZoom();
     bool          m_scrambleIsAlg{false};
     bool          m_applyFromSolved{false};
     int           m_inputModeIndex{0}; // 0=scramble, 1=alg, 2=position

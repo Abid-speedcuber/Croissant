@@ -54,6 +54,9 @@
 #include <map>
 #include <set>
 #include <QPainter>
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QGraphicsProxyWidget>
 
 // ============================================================
 // TightCheckBox — only shows tooltip when hovering over indicator+text
@@ -398,6 +401,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     buildUI();
     buildStyles();
+    if (m_mainWidget) m_mainWidget->setStyleSheet(buildStyleSheet());
     updateCommand();
 
     m_sliceTimer = new QTimer(this);
@@ -462,14 +466,24 @@ static QString invertScrambleStr(const QString &str)
 
 void MainWindow::buildUI()
 {
-    QWidget *central = new QWidget(this);
-    setCentralWidget(central);
+    // ── Zoom scaffold: QGraphicsView wraps everything so we can scale the whole UI ──
+    m_mainWidget = new QWidget();   // this is the real UI root
+    QWidget *realInner = m_mainWidget;
+    m_zoomScene = new QGraphicsScene(this);
+    m_zoomView  = new QGraphicsView(m_zoomScene, this);
+    m_zoomView->setFrameShape(QFrame::NoFrame);
+    m_zoomView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_zoomView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_zoomView->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_zoomView->setRenderHint(QPainter::Antialiasing);
+    m_zoomView->setStyleSheet("background: transparent; border: none;");
+    m_zoomProxy = m_zoomScene->addWidget(realInner);
+    setCentralWidget(m_zoomView);
 
-    QWidget *outerWidget = new QWidget(this);
+    QWidget *outerWidget = realInner;  // rest of buildUI builds into realInner
     QVBoxLayout *outerLayout = new QVBoxLayout(outerWidget);
     outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->setSpacing(0);
-    setCentralWidget(outerWidget);
 
     // ── Top bar ───────────────────────────────────────────────────────────────
     QWidget *topBar = new QWidget();
@@ -1518,7 +1532,6 @@ void MainWindow::buildUI()
     tableLay->addWidget(m_solutionTable, 1);
 
     outputWrapperLay->addWidget(m_tableContainer);
-    outputWrapperLay->addWidget(m_tableContainer);
     m_outputWrapper = outputWrapper;
     outputWrapper->installEventFilter(this);
     rightCol->addWidget(outputWrapper, 1);
@@ -2448,9 +2461,22 @@ void MainWindow::rebuildTable()
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
-    int w = event->size().width();
-    // Scale left panel: 320px base, grow a little above 1000px, cap at 400px
-    int leftW = qBound(320, 320 + (w - 860) / 6, 400);
+    applyZoom();
+}
+
+void MainWindow::applyZoom()
+{
+    if (!m_zoomProxy || !m_zoomScene || !m_zoomView) return;
+    QTransform t;
+    t.scale(m_zoomScale, m_zoomScale);
+    m_zoomView->setTransform(t);
+    QSizeF inner(width() / m_zoomScale, height() / m_zoomScale);
+    m_zoomProxy->resize(inner);
+    m_zoomScene->setSceneRect(0, 0, inner.width(), inner.height());
+
+    // Recompute left panel width based on logical (unscaled) inner width
+    int logicalW = static_cast<int>(inner.width());
+    int leftW = qBound(320, 320 + (logicalW - 860) / 6, 400);
     leftScroll->setFixedWidth(leftW);
     if (auto *lc = leftScroll->widget())
         lc->setFixedWidth(leftW - 4);
@@ -3446,6 +3472,23 @@ void MainWindow::showHowToUseModal()
     overlay->installEventFilter(f);
 }
 
+void MainWindow::applyZoom()
+{
+    if (!m_zoomProxy || !m_zoomScene || !m_zoomView) return;
+    QTransform t;
+    t.scale(m_zoomScale, m_zoomScale);
+    m_zoomView->setTransform(t);
+    QSizeF inner(width() / m_zoomScale, height() / m_zoomScale);
+    m_zoomProxy->resize(inner);
+    m_zoomScene->setSceneRect(0, 0, inner.width(), inner.height());
+
+    int logicalW = static_cast<int>(inner.width());
+    int leftW = qBound(320, 320 + (logicalW - 860) / 6, 400);
+    leftScroll->setFixedWidth(leftW);
+    if (auto *lc = leftScroll->widget())
+        lc->setFixedWidth(leftW - 4);
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     // ── (0) Per-line tooltips for the output box ──────────────────────────────
@@ -3534,6 +3577,25 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true; // consume — don't copy
         }
         return QMainWindow::eventFilter(watched, event);
+    }
+
+    // ── Ctrl+= / Ctrl+- — zoom in / out ─────────────────────────────────────
+    if (ke->modifiers() == Qt::ControlModifier)
+    {
+        if (ke->key() == Qt::Key_Equal || ke->key() == Qt::Key_Plus)
+        {
+            m_zoomScale = qMin(m_zoomScale + 0.1, 2.0);
+            applyZoom(); return true;
+        }
+        if (ke->key() == Qt::Key_Minus)
+        {
+            m_zoomScale = qMax(m_zoomScale - 0.1, 0.5);
+            applyZoom(); return true;
+        }
+        if (ke->key() == Qt::Key_0)
+        {
+            m_zoomScale = 1.0; applyZoom(); return true;
+        }
     }
 
     // ── Ctrl+Z / Ctrl+Y — undo / redo (work from any widget, including inputs) ─
