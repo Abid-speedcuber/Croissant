@@ -400,6 +400,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     qApp->installEventFilter(this);
 
     buildUI();
+    txtOutput->viewport()->installEventFilter(this);
     buildStyles();
     if (m_mainWidget) m_mainWidget->setStyleSheet(buildStyleSheet());
     updateCommand();
@@ -1550,7 +1551,6 @@ void MainWindow::buildUI()
     btnTableMode->setVisible(false);
 
     outputWrapperLay->addWidget(txtOutput);
-    txtOutput->viewport()->installEventFilter(this);
 
     m_tableContainer = new QWidget();
     m_tableContainer->setVisible(false);
@@ -1623,6 +1623,8 @@ void MainWindow::buildUI()
                 m_autoScrollPaused = false;
                 m_solveFinishedWhilePaused = false;
                 btnScrollToBottom->setVisible(false);
+                btnScrollToBottom->setText("⌄");
+                btnScrollToBottom->setGraphicsEffect(nullptr);
                 btnScrollToBottom->setText("⌄");
                 btnScrollToBottom->setStyleSheet(
                     "QPushButton#btnScrollToBottom {"
@@ -2201,9 +2203,15 @@ void MainWindow::onSolverLine(QString line)
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
             cur.insertText(displayLine, fmt);
-            if (!m_autoScrollPaused)
-                txtOutput->verticalScrollBar()->setValue(
-                    txtOutput->verticalScrollBar()->maximum());
+            {
+                int saved = txtOutput->verticalScrollBar()->value();
+                txtOutput->setTextCursor(cur);
+                if (m_autoScrollPaused)
+                    txtOutput->verticalScrollBar()->setValue(saved);
+                else
+                    txtOutput->verticalScrollBar()->setValue(
+                        txtOutput->verticalScrollBar()->maximum());
+            }
         }
     }
     else
@@ -2220,10 +2228,15 @@ void MainWindow::onSolverLine(QString line)
         fmt.setForeground(QColor(col));
         fmt.setFontPointSize(m_expanded ? 11 : 10);
         cur.insertText(displayLine, fmt);
-        txtOutput->setTextCursor(cur);
-        if (!m_autoScrollPaused)
-            txtOutput->verticalScrollBar()->setValue(
-                txtOutput->verticalScrollBar()->maximum());
+        {
+            int saved = txtOutput->verticalScrollBar()->value();
+            txtOutput->setTextCursor(cur);
+            if (m_autoScrollPaused)
+                txtOutput->verticalScrollBar()->setValue(saved);
+            else
+                txtOutput->verticalScrollBar()->setValue(
+                    txtOutput->verticalScrollBar()->maximum());
+        }
     }
 }
 
@@ -2318,23 +2331,80 @@ void MainWindow::onSolverDone(int code)
             // User is browsing — flag it and animate the scroll button
             m_solveFinishedWhilePaused = true;
             // Animate: checkmark for 1.5s, then table icon
+            // Animate text color from transparent to green (fade-in the checkmark content only)
             btnScrollToBottom->setText("✓");
-            btnScrollToBottom->setStyleSheet(
-                "QPushButton#btnScrollToBottom {"
-                "  background: #1a5c1a; border: 1px solid #2ecc40; border-radius: 16px;"
-                "  color: #2ecc40; font-size: 18px; font-weight: bold;"
-                "  padding: 0px; margin: 0px; text-align: center; }"
-                "QPushButton#btnScrollToBottom:hover { background: #236b23; }");
+            btnScrollToBottom->setToolTip("Done!");
+            {
+                // Use a QTimer to step the text color alpha from 0 to full
+                auto *stepTimer = new QTimer(btnScrollToBottom);
+                stepTimer->setInterval(16);
+                auto *step = new int(0);
+                auto applyCheckStyle = [this](int alpha) {
+                    btnScrollToBottom->setStyleSheet(QString(
+                        "QPushButton#btnScrollToBottom {"
+                        "  background: #1a5c1a; border: 1px solid #2ecc40; border-radius: 16px;"
+                        "  color: rgba(46,204,64,%1); font-size: 18px; font-weight: bold;"
+                        "  padding: 0px; margin: 0px; text-align: center; }"
+                        "QPushButton#btnScrollToBottom:hover { background: #236b23; }")
+                        .arg(alpha));
+                };
+                applyCheckStyle(0);
+                connect(stepTimer, &QTimer::timeout, this, [this, stepTimer, step, applyCheckStyle]() mutable {
+                    *step += 1;
+                    int alpha = qMin((int)(*step * 255 / 22), 255); // ~350ms at 16ms steps
+                    applyCheckStyle(alpha);
+                    if (*step >= 22) { stepTimer->stop(); delete step; }
+                });
+                stepTimer->start();
+            }
+
+            // After 1.5s: fade out checkmark text, swap to table icon, fade in
             QTimer::singleShot(1500, this, [this] {
                 if (!m_solveFinishedWhilePaused) return;
-                btnScrollToBottom->setText("⊞");
-                btnScrollToBottom->setStyleSheet(
-                    "QPushButton#btnScrollToBottom {"
-                    "  background: #2a2a4a; border: 1px solid #7a6aaa; border-radius: 16px;"
-                    "  color: #ccaaff; font-size: 18px; font-weight: bold;"
-                    "  padding: 0px; margin: 0px; text-align: center; }"
-                    "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
-                btnScrollToBottom->setToolTip("Go to table view");
+                auto *stepOut = new QTimer(btnScrollToBottom);
+                stepOut->setInterval(16);
+                auto *stepO = new int(0);
+                auto applyCheckFade = [this](int alpha) {
+                    btnScrollToBottom->setStyleSheet(QString(
+                        "QPushButton#btnScrollToBottom {"
+                        "  background: #1a5c1a; border: 1px solid #2ecc40; border-radius: 16px;"
+                        "  color: rgba(46,204,64,%1); font-size: 18px; font-weight: bold;"
+                        "  padding: 0px; margin: 0px; text-align: center; }"
+                        "QPushButton#btnScrollToBottom:hover { background: #236b23; }")
+                        .arg(alpha));
+                };
+                connect(stepOut, &QTimer::timeout, this, [this, stepOut, stepO, applyCheckFade]() mutable {
+                    *stepO += 1;
+                    int alpha = qMax(255 - (int)(*stepO * 255 / 14), 0); // ~220ms
+                    applyCheckFade(alpha);
+                    if (*stepO >= 14) {
+                        stepOut->stop(); delete stepO;
+                        // Now swap to table icon and fade in
+                        btnScrollToBottom->setText("⊞");
+                        btnScrollToBottom->setToolTip("Go to table view");
+                        auto *stepIn = new QTimer(btnScrollToBottom);
+                        stepIn->setInterval(16);
+                        auto *stepI = new int(0);
+                        auto applyTableStyle = [this](int alpha) {
+                            btnScrollToBottom->setStyleSheet(QString(
+                                "QPushButton#btnScrollToBottom {"
+                                "  background: #2a2a4a; border: 1px solid #7a6aaa; border-radius: 16px;"
+                                "  color: rgba(204,170,255,%1); font-size: 18px; font-weight: bold;"
+                                "  padding: 0px; margin: 0px; text-align: center; }"
+                                "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }")
+                                .arg(alpha));
+                        };
+                        applyTableStyle(0);
+                        connect(stepIn, &QTimer::timeout, this, [this, stepIn, stepI, applyTableStyle]() mutable {
+                            *stepI += 1;
+                            int alpha = qMin((int)(*stepI * 255 / 22), 255);
+                            applyTableStyle(alpha);
+                            if (*stepI >= 22) { stepIn->stop(); delete stepI; }
+                        });
+                        stepIn->start();
+                    }
+                });
+                stepOut->start();
             });
         } else {
             qint64 elapsed = m_hadFirstSolution
@@ -2383,6 +2453,7 @@ void MainWindow::onReset()
 void MainWindow::appendStatusLine(const QString &msg)
 {
     QString col = Theme::textTerminal(m_lightTheme);
+    int savedScroll = txtOutput->verticalScrollBar()->value();
     QTextCursor cur = txtOutput->textCursor();
     cur.movePosition(QTextCursor::End);
     if (!txtOutput->document()->isEmpty())
@@ -2395,7 +2466,15 @@ void MainWindow::appendStatusLine(const QString &msg)
     blkFmt.setLineHeight(120, QTextBlockFormat::ProportionalHeight);
     cur.setBlockFormat(blkFmt);
     cur.insertText(msg, fmt);
-    txtOutput->setTextCursor(cur);
+    // Move cursor to end without triggering scroll — use a temp cursor
+    QTextCursor endCur = txtOutput->textCursor();
+    endCur.movePosition(QTextCursor::End);
+    txtOutput->setTextCursor(endCur);
+    if (m_autoScrollPaused)
+        txtOutput->verticalScrollBar()->setValue(savedScroll);
+    else
+        txtOutput->verticalScrollBar()->setValue(
+            txtOutput->verticalScrollBar()->maximum());
 }
 
 void MainWindow::rebuildTable()
@@ -3667,12 +3746,19 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         if (scrollingUp && !m_autoScrollPaused && (worker && worker->isRunning()))
         {
             m_autoScrollPaused = true;
-            // Position the scroll-to-bottom button
-            int w = m_outputWrapper->width();
-            int h = m_outputWrapper->height();
-            btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);
-            btnScrollToBottom->raise();
-            btnScrollToBottom->setVisible(true);
+        btnScrollToBottom->setGraphicsEffect(nullptr);
+        btnScrollToBottom->setText("⌄");
+        btnScrollToBottom->setStyleSheet(
+            "QPushButton#btnScrollToBottom {"
+            "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
+            "  color: #aaaaff; font-size: 16px; font-weight: bold;"
+            "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
+            "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+        int w = m_outputWrapper->width();
+        int h = m_outputWrapper->height();
+        btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);
+        btnScrollToBottom->raise();
+        btnScrollToBottom->setVisible(true);
         }
         return false; // let the scroll happen normally
     }
