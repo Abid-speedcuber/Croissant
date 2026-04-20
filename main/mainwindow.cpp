@@ -1532,11 +1532,25 @@ void MainWindow::buildUI()
     btnTableMode->setFixedSize(22, 22);
     btnTableMode->setToolTip("Switch to table view");
 
+    btnScrollToBottom = new QPushButton("↓", outputWrapper);
+    btnScrollToBottom->setObjectName("btnScrollToBottom");
+    btnScrollToBottom->setFixedSize(32, 32);
+    btnScrollToBottom->setToolTip("Scroll to bottom / resume auto-scroll");
+    btnScrollToBottom->setVisible(false);
+    btnScrollToBottom->setCursor(Qt::PointingHandCursor);
+    btnScrollToBottom->setStyleSheet(
+        "QPushButton#btnScrollToBottom {"
+        "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
+        "  color: #aaaaff; font-size: 16px; font-weight: bold;"
+        "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
+        "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+
     btnExpand->setVisible(false);
     btnCopyTerminal->setVisible(false);
     btnTableMode->setVisible(false);
 
     outputWrapperLay->addWidget(txtOutput);
+    txtOutput->viewport()->installEventFilter(this);
 
     m_tableContainer = new QWidget();
     m_tableContainer->setVisible(false);
@@ -1590,6 +1604,36 @@ void MainWindow::buildUI()
             {
                 QApplication::clipboard()->setText(txtOutput->toPlainText());
                 appendStatusLine("Terminal copied to clipboard!"); });
+    connect(btnScrollToBottom, &QPushButton::clicked, this, [this]
+            {
+                // If solve is done and we were paused, transition to table
+                if (m_solveFinishedWhilePaused) {
+                    m_autoScrollPaused = false;
+                    m_solveFinishedWhilePaused = false;
+                    btnScrollToBottom->setVisible(false);
+                    m_tableVisible = true;
+                    txtOutput->setVisible(false);
+                    m_tableContainer->setVisible(true);
+                    btnTableMode->setText("▤");
+                    btnTableMode->setToolTip("Switch to terminal view");
+                    rebuildTable();
+                    return;
+                }
+                // Otherwise just resume auto-scroll
+                m_autoScrollPaused = false;
+                m_solveFinishedWhilePaused = false;
+                btnScrollToBottom->setVisible(false);
+                btnScrollToBottom->setText("⌄");
+                btnScrollToBottom->setStyleSheet(
+                    "QPushButton#btnScrollToBottom {"
+                    "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
+                    "  color: #aaaaff; font-size: 16px; font-weight: bold;"
+                    "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
+                    "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+                btnScrollToBottom->setToolTip("Scroll to bottom / resume auto-scroll");
+                txtOutput->verticalScrollBar()->setValue(
+                    txtOutput->verticalScrollBar()->maximum());
+            });
     connect(btnTableMode, &QPushButton::clicked, this, [this]
             {
                 m_tableVisible = !m_tableVisible;
@@ -1939,6 +1983,9 @@ void MainWindow::onSolve()
         return;
 
     m_stopped = false;
+    m_autoScrollPaused = false;
+    m_solveFinishedWhilePaused = false;
+    btnScrollToBottom->setVisible(false);
     txtOutput->clear();
     m_rawLines.clear();
     m_karnLines.clear();
@@ -2154,7 +2201,9 @@ void MainWindow::onSolverLine(QString line)
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
             cur.insertText(displayLine, fmt);
-            txtOutput->setTextCursor(cur);
+            if (!m_autoScrollPaused)
+                txtOutput->verticalScrollBar()->setValue(
+                    txtOutput->verticalScrollBar()->maximum());
         }
     }
     else
@@ -2172,6 +2221,9 @@ void MainWindow::onSolverLine(QString line)
         fmt.setFontPointSize(m_expanded ? 11 : 10);
         cur.insertText(displayLine, fmt);
         txtOutput->setTextCursor(cur);
+        if (!m_autoScrollPaused)
+            txtOutput->verticalScrollBar()->setValue(
+                txtOutput->verticalScrollBar()->maximum());
     }
 }
 
@@ -2262,18 +2314,42 @@ void MainWindow::onSolverDone(int code)
 
     if (!m_solutionLines.isEmpty())
     {
-        qint64 elapsed = m_hadFirstSolution
-                             ? (QDateTime::currentMSecsSinceEpoch() - m_firstSolutionMs)
-                             : 3000;
-        int delay = (elapsed < 3000) ? 400 : 0;
-        QTimer::singleShot(delay, this, [this]
-                           {
-                               m_tableVisible = true;
-                               txtOutput->setVisible(false);
-                               m_tableContainer->setVisible(true);
-                               btnTableMode->setText("▤");
-                               btnTableMode->setToolTip("Switch to terminal view");
-                               rebuildTable(); });
+        if (m_autoScrollPaused) {
+            // User is browsing — flag it and animate the scroll button
+            m_solveFinishedWhilePaused = true;
+            // Animate: checkmark for 1.5s, then table icon
+            btnScrollToBottom->setText("✓");
+            btnScrollToBottom->setStyleSheet(
+                "QPushButton#btnScrollToBottom {"
+                "  background: #1a5c1a; border: 1px solid #2ecc40; border-radius: 16px;"
+                "  color: #2ecc40; font-size: 18px; font-weight: bold;"
+                "  padding: 0px; margin: 0px; text-align: center; }"
+                "QPushButton#btnScrollToBottom:hover { background: #236b23; }");
+            QTimer::singleShot(1500, this, [this] {
+                if (!m_solveFinishedWhilePaused) return;
+                btnScrollToBottom->setText("⊞");
+                btnScrollToBottom->setStyleSheet(
+                    "QPushButton#btnScrollToBottom {"
+                    "  background: #2a2a4a; border: 1px solid #7a6aaa; border-radius: 16px;"
+                    "  color: #ccaaff; font-size: 18px; font-weight: bold;"
+                    "  padding: 0px; margin: 0px; text-align: center; }"
+                    "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+                btnScrollToBottom->setToolTip("Go to table view");
+            });
+        } else {
+            qint64 elapsed = m_hadFirstSolution
+                                 ? (QDateTime::currentMSecsSinceEpoch() - m_firstSolutionMs)
+                                 : 3000;
+            int delay = (elapsed < 3000) ? 400 : 0;
+            QTimer::singleShot(delay, this, [this]
+                               {
+                                   m_tableVisible = true;
+                                   txtOutput->setVisible(false);
+                                   m_tableContainer->setVisible(true);
+                                   btnTableMode->setText("▤");
+                                   btnTableMode->setToolTip("Switch to terminal view");
+                                   rebuildTable(); });
+        }
     }
 }
 
@@ -3573,12 +3649,32 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::Resize && watched == m_outputWrapper)
     {
         int w = m_outputWrapper->width();
+        int h = m_outputWrapper->height();
         int margin = 6;
         int bw = 22;
         btnExpand->move(w - margin - bw, margin);
         btnTableMode->move(w - margin - bw * 2 - 4, margin);
         btnCopyTerminal->move(w - margin - bw * 3 - 8, margin);
+        btnScrollToBottom->move(w - margin - 28 - 16, h - margin - 32 - margin);
         return false;
+    }
+
+    // ── Scroll-up on terminal viewport pauses auto-scroll ────────────────────
+    if (event->type() == QEvent::Wheel && txtOutput && watched == txtOutput->viewport())
+    {
+        QWheelEvent *we = static_cast<QWheelEvent *>(event);
+        bool scrollingUp = we->angleDelta().y() > 0;
+        if (scrollingUp && !m_autoScrollPaused && (worker && worker->isRunning()))
+        {
+            m_autoScrollPaused = true;
+            // Position the scroll-to-bottom button
+            int w = m_outputWrapper->width();
+            int h = m_outputWrapper->height();
+            btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);
+            btnScrollToBottom->raise();
+            btnScrollToBottom->setVisible(true);
+        }
+        return false; // let the scroll happen normally
     }
 
     if (event->type() != QEvent::KeyPress)

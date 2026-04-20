@@ -114,6 +114,9 @@ private:
     QProgressBar* progressBar;
     QCheckBox*    chkRankErgo;
     bool          m_tableVisible{false};
+    bool          m_autoScrollPaused{false};
+    bool          m_solveFinishedWhilePaused{false};
+    QPushButton*  btnScrollToBottom{nullptr};
     void          rebuildTerminalView();
     void          rebuildTable();
     void          appendStatusLine(const QString& msg);
