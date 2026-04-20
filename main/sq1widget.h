@@ -23,6 +23,26 @@ public:
     void reset();
     void setLightTheme(bool light) { m_lightTheme = light; update(); }
     int  getMiddleState() const { return middle_partial > 0 ? 2 : middle; }
+    bool inCubeshape() const {
+        // Each half (0-11, 12-23) must have alternating corner/edge slots.
+        // Corners occupy 2 slots (same value <8 twice), edges occupy 1 slot.
+        // Cubeshape = 4 corners + 4 edges per layer in alternating pattern.
+        for (int base = 0; base < 24; base += 12) {
+            // Try all 3 rotations of the pattern: edge at offset 0, 1, or 2 (mod 3)
+            bool ok = false;
+            for (int rem = 0; rem < 3; rem++) {
+                bool match = true;
+                for (int i = 0; i < 12; i++) {
+                    bool expectEdge = (i % 3 == rem);
+                    bool isEdge = (position[base + i] >= 8);
+                    if (isEdge != expectEdge) { match = false; break; }
+                }
+                if (match) { ok = true; break; }
+            }
+            if (!ok) return false;
+        }
+        return true;
+    }
     void setMiddleState(int state) {
         if (state == 2) { middle_partial = 1; }
         else { middle_partial = 0; middle = state; }
@@ -36,6 +56,7 @@ signals:
     void positionChanged(); // emitted whenever cube state changes
     void userInteracted();  // emitted on mouse-driven piece swap/state change (for undo)
     void middleStateChanged(int state); // 0=square, 1=kite, 2=gray
+    void cubeshapeChanged(bool inCS);
 
 protected:
     void paintEvent(QPaintEvent*) override;

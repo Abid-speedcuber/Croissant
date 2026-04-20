@@ -562,6 +562,17 @@ void MainWindow::buildUI()
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
     connect(cubeWidget, &Sq1Widget::userInteracted, this, &MainWindow::pushUndoState);
+    connect(cubeWidget, &Sq1Widget::positionChanged, this, [this]() {
+        bool cs = cubeWidget->inCubeshape();
+        if (!cs && chkCubeshape->isChecked()) {
+            chkCubeshape->blockSignals(true);
+            chkCubeshape->setChecked(false);
+            chkCubeshape->blockSignals(false);
+            updateConstraints();
+            updateCommand();
+        }
+        chkCubeshape->setEnabled(cs);
+    });
     connect(cubeWidget, &Sq1Widget::middleStateChanged, this, [this](int state) {
         bool shouldBeChecked = (state == 2);
         if (chkIgnoreMid->isChecked() != shouldBeChecked) {
@@ -1774,7 +1785,7 @@ void MainWindow::updateConstraints()
     if (is2gen)
         disableCheck(chkCubeshape);
     else
-        chkCubeshape->setEnabled(true);
+        chkCubeshape->setEnabled(cubeWidget->inCubeshape());
 
     if (chkCubeshape->isChecked())
         disableCheck(chk2gen);
