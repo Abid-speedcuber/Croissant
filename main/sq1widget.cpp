@@ -354,7 +354,7 @@ void Sq1Widget::leaveEvent(QEvent*) {
 void Sq1Widget::swapSelected(int piece) {
     bool selCorner = (selected<23 && position[selected]==position[selected+1]);
     bool pieCorner = (piece<23   && position[piece]  ==position[piece+1]);
-    if(selCorner != pieCorner) { selected=-1; update(); return; }
+    if(selCorner != pieCorner) { selected=piece; update(); return; }
     if(selected == piece) { selected=-1; update(); return; }
     emit userInteracted();
 
