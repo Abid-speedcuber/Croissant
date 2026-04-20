@@ -1551,6 +1551,32 @@ void MainWindow::buildUI()
     btnTableMode->setVisible(false);
 
     outputWrapperLay->addWidget(txtOutput);
+    auto pauseAutoScroll = [this]() {
+        if (!m_autoScrollPaused && worker && worker->isRunning()) {
+            m_autoScrollPaused = true;
+            btnScrollToBottom->setGraphicsEffect(nullptr);
+            btnScrollToBottom->setText("⌄");
+            btnScrollToBottom->setStyleSheet(
+                "QPushButton#btnScrollToBottom {"
+                "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
+                "  color: #aaaaff; font-size: 16px; font-weight: bold;"
+                "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
+                "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+            int w = m_outputWrapper->width();
+            int h = m_outputWrapper->height();
+            btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);
+            btnScrollToBottom->raise();
+            btnScrollToBottom->setVisible(true);
+        }
+    };
+    connect(txtOutput->verticalScrollBar(), &QScrollBar::sliderPressed, this, pauseAutoScroll);
+    connect(txtOutput->verticalScrollBar(), &QScrollBar::actionTriggered, this, [pauseAutoScroll](int action) {
+        // SliderSingleStepAdd/Sub = arrow keys/buttons, SliderPageStepAdd/Sub = track click
+        if (action == QAbstractSlider::SliderPageStepAdd ||
+            action == QAbstractSlider::SliderPageStepSub ||
+            action == QAbstractSlider::SliderMove)
+            pauseAutoScroll();
+    });
 
     m_tableContainer = new QWidget();
     m_tableContainer->setVisible(false);
@@ -3746,19 +3772,19 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         if (scrollingUp && !m_autoScrollPaused && (worker && worker->isRunning()))
         {
             m_autoScrollPaused = true;
-        btnScrollToBottom->setGraphicsEffect(nullptr);
-        btnScrollToBottom->setText("⌄");
-        btnScrollToBottom->setStyleSheet(
-            "QPushButton#btnScrollToBottom {"
-            "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
-            "  color: #aaaaff; font-size: 16px; font-weight: bold;"
-            "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
-            "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
-        int w = m_outputWrapper->width();
-        int h = m_outputWrapper->height();
-        btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);
-        btnScrollToBottom->raise();
-        btnScrollToBottom->setVisible(true);
+            btnScrollToBottom->setGraphicsEffect(nullptr);
+            btnScrollToBottom->setText("⌄");
+            btnScrollToBottom->setStyleSheet(
+                "QPushButton#btnScrollToBottom {"
+                "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
+                "  color: #aaaaff; font-size: 16px; font-weight: bold;"
+                "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
+                "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+            int w = m_outputWrapper->width();
+            int h = m_outputWrapper->height();
+            btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);
+            btnScrollToBottom->raise();
+            btnScrollToBottom->setVisible(true);
         }
         return false; // let the scroll happen normally
     }
