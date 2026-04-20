@@ -274,14 +274,27 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
 
     if(isMiddle) {
         emit userInteracted();
-        // Cycle: square (middle=0, partial=0) → kite (middle=1, partial=0) → either (partial=1) → square
-        if (middle_partial == 0 && middle == 0) {
-            middle = 1;
-        } else if (middle_partial == 0 && middle == 1) {
-            middle_partial = 1;
+        bool rightClick = (event->button() == Qt::RightButton);
+        if (!rightClick) {
+            // Left click cycles forward: square → kite → gray → square
+            if (middle_partial == 0 && middle == 0) {
+                middle = 1;
+            } else if (middle_partial == 0 && middle == 1) {
+                middle_partial = 1;
+            } else {
+                middle = 0;
+                middle_partial = 0;
+            }
         } else {
-            middle = 0;
-            middle_partial = 0;
+            // Right click cycles backward: square → gray → kite → square
+            if (middle_partial == 0 && middle == 0) {
+                middle_partial = 1;
+            } else if (middle_partial > 0) {
+                middle_partial = 0;
+                middle = 1;
+            } else {
+                middle = 0;
+            }
         }
         emit middleStateChanged(middle_partial > 0 ? 2 : middle);
     } else if(piece >= 0) {
