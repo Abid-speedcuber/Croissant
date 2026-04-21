@@ -45,6 +45,7 @@
 #include <QDir>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QFontDatabase>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -401,6 +402,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     buildUI();
     txtOutput->viewport()->installEventFilter(this);
+
+    // ── Load Abid's notation font (embedded resource) ─────────────────────────
+    {
+        int id = QFontDatabase::addApplicationFont(":/kompact-font.ttf");
+        if (id != -1) {
+            QStringList families = QFontDatabase::applicationFontFamilies(id);
+            if (!families.isEmpty())
+                m_abidFontFamily = families.first();
+        }
+    }
     buildStyles();
     if (m_mainWidget) m_mainWidget->setStyleSheet(buildStyleSheet());
     updateCommand();
@@ -1515,7 +1526,6 @@ void MainWindow::buildUI()
     txtOutput->setReadOnly(true);
     txtOutput->setObjectName("txtOutput");
     txtOutput->setMinimumHeight(120);
-    txtOutput->setStyleSheet("QTextEdit { background: #000000; }");
     txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
 
     btnExpand = new QPushButton("⤢", outputWrapper);
@@ -1539,12 +1549,6 @@ void MainWindow::buildUI()
     btnScrollToBottom->setToolTip("Scroll to bottom / resume auto-scroll");
     btnScrollToBottom->setVisible(false);
     btnScrollToBottom->setCursor(Qt::PointingHandCursor);
-    btnScrollToBottom->setStyleSheet(
-        "QPushButton#btnScrollToBottom {"
-        "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
-        "  color: #aaaaff; font-size: 16px; font-weight: bold;"
-        "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
-        "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
 
     btnExpand->setVisible(false);
     btnCopyTerminal->setVisible(false);
@@ -1556,12 +1560,7 @@ void MainWindow::buildUI()
             m_autoScrollPaused = true;
             btnScrollToBottom->setGraphicsEffect(nullptr);
             btnScrollToBottom->setText("⌄");
-            btnScrollToBottom->setStyleSheet(
-                "QPushButton#btnScrollToBottom {"
-                "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
-                "  color: #aaaaff; font-size: 16px; font-weight: bold;"
-                "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
-                "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+            btnScrollToBottom->setStyleSheet(""); // revert to QSS default
             int w = m_outputWrapper->width();
             int h = m_outputWrapper->height();
             btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);
@@ -1628,7 +1627,9 @@ void MainWindow::buildUI()
     connect(btnExpand, &QPushButton::clicked, this, &MainWindow::toggleExpand);
     connect(btnCopyTerminal, &QPushButton::clicked, this, [this]
             {
-                QApplication::clipboard()->setText(txtOutput->toPlainText());
+                // Always copy clean (non-abid) text regardless of display mode.
+                const QStringList &lines = chkKarnotation->isChecked() ? m_karnLines : m_rawLines;
+                QApplication::clipboard()->setText(lines.join('\n'));
                 appendStatusLine("Terminal copied to clipboard!"); });
     connect(btnScrollToBottom, &QPushButton::clicked, this, [this]
             {
@@ -1678,13 +1679,17 @@ void MainWindow::buildUI()
                 auto showCmdError = [this](const QString& msg) {
                     lblCommandError->setText(msg);
                     lblCommandError->setVisible(true);
-                    txtCommand->setStyleSheet(
-                        "QLineEdit#txtCommand { font-family: monospace; color: #ff5555; font-size: 12px; border-color: #ff5555; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
+                    // Error color is theme-dependent; pick the right value directly.
+                    QString errCol = Theme::textError(m_lightTheme);
+                    txtCommand->setStyleSheet(QString(
+                        "QLineEdit#txtCommand { font-family: monospace; color: %1;"
+                        " font-size: 12px; border-color: %1; border-right: none;"
+                        " border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }")
+                        .arg(errCol));
                 };
                 auto clearCmdError = [this]() {
                     lblCommandError->setVisible(false);
-                    txtCommand->setStyleSheet(
-                        "QLineEdit#txtCommand { font-family: monospace; color: #7fdbff; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }");
+                    txtCommand->setStyleSheet(""); // revert to QSS
                 };
 
                 QStringList parts = text.trimmed().split(' ', Qt::SkipEmptyParts);
@@ -1787,6 +1792,24 @@ void MainWindow::rebuildTerminalView()
         cur.insertText("solution will be displayed here...", fmt);
         return;
     }
+
+    // Helper: insert a solution line with optional Abid font on the alg portion.
+    auto insertSolLine = [this](QTextCursor &cur, const QString &line, const QTextCharFormat &fmt) {
+        if (!m_abidNotation || m_abidFontFamily.isEmpty()) {
+            cur.insertText(line, fmt);
+            return;
+        }
+        int lb = line.lastIndexOf('[');
+        QString algPart     = lb > 0 ? line.left(lb).trimmed() : line;
+        QString bracketPart = lb > 0 ? "  " + line.mid(lb).trimmed() : QString();
+        QTextCharFormat abidFmt = fmt;
+        abidFmt.setFontFamily(m_abidFontFamily);
+        abidFmt.setFontPointSize(fmt.fontPointSize() + 2);
+        cur.insertText(abidifyDisplay(algPart), abidFmt);
+        if (!bracketPart.isEmpty())
+            cur.insertText(bracketPart, fmt);
+    };
+
     QTextCursor cur(txtOutput->document());
     int solIdx = 0;
     for (const QString &line : std::as_const(lines))
@@ -1807,6 +1830,7 @@ void MainWindow::rebuildTerminalView()
             QTextBlockFormat blkFmt;
             blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
             cur.setBlockFormat(blkFmt);
+            insertSolLine(cur, line, fmt);
             solIdx++;
         }
         else
@@ -1818,8 +1842,8 @@ void MainWindow::rebuildTerminalView()
             QTextBlockFormat blkFmt;
             blkFmt.setLineHeight(m_expanded ? 150 : 120, QTextBlockFormat::ProportionalHeight);
             cur.setBlockFormat(blkFmt);
+            cur.insertText(line, fmt);
         }
-        cur.insertText(line, fmt);
     }
     txtOutput->verticalScrollBar()->setValue(0);
 }
@@ -1987,8 +2011,7 @@ void MainWindow::updateCommand()
     QStringList args = buildArgList();
     txtCommand->setText("sq1opt " + args.join(" ") + " " + pos);
     lblCommandError->setVisible(false);
-    QString cyan = Theme::textCyan(m_lightTheme);
-    txtCommand->setStyleSheet(QString("QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px; border-right: none; border-radius: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }").arg(cyan));
+    txtCommand->setStyleSheet(""); // revert any error-state override to QSS
 }
 
 // -------------------------------------------------------
@@ -2228,7 +2251,19 @@ void MainWindow::onSolverLine(QString line)
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
-            cur.insertText(displayLine, fmt);
+            if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+                int lb = displayLine.lastIndexOf('[');
+                QString algPart     = lb > 0 ? displayLine.left(lb).trimmed() : displayLine;
+                QString bracketPart = lb > 0 ? "  " + displayLine.mid(lb).trimmed() : QString();
+                QTextCharFormat abidFmt = fmt;
+                abidFmt.setFontFamily(m_abidFontFamily);
+                abidFmt.setFontPointSize(fmt.fontPointSize() + 2);
+                cur.insertText(abidifyDisplay(algPart), abidFmt);
+                if (!bracketPart.isEmpty())
+                    cur.insertText(bracketPart, fmt);
+            } else {
+                cur.insertText(displayLine, fmt);
+            }
             {
                 int saved = txtOutput->verticalScrollBar()->value();
                 txtOutput->setTextCursor(cur);
@@ -2637,14 +2672,25 @@ void MainWindow::rebuildTable()
         m_solutionTable->setItem(i, 0, numItem);
 
         // Solution column: selectable QLabel
-        QLabel *algLabel = new QLabel(r.alg);
+        QString algDisplay = (m_abidNotation && !m_abidFontFamily.isEmpty())
+                             ? abidifyDisplay(r.alg) : r.alg;
+        QLabel *algLabel = new QLabel(algDisplay);
         algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
         algLabel->setCursor(Qt::ArrowCursor);
         algLabel->setContentsMargins(4, 0, 4, 0);
-        algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
-                                    .arg(bg.name(),
-                                         textCol.name(),
-                                         m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
+        if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+            // Font family must live inside the stylesheet — setFont() is overridden by it.
+            // Bump point size +2 to match the kompact font's smaller cap-height.
+            int abidPt = fontSize + 2;
+            algLabel->setStyleSheet(QString(
+                "QLabel { background: %1; color: %2; font-family: '%3'; font-size: %4pt; }")
+                .arg(bg.name(), textCol.name(), m_abidFontFamily, QString::number(abidPt)));
+        } else {
+            algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
+                                        .arg(bg.name(),
+                                             textCol.name(),
+                                             m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
+        }
         // Install event filter to show IBeam only when hovering over the text itself
         algLabel->installEventFilter(this);
         m_solutionTable->setCellWidget(i, 1, algLabel);
@@ -2740,6 +2786,8 @@ void MainWindow::onRankErgoToggled(bool checked)
     txtOutput->clear();
     QTextCursor cur(txtOutput->document());
     bool firstBlock = true;
+
+    // insertLine: plain text, no abid transformation (used for status / non-sol lines)
     auto insertLine = [&](const QString &text, const QString &color, bool bold, int ptSize, int lineH)
     {
         if (!firstBlock)
@@ -2753,6 +2801,32 @@ void MainWindow::onRankErgoToggled(bool checked)
         fmt.setFontWeight(bold ? QFont::Bold : QFont::Normal);
         fmt.setFontPointSize(ptSize);
         cur.insertText(text, fmt);
+    };
+
+    // insertSolLine: solution line with optional abid font on the alg portion
+    auto insertSolLine = [&](const QString &algPart, const QString &suffix,
+                             const QString &color, bool bold, int ptSize, int lineH)
+    {
+        if (!firstBlock)
+            cur.insertBlock();
+        firstBlock = false;
+        QTextBlockFormat blkFmt;
+        blkFmt.setLineHeight(lineH, QTextBlockFormat::ProportionalHeight);
+        cur.setBlockFormat(blkFmt);
+        QTextCharFormat fmt;
+        fmt.setForeground(QColor(color));
+        fmt.setFontWeight(bold ? QFont::Bold : QFont::Normal);
+        fmt.setFontPointSize(ptSize);
+        if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+            QTextCharFormat abidFmt = fmt;
+            abidFmt.setFontFamily(m_abidFontFamily);
+            abidFmt.setFontPointSize(ptSize + 2);
+            cur.insertText(abidifyDisplay(algPart), abidFmt);
+            if (!suffix.isEmpty())
+                cur.insertText(suffix, fmt);
+        } else {
+            cur.insertText(algPart + suffix, fmt);
+        }
     };
 
     // Non-solution lines first (from the appropriate display list)
@@ -2778,23 +2852,24 @@ void MainWindow::onRankErgoToggled(bool checked)
         }
         const QString &dline = displaySols[idx];
         int lb = dline.lastIndexOf('[');
-        QString displayAlg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
+        QString displayAlg  = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
         QString bracketPart = lb > 0 ? dline.mid(lb).trimmed() : QString();
-        QString displayLine = displayAlg + (bracketPart.isEmpty() ? QString() : "  " + bracketPart);
 
         bool isAlt = (solIdx % 2 == 1);
         QString col = m_lightTheme
                           ? (isAlt ? Theme::solutionAltLight(true) : Theme::solutionPrimary(true))
                           : (isAlt ? Theme::solutionAltLight(false) : Theme::textSolution(false));
+
         if (std::isnan(score))
         {
-            QString display = QString("%1  (⚠)").arg(displayLine);
-            insertLine(display, "#cc2020", m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
+            QString suffix = (bracketPart.isEmpty() ? QString() : "  " + bracketPart) + "  (⚠)";
+            insertSolLine(displayAlg, suffix, "#cc2020", m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         }
         else
         {
-            QString display = QString("%1  (%2)").arg(displayLine).arg(score, 0, 'f', 2);
-            insertLine(display, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
+            QString suffix = (bracketPart.isEmpty() ? QString() : "  " + bracketPart)
+                             + QString("  (%1)").arg(score, 0, 'f', 2);
+            insertSolLine(displayAlg, suffix, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         }
         solIdx++;
     }
@@ -3223,6 +3298,96 @@ void MainWindow::showOldDocsPopup()
     overlay->installEventFilter(f); // watches overlay for click-outside
 }
 
+// -------------------------------------------------------
+// abidifyDisplay
+// Converts an alg-only string for display with the Kompact font.
+// WCA format  (contains commas): parses a,b pairs and maps digits to
+//   the custom codepoints, using the two-sided bar illusion when both
+//   values are negative.
+// Karn / mixed format (no commas): replaces digits with normal custom
+//   codepoints and applies singleBar to negative digit runs.
+// The bracket part "[x|y]" must NOT be passed in — strip it first.
+// -------------------------------------------------------
+QString MainWindow::abidifyDisplay(const QString& algOnly) const
+{
+    if (m_abidFontFamily.isEmpty() || algOnly.isEmpty())
+        return algOnly;
+
+    // Codepoint helpers (values 0-6 only; square-1 never exceeds 6)
+    auto normalCp  = [](int d) -> QChar { return QChar(0xe000 + d); };
+    auto singleBar = [](int d) -> QChar { return QChar(0xe006 + d); }; // 1→E007…5→E00B
+    auto barRight  = [](int d) -> QChar { return QChar(0xe00b + d); }; // 1→E00C…5→E010
+    auto barLeft   = [](int d) -> QChar { return QChar(0xe010 + d); }; // 1→E011…5→E015
+
+    auto mapDigits = [&](int absVal, std::function<QChar(int)> mapper) -> QString {
+        QString s;
+        for (QChar c : QString::number(absVal))
+            if (c.isDigit()) s += mapper(c.digitValue());
+        return s;
+    };
+
+    if (algOnly.contains(',')) {
+        // ── WCA format: find every a,b token ─────────────────────────────────
+        static const QRegularExpression pairRe(R"((-?\d+),(-?\d+))");
+        QString result;
+        int last = 0;
+        auto it = pairRe.globalMatch(algOnly);
+        while (it.hasNext()) {
+            auto m = it.next();
+            // Pass through non-numeric content (slashes, slice indicators, spaces)
+            result += algOnly.mid(last, m.capturedStart() - last);
+            int a = m.captured(1).toInt();
+            int b = m.captured(2).toInt();
+            if (a < 0 && b < 0) {
+                result += mapDigits(qAbs(a), barRight);
+                result += mapDigits(qAbs(b), barLeft);
+            } else {
+                result += (a < 0) ? mapDigits(qAbs(a), singleBar)
+                                  : mapDigits(qAbs(a), normalCp);
+                result += (b < 0) ? mapDigits(qAbs(b), singleBar)
+                                  : mapDigits(qAbs(b), normalCp);
+            }
+            last = m.capturedEnd();
+        }
+        result += algOnly.mid(last);
+        return result;
+    } else {
+        // ── Karn / stripped-comma format ──────────────────────────────────────
+        // Commas were stripped, so (-2,-3) → "-2-3" and (-5,0) → "-50".
+        // Sq1 values are always single digits (-6..6), so a '-' always governs
+        // exactly ONE following digit. Consume exactly one digit per negative token.
+        //
+        // Both-negative pair detection: if '-'digit is immediately followed by
+        // another '-'digit (no space), apply barRight + barLeft so the bars connect.
+        QString result;
+        int i = 0;
+        while (i < algOnly.size()) {
+            QChar c = algOnly[i];
+            if (c == '-' && i + 1 < algOnly.size() && algOnly[i + 1].isDigit()) {
+                // Peek: is there a second '-'digit immediately after this one?
+                bool bothNeg = (i + 2 < algOnly.size() && algOnly[i + 2] == '-' &&
+                                i + 3 < algOnly.size() && algOnly[i + 3].isDigit());
+                if (bothNeg) {
+                    result += barRight(algOnly[i + 1].digitValue()); // first  → barRight
+                    i += 2;
+                    result += barLeft(algOnly[i + 1].digitValue());  // second → barLeft
+                    i += 2;
+                } else {
+                    result += singleBar(algOnly[i + 1].digitValue());
+                    i += 2;
+                }
+            } else if (c.isDigit()) {
+                result += normalCp(c.digitValue());
+                ++i;
+            } else {
+                result += c;
+                ++i;
+            }
+        }
+        return result;
+    }
+}
+
 QString MainWindow::convertLine(const QString &rawLine)
 {
     int lb = rawLine.lastIndexOf('[');
@@ -3251,8 +3416,6 @@ void MainWindow::applyTheme()
     if (m_updateLogo)
         m_updateLogo();
     updateConstraints();
-    QString termBg = Theme::secondaryBg(m_lightTheme);
-    txtOutput->setStyleSheet(QString("QTextEdit { background: %1; }").arg(termBg));
     txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
     if (!m_rawLines.isEmpty())
     {
@@ -3264,15 +3427,7 @@ void MainWindow::applyTheme()
     if (m_tableVisible)
         rebuildTable();
 
-    // Update command line color
-    QString cyan = Theme::textCyan(m_lightTheme);
-    txtCommand->setStyleSheet(QString(
-                                  "QLineEdit#txtCommand { font-family: monospace; color: %1; font-size: 12px;"
-                                  " border-right: none; border-radius: 0; border-top-left-radius: 4px;"
-                                  " border-bottom-left-radius: 4px; }")
-                                  .arg(cyan));
-
-    // Input bar background
+    // Update command line error label; core txtCommand color is handled by QSS.
     if (m_inputBarOuter)
         m_inputBarOuter->setStyleSheet("");
     cubeWidget->setLightTheme(m_lightTheme);
@@ -3508,9 +3663,26 @@ void MainWindow::showSettingsModal()
         } });
     lay->addWidget(chkSmart);
 
-    QLabel *hint = new QLabel("More settings coming soon.");
-    hint->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(textMuted));
-    lay->addWidget(hint);
+    // ── Abid's Notation ───────────────────────────────────────────────────────
+    QCheckBox *chkAbid = new QCheckBox("Abid's notation");
+    chkAbid->setChecked(m_abidNotation && !m_abidFontFamily.isEmpty());
+    chkAbid->setEnabled(!m_abidFontFamily.isEmpty());
+    chkAbid->setToolTip("Display negative numbers as barred digits using the Kompact font\n"
+                        "(e.g. -3 → 3̄) for a cleaner look. Displayed only — copies\n"
+                        "always use standard notation with minus signs.");
+    if (m_abidFontFamily.isEmpty())
+        chkAbid->setToolTip(chkAbid->toolTip() +
+                            "\n\n⚠ kompact-font.ttf not found — visual effect unavailable.");
+    chkAbid->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
+    connect(chkAbid, &QCheckBox::toggled, this, [this](bool checked) {
+        m_abidNotation = checked;
+        if (!m_rawLines.isEmpty()) {
+            if (m_tableVisible) rebuildTable();
+            else if (chkRankErgo->isChecked()) onRankErgoToggled(true);
+            else rebuildTerminalView();
+        }
+    });
+    lay->addWidget(chkAbid);
 
     card->show();
     card->adjustSize();
@@ -3774,12 +3946,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             m_autoScrollPaused = true;
             btnScrollToBottom->setGraphicsEffect(nullptr);
             btnScrollToBottom->setText("⌄");
-            btnScrollToBottom->setStyleSheet(
-                "QPushButton#btnScrollToBottom {"
-                "  background: #2a2a4a; border: 1px solid #4a4a7a; border-radius: 16px;"
-                "  color: #aaaaff; font-size: 16px; font-weight: bold;"
-                "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
-                "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
+            btnScrollToBottom->setStyleSheet(""); // revert to QSS default
             int w = m_outputWrapper->width();
             int h = m_outputWrapper->height();
             btnScrollToBottom->move(w - 6 - 28 - 16, h - 6 - 32 - 6);

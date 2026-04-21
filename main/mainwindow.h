@@ -174,6 +174,9 @@ private:
     //settings stuffs
     bool          m_lightTheme{false};
     bool          m_smartKarn{true};
+    bool          m_abidNotation{false};
+    QString       m_abidFontFamily;
+    QString       abidifyDisplay(const QString& algOnly) const;
 
     QWidget*      m_sidebar{nullptr};
     QWidget*      m_sidebarOverlay{nullptr};

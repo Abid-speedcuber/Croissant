@@ -525,6 +525,22 @@ QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#
     background: --pressed-bg;
 }
 
+QPushButton#btnScrollToBottom {
+    background: #2a2a4a;
+    border: 1px solid #4a4a7a;
+    border-radius: 16px;
+    color: #aaaaff;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 0px;
+    margin: 0px;
+    text-align: center;
+}
+
+QPushButton#btnScrollToBottom:hover {
+    background: #3a3a6a;
+}
+
 /* ========== Left Panel & Cube Area ========== */
 QScrollArea#leftScroll {
     background: --primary-bg;
