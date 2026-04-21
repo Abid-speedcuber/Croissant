@@ -4047,7 +4047,6 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── Esc from m_mainInput — reset cube without stealing focus ─────────────
     if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput) && ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier)
     {
-        m_undoStack.clear();
         m_redoStack.clear();
         btnUndo->setEnabled(false);
         btnRedo->setEnabled(false);
@@ -4080,8 +4079,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── Text inputs get all remaining keys — never steal from them ────────────
     {
         QWidget *fw = QApplication::focusWidget();
-        if (fw == txtCommand || fw == txtScramble || fw == txtDepths || fw == m_mainInput ||
-            watched == txtCommand || watched == txtScramble || watched == txtDepths || watched == m_mainInput)
+        if (fw == txtCommand || fw == txtDepths || fw == m_mainInput ||
+            watched == txtCommand || watched == txtDepths || watched == m_mainInput ||
+            m_mainInput->hasFocus() || txtCommand->hasFocus() || txtDepths->hasFocus())
             return QMainWindow::eventFilter(watched, event);
     }
 

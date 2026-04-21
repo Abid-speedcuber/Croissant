@@ -92,7 +92,6 @@ private:
     QCheckBox*    chkMaxTotal;
     QSpinBox*     spnMaxTotal;
     QLineEdit*    txtCommand;
-    QLineEdit*    txtScramble;
     QPushButton*  btnSolve;
     QPushButton*  btnCopy;
     QPushButton*  btnApply{nullptr};
