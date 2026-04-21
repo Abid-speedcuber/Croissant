@@ -85,9 +85,9 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
         int mid = 0, mid_par = 0;
         if (s.size() == 17) {
             if      (s[16] == '-') { mid = 0; mid_par = 0; }
-            else if (s[16] == '/') { mid = 1; mid_par = 0; }
+            else if (s[16] == '+') { mid = 1; mid_par = 0; }
             else                   { mid = 0; mid_par = 1; }
-        }
+        } else if (s.size() == 16) { mid = 0; mid_par = 1; } // ABCDEFGH12345678 sets partial bar
 
         // All checks passed — commit to state
         for (int i = 0; i < 24; i++) { position[i] = pi[i]; partiality[i] = parArr[i]; }
@@ -321,7 +321,7 @@ void Sq1Widget::mouseMoveEvent(QMouseEvent* event) {
     QPointF pt = event->position();
     int hoveredPiece = -1;
     bool overPiece = false;
-    
+
     if (pt.y() < MID_TOP) {
         // Top layer: polygon hit test handles exact containment.
         hoveredPiece = hitTestTop(pt);
@@ -341,10 +341,10 @@ void Sq1Widget::mouseMoveEvent(QMouseEvent* event) {
         hoveredPiece = hitTestBot(pt);
         overPiece = (hoveredPiece >= 0);
     }
-    
+
     // Update cursor
     setCursor(overPiece ? Qt::PointingHandCursor : Qt::ArrowCursor);
-    
+
     // Update hover state and repaint if changed
     if (hovered != hoveredPiece) {
         // Ensure both old and new piece have entries in the map
