@@ -4026,16 +4026,23 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     }
 
     // ── Enter / Shift+Enter in m_mainInput ───────────────────────────────────
-    // Enter        = apply alg/scramble from solved state
-    // Shift+Enter  = do nothing (consumed)
+    // Enter        = apply alg/scramble from current cube state
+    // Shift+Enter  = apply alg/scramble from solved state (resets first)
     if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput) && ke->key() == Qt::Key_Return)
     {
         if (ke->modifiers() & Qt::ShiftModifier)
-            return true; // Shift+Enter: swallow, no action
-        // plain Enter: apply from solved state
-        m_applyFromSolved = true;
-        btnApply->click();
-        m_applyFromSolved = false;
+        {
+            // Shift+Enter: apply from solved state
+            m_applyFromSolved = true;
+            btnApply->click();
+            m_applyFromSolved = false;
+        }
+        else
+        {
+            // plain Enter: apply on top of current cube state
+            m_applyFromSolved = false;
+            btnApply->click();
+        }
         return true;
     }
 
