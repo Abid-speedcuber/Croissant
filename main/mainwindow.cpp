@@ -2676,6 +2676,8 @@ void MainWindow::rebuildTable()
                              ? abidifyDisplay(r.alg) : r.alg;
         QLabel *algLabel = new QLabel(algDisplay);
         algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        algLabel->setContextMenuPolicy(Qt::CustomContextMenu);
+        algLabel->setProperty("cleanAlg", r.alg);
         algLabel->setCursor(Qt::ArrowCursor);
         algLabel->setContentsMargins(4, 0, 4, 0);
         if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
@@ -3903,6 +3905,23 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    // ── Right-click copy on table-cell labels (always copies clean notation) ──
+    if (event->type() == QEvent::ContextMenu)
+    {
+        if (QLabel *lbl = qobject_cast<QLabel *>(watched)) {
+            QVariant v = lbl->property("cleanAlg");
+            if (v.isValid()) {
+                QMenu menu;
+                QAction *copyAct = menu.addAction("Copy");
+                QAction *chosen = menu.exec(
+                    static_cast<QContextMenuEvent *>(event)->globalPos());
+                if (chosen == copyAct)
+                    QApplication::clipboard()->setText(v.toString());
+                return true;
+            }
+        }
+    }
+
     // ── IBeam cursor only over actual label text ──────────────────────────────
     if (event->type() == QEvent::MouseMove)
     {
@@ -3969,8 +3988,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             stopSolver();
             return true; // consume — don't copy
         }
+        // If Ctrl+C fires on a table-cell label while Abid's notation is on,
+        // copy the clean (minus-sign) text instead of the PUA glyphs.
+        if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+            if (QLabel *lbl = qobject_cast<QLabel *>(watched)) {
+                QVariant v = lbl->property("cleanAlg");
+                if (v.isValid()) {
+                    QApplication::clipboard()->setText(v.toString());
+                    return true;
+                }
+            }
+        }
         return QMainWindow::eventFilter(watched, event);
     }
+
 
     // ── Ctrl+= / Ctrl+- — zoom in / out ─────────────────────────────────────
     if (ke->modifiers() == Qt::ControlModifier)
