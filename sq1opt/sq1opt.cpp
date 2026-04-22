@@ -69,7 +69,6 @@ bool specificAngleBot=false;
 int metric = TURN_METRIC;
 // 0=both  1=preABF  2=postABF  3=none (default — matches old solver-mode behaviour of
 // normalizing postABF, but the UI default is "none" so the user opts in explicitly)
-int normalizeAbf = 3;
 int maxX = 6;
 int maxY = 6;
 int maxTotal = 12;
@@ -1287,12 +1286,8 @@ class PositionSolver {
 		if( usenegative && m>6 ) m-=12;
 		return m;
 	}
-	std::string printmove(int mu, int md, bool removeAUF){
+	std::string printmove(int mu, int md){
 		std::string out = "";
-		if (removeAUF) {
-			mu = (mu + 13)%3 - 1;
-			md = (md + 13)%3 - 1;
-		}
 		if( mu!=0 || md!=0 ) {
 			if( usebrackets && !karnotation ) out += "(";
 			out += std::to_string(mu);
@@ -1308,20 +1303,11 @@ class PositionSolver {
 		int mu=0, md=0;
 		int angle=0;
 
-		// Whether to strip AUF from the pre- and post-ABF moves.
-		// "Pre-ABF"  = the move that appears BEFORE the first '/' in the output.
-		// "Post-ABF" = the move that appears AFTER  the last  '/' in the output.
-		// When generator is on sq1opt iterates moveList backwards, so the first
-		// printed move is still the pre-ABF display move — the semantics are
-		// purely about position in the output string, not the internal move order.
-		const bool normPre  = (normalizeAbf == 0 || normalizeAbf == 1);
-		const bool normPost = (normalizeAbf == 0 || normalizeAbf == 2);
-
 		if( generator ){
 			bool isFirstOutputSlice = true;
 			for( int i=moveLen-1; i>=0; i--){
 				if( moveList[i]==0 ) {
-					out += printmove(mu, md, isFirstOutputSlice && normPre);
+					out += printmove(mu, md);
 					isFirstOutputSlice = false;
 					mu = md = 0;
 					out += "/";
@@ -1340,7 +1326,7 @@ class PositionSolver {
 			bool isFirstOutputSlice = true;
 			for( int i=0; i<moveLen; i++){
 				if( moveList[i]==0 ) {
-					out += printmove(mu, md, isFirstOutputSlice && normPre);
+					out += printmove(mu, md);
 					isFirstOutputSlice = false;
 					mu = md = 0;
 					out += "/";
@@ -1356,11 +1342,12 @@ class PositionSolver {
 				}
 			}
 		}
-		out += printmove(mu, md, normPost);
+		out += printmove(mu, md);
 		if (karnotation)
 			out = karnify(out);
 		std::cout << out;
-		std::cout <<"  ["<<tw<<"|"<<tu;
+		std::cout <<"  ["<<tw;
+		if (metric != SLICE_METRIC) std::cout <<"|"<<tu; // move
 		if (metric == ANGLE_METRIC) std::cout<<"|"<<angle;
 		std::cout<<"] "<<std::endl;
 	}
@@ -1635,13 +1622,6 @@ int main(int argc, char* argv[]){
 				case 'K':
 					karnotation = true;
 					break;
-				case 'o':
-				case 'O':
-					if      (argv[i][2]=='b'||argv[i][2]=='B') normalizeAbf=0;
-					else if (argv[i][2]=='e'||argv[i][2]=='E') normalizeAbf=1;
-					else if (argv[i][2]=='s'||argv[i][2]=='S') normalizeAbf=2;
-					else return show(1);
-					break;
 				case 'n':
 				case 'N':
 					if (argv[i][2]=='b'||argv[i][2]=='B') { specificAngleTop=true; specificAngleBot=true; }
@@ -1706,21 +1686,21 @@ int main(int argc, char* argv[]){
 
 	// now we have a position p to solve
 
-	if(verbosity>=3) std::cout << "Initialising..."<<std::endl;
+	if(verbosity>=3) std::cout << "Initializing..."<<std::endl;
 	// calculate transition tables
 	ChoiceTable ct;
 	if(verbosity>=4) std::cout << "  5. Shape transition table"<<std::endl;
 	ShapeTranTable st;
-	if(verbosity>=4) std::cout << "  4. Colouring 1 transition table"<<std::endl;
+	if(verbosity>=4) std::cout << "  4. Coloring transition table #1"<<std::endl;
 	ShpColTranTable scte( st, ct, true );
-	if(verbosity>=4) std::cout << "  3. Colouring 2 transition table"<<std::endl;
+	if(verbosity>=4) std::cout << "  3. Coloring transition table #2"<<std::endl;
 	ShpColTranTable sctc( st, ct, false );
 
 	//calculate pruning tables for two colourings
 	FullPosition q;
-	if(verbosity>=4) std::cout << "  2. Colouring 1 pruning table"<<std::endl;
+	if(verbosity>=4) std::cout << "  2. Coloring pruning table #1"<<std::endl;
 	PrunTable pr1(q, 0, st,scte,sctc );
-	if(verbosity>=4) std::cout << "  1. Colouring 2 pruning table"<<std::endl;
+	if(verbosity>=4) std::cout << "  1. Coloring pruning table #2"<<std::endl;
 	PrunTable pr2(q, 1, st,scte,sctc );
 	if(verbosity>=4) std::cout << "  0. Finished."<<std::endl;
 	PositionSolver ps( st, scte, sctc, pr1, pr2 );

@@ -1,9 +1,9 @@
 /* ========== Main Window & Base Styling ========== */
-QMainWindow, QWidget { 
-    background: --primary-bg; 
-    color: --text-primary; 
-    font-family: 'Segoe UI', Arial; 
-    font-size: 13px; 
+QMainWindow, QWidget {
+    background: --primary-bg;
+    color: --text-primary;
+    font-family: 'Segoe UI', Arial;
+    font-size: 13px;
 }
 
 /* ========== Options Panel Rows (div-style flex rows) ========== */
@@ -35,7 +35,7 @@ QWidget#optionRowRight {
 }
 
 /* --- per-row overrides (you can customize each line here) --- */
-QWidget#optionRow_metric        { min-height: 30px; max-height: 36px; margin-bottom: 3px; }
+QWidget#optionRow_metric        { min-height: 28px; max-height: 32px; margin-bottom: 3px; }
 QWidget#optionRow_allopt        { min-height: 28px; }
 QWidget#optionRow_depths        { min-height: 28px; }
 QWidget#optionRow_generator     { min-height: 28px; margin-top: 3px; }
@@ -43,8 +43,8 @@ QWidget#optionRow_2gen          { min-height: 28px; }
 QWidget#optionRow_pseudo2gen    { min-height: 28px; }
 QWidget#optionRow_cubeshape     { min-height: 28px; }
 QWidget#optionRow_ignoremid     { min-height: 28px; margin-bottom: 3px; }
-QWidget#optionRow_angle         { min-height: 30px; max-height: 36px; margin-top: 3px; }
-QWidget#optionRow_normalizeabf  { min-height: 30px; max-height: 36px; }
+QWidget#optionRow_angle         { min-height: 28px; max-height: 32px; margin-top: 3px; }
+QWidget#optionRow_normalizeabf  { min-height: 28px; max-height: 32px; }
 QWidget#optionRow_maxx          { min-height: 28px; margin-top: 3px; }
 QWidget#optionRow_maxy          { min-height: 28px; }
 QWidget#optionRow_maxtotal      { min-height: 28px; }
@@ -57,6 +57,7 @@ QCheckBox#chkPseudo2gen,
 QCheckBox#chkCubeshape,
 QCheckBox#chkIgnoreMid,
 QCheckBox#chkKarnotation,
+QCheckBox#chkRankErgo,
 QCheckBox#chkMaxX,
 QCheckBox#chkMaxY,
 QCheckBox#chkMaxTotal {
@@ -104,6 +105,8 @@ QWidget#anglePill,
 QWidget#normalizeAbfPill {
     background: --radio-pill-bg;
     border-radius: 7px;
+    min-height: 24px;
+    max-height: 24px;
 }
 
 /* --- radio pill buttons base --- */
@@ -113,11 +116,13 @@ QWidget#normalizeAbfPill > QPushButton {
     background: transparent;
     border: none;
     color: --radio-btn-text;
-    padding: 3px 10px;
+    padding: 0px 10px;
     font-size: 11px;
     font-weight: 600;
     border-radius: 0;
     min-width: 0;
+    min-height: 22px;
+    max-height: 22px;
 }
 
 /* --- first/last rounding --- */
@@ -162,25 +167,25 @@ QLabel#normalizeAbfRow_label {
 }
 
 /* ========== GroupBox ========== */
-QGroupBox { 
-    border: 1px solid --border-group; 
-    border-radius: 6px; 
-    margin-top: 8px; 
-    padding-top: 8px; 
-    color: --text-secondary; 
+QGroupBox {
+    border: 1px solid --border-group;
+    border-radius: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    color: --text-secondary;
 }
 
-QGroupBox::title { 
-    subcontrol-origin: margin; 
-    left: 8px; 
-    padding: 0 4px; 
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px;
 }
 
 /* ========== CheckBox ========== */
-QCheckBox { 
+QCheckBox {
     spacing: 6px;
 }
-QCheckBox::indicator { 
+QCheckBox::indicator {
     width:14px;
     height:14px;
     border-radius:3px;
@@ -188,27 +193,37 @@ QCheckBox::indicator {
     background:--checkbox-bg;
 }
 
-QCheckBox::indicator:checked { 
+QCheckBox::indicator:checked {
     background: --checkbox-check-blue;
     border-color: --checkbox-check-blue;
 }
 
-QCheckBox#chkRankErgo::indicator:checked { 
+QCheckBox#chkRankErgo::indicator:checked {
     background: --checkbox-check-orange;
     border-color: --checkbox-check-orange;
 }
 
-QCheckBox:disabled { 
+QCheckBox:disabled,
+QCheckBox#chkAllOptimal:disabled,
+QCheckBox#chkGenerator:disabled,
+QCheckBox#chk2gen:disabled,
+QCheckBox#chkPseudo2gen:disabled,
+QCheckBox#chkCubeshape:disabled,
+QCheckBox#chkIgnoreMid:disabled,
+QCheckBox#chkKarnotation:disabled,
+QCheckBox#chkMaxX:disabled,
+QCheckBox#chkMaxY:disabled,
+QCheckBox#chkMaxTotal:disabled {
     color: #4a4a5a;
 }
 
-QCheckBox::indicator:disabled { 
+QCheckBox::indicator:disabled {
     border-color: --border-dark;
     background: --disabled-bg;
 }
 
 /* ========== Input Fields (LineEdit & SpinBox) ========== */
-QLineEdit { 
+QLineEdit {
     background: --tertiary-bg;
     border: 1px solid --border-light;
     border-radius: 4px;
@@ -216,13 +231,13 @@ QLineEdit {
     color: --input-field-text;
 }
 
-QLineEdit:disabled { 
+QLineEdit:disabled {
     color: --text-disabled;
     background: --disabled-bg;
     border-color: --border-dark;
 }
 
-QLineEdit#txtCommand { 
+QLineEdit#txtCommand {
     font-family: monospace;
     color: --text-cyan;
     font-size: 12px;
@@ -241,34 +256,34 @@ QSpinBox {
     min-width: 48px;
 }
 
-QSpinBox:disabled { 
+QSpinBox:disabled {
     color: --text-disabled;
     background: --disabled-bg;
     border-color: --border-dark;
 }
 
-QSpinBox::up-button   { 
+QSpinBox::up-button   {
     width: 0;
     border: none;
 }
 
-QSpinBox::down-button { 
+QSpinBox::down-button {
     width: 0;
     border: none;
 }
 
-QSpinBox::up-arrow    { 
+QSpinBox::up-arrow    {
     width: 0;
     height: 0;
 }
 
-QSpinBox::down-arrow  { 
+QSpinBox::down-arrow  {
     width: 0;
     height: 0;
 }
 
 /* ========== TextEdit ========== */
-QTextEdit#txtOutput { 
+QTextEdit#txtOutput {
     background: --secondary-bg;
     border: 1px solid --border-group;
     border-radius: 4px;
@@ -278,12 +293,12 @@ QTextEdit#txtOutput {
     padding: 4px;
 }
 
-QTextEdit#txtOutput > QWidget { 
+QTextEdit#txtOutput > QWidget {
     background: --secondary-bg;
 }
 
 /* ========== Buttons ========== */
-QPushButton { 
+QPushButton {
     background: --button-bg;
     border: 1px solid --button-border;
     border-radius: 5px;
@@ -291,16 +306,16 @@ QPushButton {
     color: --button-text;
 }
 
-QPushButton:hover { 
+QPushButton:hover {
     background: --hover-bg;
     border-color: --button-border;
 }
 
-QPushButton:pressed { 
+QPushButton:pressed {
     background: --pressed-bg;
 }
 
-QPushButton#btnSolve { 
+QPushButton#btnSolve {
     background: --button-solve-bg;
     border-color: --button-solve-border;
     color: #fff;
@@ -308,17 +323,17 @@ QPushButton#btnSolve {
     font-weight: bold;
 }
 
-QPushButton#btnSolve:hover { 
+QPushButton#btnSolve:hover {
     background: --button-solve-hover;
 }
 
-QPushButton#btnSolve:disabled { 
+QPushButton#btnSolve:disabled {
     background: --stop-solve-disabled-bg;
     border-color: --stop-solve-disabled-border;
     color: --stop-solve-disabled-text;
 }
 
-QPushButton#btnCopy { 
+QPushButton#btnCopy {
     background: --tertiary-bg;
     border: 1px solid --border-light;
     border-left: none;
@@ -331,7 +346,7 @@ QPushButton#btnCopy {
     margin-right: 5px;
 }
 
-QPushButton#btnCopy:hover { 
+QPushButton#btnCopy:hover {
     background: --hover-bg;
     color: --button-text;
 }
@@ -347,7 +362,7 @@ QPushButton#btnReset {
     letter-spacing: -0.5px;
 }
 
-QPushButton#btnReset:hover { 
+QPushButton#btnReset:hover {
     background: --button-reset-hover;
     border-color: --button-border;
     color: --button-text;
@@ -382,7 +397,7 @@ QPushButton#btnApplyScramble {
     padding: 4px 8px;
 }
 
-QPushButton#btnApplyScramble:hover { 
+QPushButton#btnApplyScramble:hover {
     background: --hover-bg;
     border-color: --button-border;
 }
@@ -399,12 +414,12 @@ QPushButton#btnScrambleMode {
     font-size: 11px;
 }
 
-QPushButton#btnScrambleMode:checked { 
+QPushButton#btnScrambleMode:checked {
     color: #fff;
     background: #333350;
 }
 
-QPushButton#btnScrambleMode:hover { 
+QPushButton#btnScrambleMode:hover {
     background: --hover-bg;
 }
 
@@ -442,7 +457,7 @@ QPushButton#btnInputMode {
     letter-spacing: 0.5px;
 }
 
-QPushButton#btnInputMode:hover { 
+QPushButton#btnInputMode:hover {
     background: --input-mode-hover;
     border-color: --input-mode-border;
 }
@@ -462,7 +477,7 @@ QPushButton#btnInputModeArrow {
     max-width: 20px;
 }
 
-QPushButton#btnInputModeArrow:hover { 
+QPushButton#btnInputModeArrow:hover {
     background: --input-arrow-hover;
     border-color: --input-arrow-border;
 }
@@ -483,7 +498,7 @@ QPushButton#btnApply {
     letter-spacing: 0.5px;
 }
 
-QPushButton#btnApply:hover { 
+QPushButton#btnApply:hover {
     background: --input-apply-hover;
     border-color: --input-apply-border;
     color: --input-apply-hover-text;
@@ -588,85 +603,85 @@ QPushButton#btnReset:hover {
 }
 
 /* ========== ProgressBar ========== */
-QProgressBar { 
+QProgressBar {
     border: none;
     background: --progress-bg;
     border-radius: 3px;
 }
 
-QProgressBar::chunk { 
+QProgressBar::chunk {
     background: --progress-fill;
     border-radius: 3px;
 }
 
 /* ========== Labels ========== */
-QLabel#lblStatus { 
+QLabel#lblStatus {
     color: --status-text;
     font-size: 11px;
 }
 
-QLabel#lblScrambleError { 
+QLabel#lblScrambleError {
     color: --text-error;
     font-size: 11px;
     padding: 2px 2px;
 }
 
-QLabel#lblCommandError  { 
+QLabel#lblCommandError  {
     color: --text-error;
     font-size: 11px;
     padding: 2px 2px;
 }
 
 /* ========== ScrollBars ========== */
-QScrollBar:vertical { 
+QScrollBar:vertical {
     background: --scrollbar-bg;
     width: 8px;
     border-radius: 4px;
     margin: 0;
 }
 
-QScrollBar::handle:vertical { 
+QScrollBar::handle:vertical {
     background: --scrollbar-handle;
     border-radius: 4px;
     min-height: 24px;
 }
 
-QScrollBar::handle:vertical:hover { 
+QScrollBar::handle:vertical:hover {
     background: --scrollbar-hover;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { 
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0px;
     border: 0;
 }
 
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { 
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     background: none;
 }
 
-QScrollBar:horizontal { 
+QScrollBar:horizontal {
     background: --scrollbar-bg;
     height: 8px;
     border-radius: 4px;
     margin: 0;
 }
 
-QScrollBar::handle:horizontal { 
+QScrollBar::handle:horizontal {
     background: --scrollbar-handle;
     border-radius: 4px;
     min-width: 24px;
 }
 
-QScrollBar::handle:horizontal:hover { 
+QScrollBar::handle:horizontal:hover {
     background: --scrollbar-hover;
 }
 
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { 
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
     border: 0;
 }
 
-QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { 
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
     background: none;
 }
 

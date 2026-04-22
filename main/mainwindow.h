@@ -68,7 +68,6 @@ private:
     void buildUI();
     void buildStyles();
     QStringList buildArgList();
-    void updateRankErgoState();     // enable/disable chkRankErgo and refresh its tooltip
     void syncFlagsFromCommand(const QString& text);
 
     Sq1Widget*    cubeWidget;
@@ -85,6 +84,7 @@ private:
     QCheckBox*    chkKarnotation;
     QButtonGroup*  m_angleGroup{nullptr};   // 0=Both 1=Top 2=Bottom 3=None(default)
     QButtonGroup*  m_normalizeAbfGroup{nullptr}; // 0=Both 1=PreABF 2=PostABF 3=None(default)
+    QWidget*       m_normalizeAbfRow{nullptr};
     QCheckBox*    chkMaxX;
     QSpinBox*     spnMaxX;
     QCheckBox*    chkMaxY;
@@ -111,7 +111,6 @@ private:
     QPushButton*  btnTableMode;     // switches between table and terminal view
     QLabel*       lblStatus;
     QProgressBar* progressBar;
-    QCheckBox*    chkRankErgo;
     bool          m_tableVisible{false};
     bool          m_autoScrollPaused{false};
     bool          m_solveFinishedWhilePaused{false};
@@ -167,13 +166,23 @@ private:
     QVector<CubeSnapshot> m_undoStack;
     QVector<CubeSnapshot> m_redoStack;
     QVector<CubeSnapshot> m_slicePending;
+
+    struct TableRow { QString alg; int moves; int slices; int angle; double ergo; };
+    QVector<TableRow> m_pendingTableRows;
+    QTimer*           m_tableFillTimer{nullptr};
+    int               m_tableFilledCount{0};
+    void              fillNextTableBatch();
     void pushUndoState();
     void showAboutModal();
 
-    //settings stuffs
+    // settings stuffs
     bool          m_lightTheme{false};
     bool          m_smartKarn{true};
     bool          m_abidNotation{false};
+    bool          m_ignoreTrans{false};
+    int           m_normalizeAbfMode{3}; // 0=Both 1=PreABF 2=PostABF 3=None
+    QButtonGroup* m_normalizeAbfDisplayGroup{nullptr}; // the new below-terminal pill
+    QString       applyNormalizeAbf(const QString& rawAlgLine) const;
     QString       m_abidFontFamily;
     QString       abidifyDisplay(const QString& algOnly) const;
 
@@ -182,6 +191,7 @@ private:
     bool          m_sidebarOpen{false};
     QPushButton*  btnHamburger{nullptr};
     QCheckBox*    chkSmartKarn{nullptr};
+    QCheckBox*    chkIgnoreTransSetting{nullptr};
     QWidget*      m_inputBarOuter{nullptr};
     void showSettingsModal();
     void showHowToUseModal();
