@@ -585,16 +585,16 @@ void MainWindow::buildUI()
         }
         chkCubeshape->setEnabled(cs);
     });
-    connect(cubeWidget, &Sq1Widget::middleStateChanged, this, [this](int state) {
+    connect(cubeWidget, &Sq1Widget::equatorStateChanged, this, [this](int state) {
         bool shouldBeChecked = (state == 2);
-        if (chkIgnoreMid->isChecked() != shouldBeChecked) {
+        if (chkIgnoreEquator->isChecked() != shouldBeChecked) {
             if (!shouldBeChecked) {
                 // leaving gray state — remember nothing, just uncheck
                 m_preIgnoreMidState = 0;
             }
-            chkIgnoreMid->blockSignals(true);
-            chkIgnoreMid->setChecked(shouldBeChecked);
-            chkIgnoreMid->blockSignals(false);
+            chkIgnoreEquator->blockSignals(true);
+            chkIgnoreEquator->setChecked(shouldBeChecked);
+            chkIgnoreEquator->blockSignals(false);
             updateConstraints();
             updateCommand();
         }
@@ -697,7 +697,7 @@ void MainWindow::buildUI()
     undoResetRedoRow->addWidget(btnRedo, 1);
     leftCol->addLayout(undoResetRedoRow);
 
-    btnSolve = new QPushButton("▶  Solve  [Ctrl+↵]");
+    btnSolve = new QPushButton("▶  Solve  [Ctrl+Enter]");
     btnSolve->setObjectName("btnSolve");
     btnSolve->setFixedHeight(48);
     leftCol->addWidget(btnSolve);
@@ -861,10 +861,10 @@ void MainWindow::buildUI()
     };
 
     QWidget *metricRadioRow = makeRadioRow("Metric", {"Slice", "Move", "Angle"}, 0, m_metricGroup, "metricRadioRow", "metricPill");
-    metricRadioRow->setToolTip("Choose how move length is counted:\n"
+    metricRadioRow->setToolTip("Choose how move length of an alg is counted:\n"
                                "Slice – only slices count\n"
                                "Move  – layer turns count too\n"
-                               "Angle – turns weighted by angle amount");
+                               "Angle – layer turns are weighted by angle amount");
     // (pill objectName set inside makeRadioRow)
 
     chkAllOptimal = new TightCheckBox("All optimal");
@@ -882,7 +882,7 @@ void MainWindow::buildUI()
 
     chkDepths = new TightCheckBox("Specific depths:");
     chkDepths->setObjectName("chkDepths");
-    chkDepths->setToolTip("Search only the listed move depths instead of starting from 0 and going up.\n"
+    chkDepths->setToolTip("Search only the listed move depths, instead of starting from 0 and going up.\n"
                           "Comma-separated, e.g.\"8,9\". \n"
                           "Write in the input box to toggle it on.");
     chkDepths->setAttribute(Qt::WA_TransparentForMouseEvents, false);
@@ -903,8 +903,7 @@ void MainWindow::buildUI()
     chk2gen = new TightCheckBox("2Gen  (top layer + slices only)");
     chk2gen->setObjectName("chk2gen");
     chk2gen->setToolTip("Restrict to 2-gen moves: top-layer turns and slices only.\n"
-                        "Requires the bottom left pieces to already be solved.\n"
-                        "You cannot demand both 2-gen and stay-in-cubeshape.");
+                        "Requires the bottom left pieces to already be solved.");
 
     chkPseudo2gen = new TightCheckBox("Pseudo 2Gen  (bottom: ±1 only)");
     chkPseudo2gen->setObjectName("chkPseudo2gen");
@@ -914,9 +913,9 @@ void MainWindow::buildUI()
     chkCubeshape->setObjectName("chkCubeshape");
     chkCubeshape->setToolTip("Only generate algs that keep the puzzle in cubeshape throughout.");
 
-    chkIgnoreMid = new TightCheckBox("Ignore middle layer");
-    chkIgnoreMid->setObjectName("chkIgnoreMid");
-    chkIgnoreMid->setToolTip("Ignore bar states. Equivalent to clicking on the bar until it is gray.");
+    chkIgnoreEquator = new TightCheckBox("Ignore equator");
+    chkIgnoreEquator->setObjectName("chkIgnoreEquator");
+    chkIgnoreEquator->setToolTip("Ignore equator states. Equivalent to clicking on the bar until it is gray.");
 
     chkKarnotation = new TightCheckBox("Karnotation output");
     chkKarnotation->setObjectName("chkKarnotation");
@@ -924,22 +923,22 @@ void MainWindow::buildUI()
 
     QWidget *angleRadioRow = makeRadioRow("Lock layer angle on preabf",
                                           {"Both", "Top", "Bottom", "None"}, 3, m_angleGroup, "angleRadioRow", "anglePill");
-    angleRadioRow->setToolTip("Lock the pre-ABF angle move to ±1 (or 0).\n"
+    angleRadioRow->setToolTip("Lock the pre-ABF angle move to ±1 or 0.\n"
                               "Both   – restricts top and bottom\n"
                               "Top    – restricts top layer only\n"
                               "Bottom – restricts bottom layer only\n"
-                              "None   – no restriction (default)");
+                              "None   – no restriction");
 
     m_normalizeAbfRow = makeRadioRow("Normalize ABF",
         {"Both", "PreABF", "PostABF", "None"}, 3, m_normalizeAbfGroup, "normalizeAbfRow", "normalizeAbfPill");
     m_normalizeAbfRow->setEnabled(true);
     QWidget *normalizeAbfRow = m_normalizeAbfRow;
     // TODO: update this tooltip text with a precise description of what normalizing does
-    normalizeAbfRow->setToolTip("Control which AUF moves are normalized in the output.\n"
+    normalizeAbfRow->setToolTip("Control which AUF moves are normalized in the output. (e.g. 3-1 → 0-1)\n"
                                 "PreABF  – normalize the move before the first slice\n"
                                 "PostABF – normalize the move after the last slice\n"
                                 "Both    – normalize both ends\n"
-                                "None    – no normalization (default)");
+                                "None    – no normalization");
 
     chkMaxX = new TightCheckBox("Max top turn:");
     chkMaxX->setObjectName("chkMaxX");
@@ -1029,7 +1028,7 @@ void MainWindow::buildUI()
     // Row: Ignore middle layer (full width)
     {
         QWidget *row = makeRow("optionRow_ignoremid");
-        rowLeft(row)->addWidget(chkIgnoreMid);
+        rowLeft(row)->addWidget(chkIgnoreEquator);
         grid->addWidget(row);
     }
     // Row: Angle radio (full width)
@@ -1101,12 +1100,12 @@ void MainWindow::buildUI()
     connect(chk2gen, &QCheckBox::toggled, this, upd);
     connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
     connect(chkCubeshape, &QCheckBox::toggled, this, upd);
-    connect(chkIgnoreMid, &QCheckBox::toggled, this, [this, upd](bool checked) {
+    connect(chkIgnoreEquator, &QCheckBox::toggled, this, [this, upd](bool checked) {
         if (checked) {
-            m_preIgnoreMidState = cubeWidget->getMiddleState();
-            cubeWidget->setMiddleState(2); // gray / partial
+            m_preIgnoreMidState = cubeWidget->getEquatorState();
+            cubeWidget->setEquatorState(2); // gray / partial
         } else {
-            cubeWidget->setMiddleState(m_preIgnoreMidState);
+            cubeWidget->setEquatorState(m_preIgnoreMidState);
         }
         upd();
     });
@@ -1153,7 +1152,7 @@ void MainWindow::buildUI()
     btnCopy->setObjectName("btnCopy");
     btnCopy->setFixedWidth(32);
     btnCopy->setFixedHeight(24);
-    btnCopy->setToolTip("Copy command");
+    btnCopy->setToolTip("Copy the alg");
     btnCopy->setVisible(false);
 
     // Enter/Shift+Enter are handled in eventFilter; returnPressed is not used.
@@ -1536,7 +1535,7 @@ void MainWindow::buildUI()
     btnCopyTerminal = new QPushButton("⎘", outputWrapper);
     btnCopyTerminal->setObjectName("btnCopyTerminal");
     btnCopyTerminal->setFixedSize(22, 22);
-    btnCopyTerminal->setToolTip("Copy terminal contents");
+    btnCopyTerminal->setToolTip("Copy all algs in terminal");
 
     btnTableMode = new QPushButton("⊞", outputWrapper);
     btnTableMode->setObjectName("btnTableMode");
@@ -1546,7 +1545,7 @@ void MainWindow::buildUI()
     btnScrollToBottom = new QPushButton("↓", outputWrapper);
     btnScrollToBottom->setObjectName("btnScrollToBottom");
     btnScrollToBottom->setFixedSize(32, 32);
-    btnScrollToBottom->setToolTip("Scroll to bottom / resume auto-scroll");
+    btnScrollToBottom->setToolTip("Scroll to bottom and resume auto-scroll");
     btnScrollToBottom->setVisible(false);
     btnScrollToBottom->setCursor(Qt::PointingHandCursor);
 
@@ -1655,7 +1654,7 @@ void MainWindow::buildUI()
                     "  color: #aaaaff; font-size: 16px; font-weight: bold;"
                     "  padding: 0px; margin: 0px; text-align: center; line-height: 32px; }"
                     "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
-                btnScrollToBottom->setToolTip("Scroll to bottom / resume auto-scroll");
+                btnScrollToBottom->setToolTip("Scroll to bottom and resume auto-scroll");
                 txtOutput->verticalScrollBar()->setValue(
                     txtOutput->verticalScrollBar()->maximum());
             });
@@ -1973,7 +1972,7 @@ QStringList MainWindow::buildArgList()
         args << "-p";
     if (chkCubeshape->isChecked())
         args << "-c";
-    if (chkIgnoreMid->isChecked())
+    if (chkIgnoreEquator->isChecked())
         args << "-m";
     // Angle lock radio: 0=Both, 1=Top, 2=Bottom, 3=None (default — no flag)
     {
@@ -2056,7 +2055,7 @@ void MainWindow::onSolve()
     appendStatusLine("Solving…");
 
     // Swap Solve → Stop appearance (muted dark red, not alarming).
-    btnSolve->setText("■  Stop  [Ctrl+↵]");
+    btnSolve->setText("■  Stop  [Ctrl+Enter]");
     btnSolve->setStyleSheet(QString(
                                 "QPushButton#btnSolve {"
                                 "  background: %1; border: 1px solid %2; padding-top: 0px; padding-bottom: 0px;"
@@ -2323,7 +2322,7 @@ void MainWindow::onSolverDone(int code)
         if (QLabel *lbl = m_normalizeAbfRow->findChild<QLabel*>("normalizeAbfRow_label"))
             lbl->setStyleSheet(""); // revert to QSS
     }
-    btnSolve->setText("▶  Solve  [Ctrl+↵]");
+    btnSolve->setText("▶  Solve  [Ctrl+Enter]");
     btnSolve->setStyleSheet(""); // revert to stylesheet-defined look
     // Progress bar stays visible in indeterminate mode while ergo ranks
     progressBar->setRange(0, 0); // indeterminate pulse
@@ -3797,7 +3796,7 @@ void MainWindow::showSettingsModal()
     QCheckBox *chkSmart = new QCheckBox("Use smarter karnotation");
     chkSmart->setChecked(m_smartKarn);
     chkSmart->setToolTip("When 'Karnotation output' is on, use cubeshape-aware karnify.\n"
-                         "Applies different karn rules depending on whether the puzzle\n"
+                         "i.e. apply different karn rules depending on whether the puzzle\n"
                          "is in cubeshape at each move.");
     chkSmart->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
     connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked)
@@ -3837,9 +3836,7 @@ void MainWindow::showSettingsModal()
     QCheckBox *chkAbid = new QCheckBox("Abid's notation");
     chkAbid->setChecked(m_abidNotation && !m_abidFontFamily.isEmpty());
     chkAbid->setEnabled(!m_abidFontFamily.isEmpty());
-    chkAbid->setToolTip("Display negative numbers as barred digits using the Kompact font\n"
-                        "(e.g. -3 → 3̄) for a cleaner look. Displayed only — copies\n"
-                        "always use standard notation with minus signs.");
+    chkAbid->setToolTip("Display negative numbers as barred digits using the Kompact font for display.");
     if (m_abidFontFamily.isEmpty())
         chkAbid->setToolTip(chkAbid->toolTip() +
                             "\n\n⚠ kompact-font.ttf not found — visual effect unavailable.");
@@ -3856,7 +3853,8 @@ void MainWindow::showSettingsModal()
 
     QCheckBox *chkIgnoreTrans = new QCheckBox("Ignore move equivalences (-x)");
     chkIgnoreTrans->setToolTip("REALLY generate all possible algs - with all the y2 possibilities and things.\n"
-                                "Only useful if you don't anticipate a lot of algs initially.");
+                                "Only useful if you don't anticipate a lot of algs initially.\n"
+                                "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)");
     chkIgnoreTrans->setChecked(m_ignoreTrans);
     chkIgnoreTrans->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
     chkIgnoreTransSetting = chkIgnoreTrans;

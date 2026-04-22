@@ -80,7 +80,7 @@ private:
     QCheckBox*    chk2gen;
     QCheckBox*    chkPseudo2gen;
     QCheckBox*    chkCubeshape;
-    QCheckBox*    chkIgnoreMid;     // -m: ignore middle-layer shape
+    QCheckBox*    chkIgnoreEquator;     // -m: ignore equator
     QCheckBox*    chkKarnotation;
     QButtonGroup*  m_angleGroup{nullptr};   // 0=Both 1=Top 2=Bottom 3=None(default)
     QButtonGroup*  m_normalizeAbfGroup{nullptr}; // 0=Both 1=PreABF 2=PostABF 3=None(default)

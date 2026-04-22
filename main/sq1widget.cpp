@@ -91,7 +91,7 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
 
         // All checks passed — commit to state
         for (int i = 0; i < 24; i++) { position[i] = pi[i]; partiality[i] = parArr[i]; }
-        middle = mid; middle_partial = mid_par; selected = -1;
+        equator = mid; equator_partial = mid_par; selected = -1;
         update();
         return true;
 
@@ -103,7 +103,7 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
 void Sq1Widget::reset() {
     int defPos[] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
     for(int i=0;i<24;i++) { position[i]=defPos[i]; partiality[i]=0; }
-    middle=0; middle_partial=0; selected=-1; hovered=-1;
+    equator=0; equator_partial=0; selected=-1; hovered=-1;
     update();
     emit positionChanged();
 }
@@ -179,7 +179,7 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     drawLayer(p, 0,  12, {TOP_CX, TOP_CY}, -105);  // top layer, starts at -105 deg
     drawLayer(p, 12, 24, {BOT_CX, BOT_CY},  105);  // bot layer, starts at 105 deg
 
-    // Middle band
+    // Equator band
     // x1..x2 = thin left strip (always red).
     // Square: x2..x3 = wide right strip (red). Kite: x2..x2b = narrow right strip (orange), rest black.
     double r_len = (MAIN_LEN + SUB_LEN);
@@ -189,8 +189,8 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     double x2b = TOP_CX + r_len * 0.28;   // kite end: mirrors left strip width
     qreal midT = m_hoverProgress.value(-2, 0.0);
     drawPoly(p, {{x1,MID_TOP},{x2,MID_TOP},{x2,MID_BOT},{x1,MID_BOT}}, colors[2], midT);
-    QColor rightColor = middle_partial > 0 ? colors[6] : colors[middle == 0 ? 2 : 4];
-    double x_end = (middle == 0 || middle_partial > 0) ? x3 : x2b;
+    QColor rightColor = equator_partial > 0 ? colors[6] : colors[equator == 0 ? 2 : 4];
+    double x_end = (equator == 0 || equator_partial > 0) ? x3 : x2b;
     drawPoly(p, {{x2,MID_TOP},{x_end,MID_TOP},{x_end,MID_BOT},{x2,MID_BOT}}, rightColor, midT);
 }
 
@@ -255,7 +255,7 @@ int Sq1Widget::hitTestBot(QPointF pt) {
 void Sq1Widget::mousePressEvent(QMouseEvent* event) {
     QPointF pt = event->position();
     int piece = -1;
-    bool isMiddle = false;
+    bool isEquator = false;
 
     if (pt.y() < MID_TOP) {
         // Top layer: polygon hit test handles exact containment.
@@ -266,37 +266,37 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
         double x1 = TOP_CX - r_len * 0.97;
         double x3 = TOP_CX + r_len * 0.97;
         if (pt.x() >= x1 && pt.x() <= x3)
-            isMiddle = true;
+            isEquator = true;
     } else {
         // Bottom layer: polygon hit test handles exact containment.
         piece = hitTestBot(pt);
     }
 
-    if(isMiddle) {
+    if(isEquator) {
         emit userInteracted();
         bool rightClick = (event->button() == Qt::RightButton);
         if (!rightClick) {
             // Left click cycles forward: square → kite → gray → square
-            if (middle_partial == 0 && middle == 0) {
-                middle = 1;
-            } else if (middle_partial == 0 && middle == 1) {
-                middle_partial = 1;
+            if (equator_partial == 0 && equator == 0) {
+                equator = 1;
+            } else if (equator_partial == 0 && equator == 1) {
+                equator_partial = 1;
             } else {
-                middle = 0;
-                middle_partial = 0;
+                equator = 0;
+                equator_partial = 0;
             }
         } else {
             // Right click cycles backward: square → gray → kite → square
-            if (middle_partial == 0 && middle == 0) {
-                middle_partial = 1;
-            } else if (middle_partial > 0) {
-                middle_partial = 0;
-                middle = 1;
+            if (equator_partial == 0 && equator == 0) {
+                equator_partial = 1;
+            } else if (equator_partial > 0) {
+                equator_partial = 0;
+                equator = 1;
             } else {
-                middle = 0;
+                equator = 0;
             }
         }
-        emit middleStateChanged(middle_partial > 0 ? 2 : middle);
+        emit equatorStateChanged(equator_partial > 0 ? 2 : equator);
     } else if(piece >= 0) {
         if(event->button() == Qt::RightButton) {
             emit userInteracted();
@@ -333,8 +333,8 @@ void Sq1Widget::mouseMoveEvent(QMouseEvent* event) {
         double x3 = TOP_CX + r_len * 0.97;
         if (pt.x() >= x1 && pt.x() <= x3) {
             overPiece = true;
-            // Middle band is one clickable element, but not a "piece" - use a sentinel value
-            hoveredPiece = -2;  // Special value: hovering middle, not a real piece index
+            // Equator band is one clickable element, but not a "piece" - use a sentinel value
+            hoveredPiece = -2;  // Special value: hovering equator, not a real piece index
         }
     } else {
         // Bottom layer: polygon hit test handles exact containment.
@@ -436,7 +436,7 @@ void Sq1Widget::doSlice() {
         std::swap(position[i],   position[i+6]);
         std::swap(partiality[i], partiality[i+6]);
     }
-    middle = 1 - middle;
+    equator = 1 - equator;
     update(); emit positionChanged();
 }
 
@@ -467,6 +467,6 @@ QString Sq1Widget::getPositionString() {
         }
         if(x<8) i++; // skip duplicate corner slot
     }
-    if(middle_partial==0) out += (middle==0 ? '-' : '/');
+    if(equator_partial==0) out += (equator==0 ? '-' : '/');
     return out;
 }

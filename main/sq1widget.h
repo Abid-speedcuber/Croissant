@@ -22,7 +22,7 @@ public:
 
     void reset();
     void setLightTheme(bool light) { m_lightTheme = light; update(); }
-    int  getMiddleState() const { return middle_partial > 0 ? 2 : middle; }
+    int  getEquatorState() const { return equator_partial > 0 ? 2 : equator; }
     bool inCubeshape() const {
         // Each half (0-11, 12-23) must have alternating corner/edge slots.
         // Corners occupy 2 slots (same value <8 twice), edges occupy 1 slot.
@@ -43,9 +43,9 @@ public:
         }
         return true;
     }
-    void setMiddleState(int state) {
-        if (state == 2) { middle_partial = 1; }
-        else { middle_partial = 0; middle = state; }
+    void setEquatorState(int state) {
+        if (state == 2) { equator_partial = 1; }
+        else { equator_partial = 0; equator = state; }
         update();
         emit positionChanged();
     }
@@ -55,7 +55,7 @@ public:
 signals:
     void positionChanged(); // emitted whenever cube state changes
     void userInteracted();  // emitted on mouse-driven piece swap/state change (for undo)
-    void middleStateChanged(int state); // 0=square, 1=kite, 2=gray
+    void equatorStateChanged(int state); // 0=square, 1=kite, 2=gray
     void cubeshapeChanged(bool inCS);
 
 protected:
@@ -69,8 +69,8 @@ private:
     // --- State (mirrors helper.html JS variables) ---
     std::array<int,24> position;
     std::array<int,24> partiality;  // 0=full, 1=top/bottom, 2=any
-    int middle;           // 0 = square, 1 = kite
-    int middle_partial;   // 0 or 1
+    int equator;           // 0 = square, 1 = kite
+    int equator_partial;   // 0 or 1
     int selected;         // index of selected piece, or -1
     int hovered;          // index of hovered piece, or -1
     QMap<int, qreal> m_hoverProgress; // 0.0 = no hover, 1.0 = full hover
