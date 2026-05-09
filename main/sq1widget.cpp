@@ -253,7 +253,11 @@ int Sq1Widget::hitTestBot(QPointF pt) {
 }
 
 void Sq1Widget::mousePressEvent(QMouseEvent* event) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     QPointF pt = event->position();
+#else
+    QPointF pt = event->localPos();
+#endif
     int piece = -1;
     bool isEquator = false;
 
@@ -318,7 +322,11 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
 }
 
 void Sq1Widget::mouseMoveEvent(QMouseEvent* event) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     QPointF pt = event->position();
+#else
+    QPointF pt = event->localPos();
+#endif
     int hoveredPiece = -1;
     bool overPiece = false;
 

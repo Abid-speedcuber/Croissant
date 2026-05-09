@@ -17,7 +17,6 @@
 #include "styles/stylesheet.h"
 #include "sq1-core/output-converter.h"
 
-class QProcess;
 class Sq1Widget;
 class QCheckBox;
 class QButtonGroup;
@@ -33,12 +32,12 @@ public:
     QString positionStr;
     QStringList flags;
     void run() override;
-    void requestStop();                     // kill the running process from any thread
+    void requestStop();
 signals:
     void lineReady(QString line);
     void finished(int exitCode);
 private:
-    std::atomic<QProcess*> m_proc{nullptr}; // set while process is live; null otherwise
+    std::atomic_bool m_stopRequested{false};
 };
 
 class MainWindow : public QMainWindow {

@@ -11,6 +11,8 @@
 #include <vector>
 #include <sstream>
 #include <algorithm>
+#include <atomic>
+#include <stdexcept>
 
 #define NUMHALVES 13
 #define NUMLAYERS 158
@@ -73,6 +75,49 @@ int maxX = 6;
 int maxY = 6;
 int maxTotal = 12;
 std::vector<int> specificDepths;
+
+static std::string tableDirectory = ".";
+static std::atomic_bool stopRequested{false};
+
+void sq1optSetTableDirectory(const std::string& dir)
+{
+	tableDirectory = dir.empty() ? "." : dir;
+}
+
+void sq1optRequestStop()
+{
+	stopRequested.store(true);
+}
+
+static std::string tablePath(const char* fileName)
+{
+	if (tableDirectory == "." || tableDirectory.empty()) return fileName;
+	const char last = tableDirectory[tableDirectory.size() - 1];
+	if (last == '/' || last == '\\') return tableDirectory + fileName;
+	return tableDirectory + "/" + fileName;
+}
+
+static void resetSolverOptions()
+{
+	stopRequested.store(false);
+	verbosity = 5;
+	generator = false;
+	usenegative = false;
+	usebrackets = false;
+	karnotation = false;
+	specificAngleTop = false;
+	specificAngleBot = false;
+	metric = TURN_METRIC;
+	maxX = 6;
+	maxY = 6;
+	maxTotal = 12;
+	specificDepths.clear();
+}
+
+static inline void throwIfStopped()
+{
+	if (stopRequested.load()) throw std::runtime_error("Solver stopped.");
+}
 
 class HalfLayer {
 public:
@@ -227,10 +272,11 @@ public:
 		// At last we can calculate full transition table
 		tranTable = new int[NUMSHAPES][4];
 		// see if can be found on file
-		std::ifstream is(FILESTT, std::ios::binary);
+		std::ifstream is(tablePath(FILESTT), std::ios::binary);
 		if( is.fail() ){
 			// no file. calculate table.
 			for( int i=0; i<nShape; i++ ){
+				throwIfStopped();
 				//effect on shape of each move, incuding reflection
 				for( int m=0; m<4; m++ ){
 					for( int j=0; j<nShape; j++ ){
@@ -243,7 +289,7 @@ public:
 				}
 			}
 			// save to file
-			std::ofstream os(FILESTT, std::ios::binary);
+			std::ofstream os(tablePath(FILESTT), std::ios::binary);
 			os.write( (char*)tranTable, nShape*4*sizeof(int) );
 		}else{
 			// read from file
@@ -372,25 +418,26 @@ public:
 		tranTable = new char[NUMSHAPES][70][3];
 
 		// see if can be found on file
-		std::ifstream is( edges? FILESCTE : FILESCTC, std::ios::binary);
+		std::ifstream is(tablePath(edges? FILESCTE : FILESCTC), std::ios::binary);
 		if( is.fail() ){
 			// no file. calculate table.
 			// Calculate transition table
 			int i,j,m;
 			for( m=0; m<3; m++ ){
 				for( i=0; i<NUMSHAPES; i++ ){
+					throwIfStopped();
 					for( j=0; j<70; j++){
 						p.set(i,j,edges);
 						p.domove(m);
 						tranTable[i][j][m]=p.getColIdx();
 						if( p.getColIdx()==255 ){
-							exit(0);
+							throw std::runtime_error("Invalid shape/color transition table entry.");
 						}
 					}
 				}
 			}
 			// save to file
-			std::ofstream os(edges? FILESCTE : FILESCTC, std::ios::binary);
+			std::ofstream os(tablePath(edges? FILESCTE : FILESCTC), std::ios::binary);
 			os.write( (char*)tranTable, NUMSHAPES*3*70*sizeof(char) );
 		}else{
 			// read from file
@@ -868,13 +915,13 @@ public:
 	{
 		// Calculate pruning table
 		table = new char[NUMSHAPES][70][70];
-		const char *fname;
+		std::string fname;
 		if(metric == TURN_METRIC){
-			fname = (cl==0)? FILEP1U : FILEP2U;
+			fname = tablePath((cl==0)? FILEP1U : FILEP2U);
 		} else if (metric == ANGLE_METRIC) {
-			fname = (cl==0)? FILEP1A : FILEP2A;
+			fname = tablePath((cl==0)? FILEP1A : FILEP2A);
 		} else {
-			fname = (cl==0)? FILEP1W : FILEP2W;
+			fname = tablePath((cl==0)? FILEP1W : FILEP2W);
 		}
 
 		// see if can be found on file
@@ -903,6 +950,7 @@ public:
 			int n=1;
 			int last_nonzero=-1;
 			do{
+				throwIfStopped();
 				if(verbosity>=6) std::cout<<" l="<<(int)(l-1)<<"  n="<<(int)n<<std::endl;
 				n=0;
 				if (metric == TURN_METRIC){
@@ -923,7 +971,7 @@ public:
 									}
 									w++;
 									if(w>12){
-										exit(0);
+										throw std::runtime_error("Invalid pruning table turn cycle.");
 									}
 								}while(j0!=i0 || j1!=i1 || j2!=i2 );
 							}
@@ -959,7 +1007,7 @@ public:
 										n++;
 									}
 									if(w>12){
-										exit(0);
+										throw std::runtime_error("Invalid pruning table angle cycle.");
 									}
 								}while(j0!=i0 || j1!=i1 || j2!=i2 );
 							}
@@ -1125,6 +1173,7 @@ class PositionSolver {
 			int saved_c0=c0, saved_c1=c1, saved_c2=c2;
 			int saved_shp=shp, saved_shp2=shp2, saved_middle=middle;
 			for (int depth : specificDepths) {
+				if (stopRequested.load()) return -1;
 				// Restore encoded state before each depth search
 				e0=saved_e0; e1=saved_e1; e2=saved_e2;
 				c0=saved_c0; c1=saved_c1; c2=saved_c2;
@@ -1136,15 +1185,18 @@ class PositionSolver {
 					std::cout << "depth "<<depth<<" does not match the barflip state" << std::endl<<std::flush;
 					continue;
 				}
-				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+				int searchResult = search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+				if (searchResult < 0) return searchResult;
 			}
 		} else {
 		while(true){
+			if (stopRequested.load()) return -1;
 			l++;
 			if (metric == SLICE_METRIC && middle!=0) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
 			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+			if (searchResult < 0) return searchResult;
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
 				if (l >= optimalMoves + extraMoves || (metric == SLICE_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
@@ -1166,6 +1218,7 @@ class PositionSolver {
 	}
 	int search( const int l, const int lm, unsigned long *nodes, int twoGen, bool keepCubeShape, bool keepAngleTop, bool keepAngleBot){
 		int i,r=0;
+		if (stopRequested.load()) return -1;
 
 		// search for l more moves. previous move was lm.
 		(*nodes)++;
@@ -1218,6 +1271,7 @@ class PositionSolver {
 					lastTurns[4]=i;
 					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absTopMove:l, 0, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
 					moveLen--;
+					if(r<0) return r;
 					if(r!=0 && !findAll) return(r);
 				}
 				i+=doMove(0);
@@ -1242,6 +1296,7 @@ class PositionSolver {
 						r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
 					}
 					moveLen--;
+					if(r<0) return r;
 					if(r!=0 && !findAll) return(r);
 				}
 				i+=doMove(1);
@@ -1266,6 +1321,7 @@ class PositionSolver {
 				// note that if angle metric is defined to count slices as 0, it will sometimes miss the optimal solution because the current pruning tables count how many slices a position is away from solved
 				r+=search(l-1, 2, nodes, twoGen, keepCubeShape, false, false);
 				moveLen--;
+				if(r<0) return r;
 				if(r!=0 && !findAll) return(r);
 			}
 			doMove(2);
@@ -1436,6 +1492,7 @@ public:
 			int saved_shpx=shpx, saved_shpx2=shpx2;
 			FullPosition saved_fp=fp;
 			for (int depth : specificDepths) {
+				if (stopRequested.load()) return -1;
 				// Restore all encoded state before each depth search
 				e0=saved_e0; e1=saved_e1; e2=saved_e2;
 				c0=saved_c0; c1=saved_c1; c2=saved_c2;
@@ -1449,15 +1506,18 @@ public:
 					std::cout << "depth "<<depth<<" does not match the barflip state" << std::endl<<std::flush;
 					continue;
 				}
-				search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+				int searchResult = search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+				if (searchResult < 0) return searchResult;
 			}
 		} else {
 		while(true){
+			if (stopRequested.load()) return -1;
 			l++;
 			if( metric==SLICE_METRIC && middle!=0 ) l++;
 			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
 			for( int i=0; i<6; i++) lastTurns[i]=0;
 			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+			if (searchResult < 0) return searchResult;
 			if (searchResult != 0) {
 				if (optimalMoves == -1) optimalMoves = l;
 				if (l >= optimalMoves + extraMoves || (metric==SLICE_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
@@ -1550,7 +1610,8 @@ void help(){
 
 
 // -w|u=slice/turn metric  -a=all  -m=ignore middle
-int main(int argc, char* argv[]){
+int sq1optMain(int argc, char* argv[]){
+	resetSolverOptions();
 	bool ignoreMid=false;
 	bool ignoreTrans=false;
 	bool findAll=false;
@@ -1752,6 +1813,7 @@ int main(int argc, char* argv[]){
 
 			//solve position
 			int r = pps.solve(twoGen, extraMoves, keepCubeShape);
+			if (r < 0) return 130;
 			if (r) show(r);
 		} else {
 			// convert position to colour encoding
@@ -1759,6 +1821,7 @@ int main(int argc, char* argv[]){
 
 			//solve position
 			int r = ps.solve(twoGen, extraMoves, keepCubeShape);
+			if (r < 0) return 130;
 			if (r) show(r);
 		}
 
@@ -1768,6 +1831,13 @@ int main(int argc, char* argv[]){
 
 	return(0);
 }
+
+#ifndef SQ1OPT_LIBRARY
+int main(int argc, char* argv[])
+{
+	return sq1optMain(argc, argv);
+}
+#endif
 
 
 

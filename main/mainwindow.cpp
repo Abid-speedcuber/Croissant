@@ -4,6 +4,7 @@
 #include "sq1-core/karnotation.h"
 #include "styles/theme.h"
 #include "sq1-core/output-converter.h"
+#include "sq1-core/sq1opt-runner.h"
 #include "styles/stylesheet.h"
 #include <QApplication>
 #include <QHBoxLayout>
@@ -22,7 +23,6 @@
 #include <QButtonGroup>
 #include <QClipboard>
 #include <QSet>
-#include <QProcess>
 #include <QCoreApplication>
 #include <QProxyStyle>
 #include <QToolTip>
@@ -49,7 +49,11 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <exception>
+#include <iostream>
+#include <mutex>
 #include <sstream>
+#include <streambuf>
 #include <vector>
 #include <string>
 #include <map>
@@ -313,71 +317,120 @@ public:
 // -------------------------------------------------------
 // SolverWorker
 // -------------------------------------------------------
+namespace
+{
+std::mutex g_solverStreamMutex;
+
+class SolverStreamBuffer : public std::streambuf
+{
+public:
+    explicit SolverStreamBuffer(SolverWorker *worker) : m_worker(worker) {}
+
+    ~SolverStreamBuffer() override
+    {
+        flushLine();
+    }
+
+protected:
+    int overflow(int ch) override
+    {
+        if (ch == traits_type::eof())
+            return traits_type::not_eof(ch);
+
+        char c = static_cast<char>(ch);
+        if (c == '\n')
+            flushLine();
+        else if (c != '\r')
+            m_line.push_back(c);
+        return ch;
+    }
+
+    std::streamsize xsputn(const char *s, std::streamsize count) override
+    {
+        for (std::streamsize i = 0; i < count; ++i)
+            overflow(static_cast<unsigned char>(s[i]));
+        return count;
+    }
+
+    int sync() override
+    {
+        flushLine();
+        return 0;
+    }
+
+private:
+    void flushLine()
+    {
+        if (m_line.empty())
+            return;
+        emit m_worker->lineReady(QString::fromStdString(m_line).trimmed());
+        m_line.clear();
+    }
+
+    SolverWorker *m_worker;
+    std::string m_line;
+};
+}
+
 void SolverWorker::requestStop()
 {
-    // Safe to call from any thread: m_proc is atomic.
-    QProcess *p = m_proc.load();
-    if (p)
-        p->kill();
+    m_stopRequested.store(true);
+    sq1optRequestStop();
+    emit lineReady("Stop requested. The integrated solver will stop when the current solve returns.");
 }
 
 void SolverWorker::run()
 {
-    QString exePath = QCoreApplication::applicationDirPath() + "/solver-core/sq1opt";
-#ifdef Q_OS_WIN
-    exePath += ".exe";
-#endif
-    QProcess proc;
-    // Publish pointer so requestStop() can kill it from the main thread.
-    m_proc.store(&proc);
+    std::lock_guard<std::mutex> streamLock(g_solverStreamMutex);
+    m_stopRequested.store(false);
 
-    proc.setProcessChannelMode(QProcess::MergedChannels);
-    proc.setWorkingDirectory(QCoreApplication::applicationDirPath() + "/solver-core");
+    QDir tableDir(QCoreApplication::applicationDirPath());
+    if (!tableDir.exists("pruning-tables"))
+        tableDir.mkpath("pruning-tables");
+    tableDir.cd("pruning-tables");
+    sq1optSetTableDirectory(tableDir.absolutePath().toStdString());
+
     QStringList args;
+    args << "sq1opt";
     args << "-v5";
     args.append(flags);
     args << positionStr;
-    proc.start(exePath, args);
-    if (!proc.waitForStarted(3000))
+
+    std::vector<std::string> argStorage;
+    std::vector<char *> argv;
+    argStorage.reserve(args.size());
+    argv.reserve(args.size());
+    for (const QString &arg : args)
     {
-        m_proc.store(nullptr);
-        emit lineReady("ERROR: Could not start sq1opt. Make sure sq1opt.exe is in the solver-core folder.");
-        emit finished(-1);
-        return;
+        argStorage.push_back(arg.toStdString());
+        argv.push_back(argStorage.back().data());
     }
 
-    QByteArray buf;
-    auto drainLines = [&]()
+    SolverStreamBuffer outBuffer(this);
+    std::streambuf *oldOut = std::cout.rdbuf(&outBuffer);
+    std::streambuf *oldErr = std::cerr.rdbuf(&outBuffer);
+    int exitCode = -1;
+    try
     {
-        int nl;
-        while ((nl = buf.indexOf('\n')) != -1)
-        {
-            QString line = QString::fromUtf8(buf.left(nl)).trimmed();
-            buf.remove(0, nl + 1);
-            if (!line.isEmpty())
-                emit lineReady(line);
-        }
-    };
-
-    while (true)
-    {
-        bool gotData = proc.waitForReadyRead(200);
-        if (gotData)
-            buf += proc.readAll();
-        drainLines();
-        if (!gotData && proc.state() == QProcess::NotRunning)
-            break;
+        exitCode = sq1optMain(static_cast<int>(argv.size()), argv.data());
     }
-    buf += proc.readAll();
-    drainLines();
-    buf = buf.trimmed();
-    if (!buf.isEmpty())
-        emit lineReady(QString::fromUtf8(buf));
+    catch (const std::exception &e)
+    {
+        emit lineReady(QString("ERROR: %1").arg(e.what()));
+        exitCode = -1;
+    }
+    catch (...)
+    {
+        emit lineReady("ERROR: Unknown solver failure.");
+        exitCode = -1;
+    }
 
-    // Null the pointer BEFORE proc is destroyed so requestStop can't fire on a dead object.
-    m_proc.store(nullptr);
-    proc.waitForFinished(1000);
-    emit finished(proc.exitCode());
+    std::cout.flush();
+    std::cerr.flush();
+    outBuffer.pubsync();
+    std::cout.rdbuf(oldOut);
+    std::cerr.rdbuf(oldErr);
+    emit finished(exitCode);
 }
 
 // -------------------------------------------------------

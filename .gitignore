@@ -66,6 +66,6 @@ Makefile*
 # added by abid
 compile_log.txt
 main/REFACTORING.md
-/solver-core
+/pruning-tables
 main/*.rc
 main/*.stash
