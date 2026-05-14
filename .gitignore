@@ -69,3 +69,4 @@ main/REFACTORING.md
 /pruning-tables
 main/*.rc
 main/*.stash
+build.sh

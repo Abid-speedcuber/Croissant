@@ -1,6 +1,22 @@
 #include "output-converter.h"
 #include "karnotation.h"
 #include <QString>
+#include <QStringList>
+#include <QFontDatabase>
+#include <QRegularExpression>
+#include <functional>
+
+QString OutputConverter::s_abidFontFamily;
+
+void OutputConverter::loadAbidFont()
+{
+    int id = QFontDatabase::addApplicationFont(":/kompact-font.ttf");
+    if (id != -1) {
+        QStringList families = QFontDatabase::applicationFontFamilies(id);
+        if (!families.isEmpty())
+            s_abidFontFamily = families.first();
+    }
+}
 
 QString OutputConverter::convert(const QString& rawLine, OutputMode mode) {
     if (mode == OutputMode::Raw)
@@ -21,4 +37,77 @@ QString OutputConverter::convert(const QString& rawLine, OutputMode mode) {
     }
 
     return rawLine;
+}
+
+QString OutputConverter::abidifyDisplay(const QString& algOnly)
+{
+    if (s_abidFontFamily.isEmpty() || algOnly.isEmpty())
+        return algOnly;
+
+    // Codepoint helpers (values 0-6 only; square-1 never exceeds 6)
+    auto normalCp  = [](int d) -> QChar { return QChar(0xe000 + d); };
+    auto singleBar = [](int d) -> QChar { return QChar(0xe006 + d); }; // 1→E007…5→E00B
+    auto barRight  = [](int d) -> QChar { return QChar(0xe00b + d); }; // 1→E00C…5→E010
+    auto barLeft   = [](int d) -> QChar { return QChar(0xe010 + d); }; // 1→E011…5→E015
+
+    auto mapDigits = [&](int absVal, std::function<QChar(int)> mapper) -> QString {
+        QString s;
+        for (QChar c : QString::number(absVal))
+            if (c.isDigit()) s += mapper(c.digitValue());
+        return s;
+    };
+
+    if (algOnly.contains(',')) {
+        // ── WCA format: find every a,b token ─────────────────────────────────
+        static const QRegularExpression pairRe(R"((-?\d+),(-?\d+))");
+        QString result;
+        int last = 0;
+        auto it = pairRe.globalMatch(algOnly);
+        while (it.hasNext()) {
+            auto m = it.next();
+            // Pass through non-numeric content (slashes, slice indicators, spaces)
+            result += algOnly.mid(last, m.capturedStart() - last);
+            int a = m.captured(1).toInt();
+            int b = m.captured(2).toInt();
+            if (a < 0 && b < 0) {
+                result += mapDigits(qAbs(a), barRight);
+                result += mapDigits(qAbs(b), barLeft);
+            } else {
+                result += (a < 0) ? mapDigits(qAbs(a), singleBar)
+                                  : mapDigits(qAbs(a), normalCp);
+                result += (b < 0) ? mapDigits(qAbs(b), singleBar)
+                                  : mapDigits(qAbs(b), normalCp);
+            }
+            last = m.capturedEnd();
+        }
+        result += algOnly.mid(last);
+        return result;
+    } else {
+        // ── Karn / stripped-comma format ──────────────────────────────────────
+        QString result;
+        int i = 0;
+        while (i < algOnly.size()) {
+            QChar c = algOnly[i];
+            if (c == '-' && i + 1 < algOnly.size() && algOnly[i + 1].isDigit()) {
+                bool bothNeg = (i + 2 < algOnly.size() && algOnly[i + 2] == '-' &&
+                                i + 3 < algOnly.size() && algOnly[i + 3].isDigit());
+                if (bothNeg) {
+                    result += barRight(algOnly[i + 1].digitValue());
+                    i += 2;
+                    result += barLeft(algOnly[i + 1].digitValue());
+                    i += 2;
+                } else {
+                    result += singleBar(algOnly[i + 1].digitValue());
+                    i += 2;
+                }
+            } else if (c.isDigit()) {
+                result += normalCp(c.digitValue());
+                ++i;
+            } else {
+                result += c;
+                ++i;
+            }
+        }
+        return result;
+    }
 }

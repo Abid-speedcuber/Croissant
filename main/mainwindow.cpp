@@ -45,7 +45,7 @@
 #include <QDir>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
-#include <QFontDatabase>
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -457,14 +457,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     txtOutput->viewport()->installEventFilter(this);
 
     // ── Load Abid's notation font (embedded resource) ─────────────────────────
-    {
-        int id = QFontDatabase::addApplicationFont(":/kompact-font.ttf");
-        if (id != -1) {
-            QStringList families = QFontDatabase::applicationFontFamilies(id);
-            if (!families.isEmpty())
-                m_abidFontFamily = families.first();
-        }
-    }
+    OutputConverter::loadAbidFont();
     buildStyles();
     if (m_mainWidget) m_mainWidget->setStyleSheet(buildStyleSheet());
     updateCommand();
@@ -1842,7 +1835,7 @@ void MainWindow::rebuildTerminalView()
 
     // Helper: insert a solution line with optional Abid font on the alg portion.
     auto insertSolLine = [this](QTextCursor &cur, const QString &line, const QTextCharFormat &fmt) {
-        if (!m_abidNotation || m_abidFontFamily.isEmpty()) {
+        if (!m_abidNotation || OutputConverter::s_abidFontFamily.isEmpty()) {
             cur.insertText(line, fmt);
             return;
         }
@@ -1850,9 +1843,9 @@ void MainWindow::rebuildTerminalView()
         QString algPart     = lb > 0 ? line.left(lb).trimmed() : line;
         QString bracketPart = lb > 0 ? "  " + line.mid(lb).trimmed() : QString();
         QTextCharFormat abidFmt = fmt;
-        abidFmt.setFontFamily(m_abidFontFamily);
+        abidFmt.setFontFamily(OutputConverter::s_abidFontFamily);
         abidFmt.setFontPointSize(fmt.fontPointSize() + 2);
-        cur.insertText(abidifyDisplay(algPart), abidFmt);
+        cur.insertText(OutputConverter::abidifyDisplay(algPart), abidFmt);
         if (!bracketPart.isEmpty())
             cur.insertText(bracketPart, fmt);
     };
@@ -2307,14 +2300,14 @@ void MainWindow::onSolverLine(QString line)
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
-            if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+            if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
                 int lb = displayLine.lastIndexOf('[');
                 QString algPart     = lb > 0 ? displayLine.left(lb).trimmed() : displayLine;
                 QString bracketPart = lb > 0 ? "  " + displayLine.mid(lb).trimmed() : QString();
                 QTextCharFormat abidFmt = fmt;
-                abidFmt.setFontFamily(m_abidFontFamily);
+                abidFmt.setFontFamily(OutputConverter::s_abidFontFamily);
                 abidFmt.setFontPointSize(fmt.fontPointSize() + 2);
-                cur.insertText(abidifyDisplay(algPart), abidFmt);
+                cur.insertText(OutputConverter::abidifyDisplay(algPart), abidFmt);
                 if (!bracketPart.isEmpty())
                     cur.insertText(bracketPart, fmt);
             } else {
@@ -2659,16 +2652,16 @@ void MainWindow::fillNextTableBatch()
         { QFont f = numItem->font(); f.setPointSize(m_expanded ? fontSize - 2 : 10); f.setItalic(false); numItem->setFont(f); }
         m_solutionTable->setItem(i, 0, numItem);
 
-        QString algDisplay = (m_abidNotation && !m_abidFontFamily.isEmpty()) ? abidifyDisplay(r.alg) : r.alg;
+        QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
         QLabel *algLabel = new QLabel(algDisplay);
         algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
         algLabel->setContextMenuPolicy(Qt::CustomContextMenu);
         algLabel->setProperty("cleanAlg", r.alg);
         algLabel->setCursor(Qt::ArrowCursor);
         algLabel->setContentsMargins(4, 0, 4, 0);
-        if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
             algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; font-family: '%3'; font-size: %4pt; }")
-                .arg(bg.name(), textCol.name(), m_abidFontFamily, QString::number(fontSize + 2)));
+                .arg(bg.name(), textCol.name(), OutputConverter::s_abidFontFamily, QString::number(fontSize + 2)));
         } else {
             algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
                 .arg(bg.name(), textCol.name(), m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
@@ -2856,21 +2849,21 @@ void MainWindow::rebuildTable()
         m_solutionTable->setItem(i, 0, numItem);
 
         // Solution column: selectable QLabel
-        QString algDisplay = (m_abidNotation && !m_abidFontFamily.isEmpty())
-                             ? abidifyDisplay(r.alg) : r.alg;
+        QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+                             ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
         QLabel *algLabel = new QLabel(algDisplay);
         algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
         algLabel->setContextMenuPolicy(Qt::CustomContextMenu);
         algLabel->setProperty("cleanAlg", r.alg);
         algLabel->setCursor(Qt::ArrowCursor);
         algLabel->setContentsMargins(4, 0, 4, 0);
-        if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
             // Font family must live inside the stylesheet — setFont() is overridden by it.
             // Bump point size +2 to match the kompact font's smaller cap-height.
             int abidPt = fontSize + 2;
             algLabel->setStyleSheet(QString(
                 "QLabel { background: %1; color: %2; font-family: '%3'; font-size: %4pt; }")
-                .arg(bg.name(), textCol.name(), m_abidFontFamily, QString::number(abidPt)));
+                .arg(bg.name(), textCol.name(), OutputConverter::s_abidFontFamily, QString::number(abidPt)));
         } else {
             algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
                                         .arg(bg.name(),
@@ -3026,11 +3019,11 @@ void MainWindow::onRankErgoToggled(bool checked)
         fmt.setForeground(QColor(color));
         fmt.setFontWeight(bold ? QFont::Bold : QFont::Normal);
         fmt.setFontPointSize(ptSize);
-        if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
             QTextCharFormat abidFmt = fmt;
-            abidFmt.setFontFamily(m_abidFontFamily);
+            abidFmt.setFontFamily(OutputConverter::s_abidFontFamily);
             abidFmt.setFontPointSize(ptSize + 2);
-            cur.insertText(abidifyDisplay(algPart), abidFmt);
+            cur.insertText(OutputConverter::abidifyDisplay(algPart), abidFmt);
             if (!suffix.isEmpty())
                 cur.insertText(suffix, fmt);
         } else {
@@ -3476,96 +3469,6 @@ void MainWindow::showOldDocsPopup()
     overlay->installEventFilter(f); // watches overlay for click-outside
 }
 
-// -------------------------------------------------------
-// abidifyDisplay
-// Converts an alg-only string for display with the Kompact font.
-// WCA format  (contains commas): parses a,b pairs and maps digits to
-//   the custom codepoints, using the two-sided bar illusion when both
-//   values are negative.
-// Karn / mixed format (no commas): replaces digits with normal custom
-//   codepoints and applies singleBar to negative digit runs.
-// The bracket part "[x|y]" must NOT be passed in — strip it first.
-// -------------------------------------------------------
-QString MainWindow::abidifyDisplay(const QString& algOnly) const
-{
-    if (m_abidFontFamily.isEmpty() || algOnly.isEmpty())
-        return algOnly;
-
-    // Codepoint helpers (values 0-6 only; square-1 never exceeds 6)
-    auto normalCp  = [](int d) -> QChar { return QChar(0xe000 + d); };
-    auto singleBar = [](int d) -> QChar { return QChar(0xe006 + d); }; // 1→E007…5→E00B
-    auto barRight  = [](int d) -> QChar { return QChar(0xe00b + d); }; // 1→E00C…5→E010
-    auto barLeft   = [](int d) -> QChar { return QChar(0xe010 + d); }; // 1→E011…5→E015
-
-    auto mapDigits = [&](int absVal, std::function<QChar(int)> mapper) -> QString {
-        QString s;
-        for (QChar c : QString::number(absVal))
-            if (c.isDigit()) s += mapper(c.digitValue());
-        return s;
-    };
-
-    if (algOnly.contains(',')) {
-        // ── WCA format: find every a,b token ─────────────────────────────────
-        static const QRegularExpression pairRe(R"((-?\d+),(-?\d+))");
-        QString result;
-        int last = 0;
-        auto it = pairRe.globalMatch(algOnly);
-        while (it.hasNext()) {
-            auto m = it.next();
-            // Pass through non-numeric content (slashes, slice indicators, spaces)
-            result += algOnly.mid(last, m.capturedStart() - last);
-            int a = m.captured(1).toInt();
-            int b = m.captured(2).toInt();
-            if (a < 0 && b < 0) {
-                result += mapDigits(qAbs(a), barRight);
-                result += mapDigits(qAbs(b), barLeft);
-            } else {
-                result += (a < 0) ? mapDigits(qAbs(a), singleBar)
-                                  : mapDigits(qAbs(a), normalCp);
-                result += (b < 0) ? mapDigits(qAbs(b), singleBar)
-                                  : mapDigits(qAbs(b), normalCp);
-            }
-            last = m.capturedEnd();
-        }
-        result += algOnly.mid(last);
-        return result;
-    } else {
-        // ── Karn / stripped-comma format ──────────────────────────────────────
-        // Commas were stripped, so (-2,-3) → "-2-3" and (-5,0) → "-50".
-        // Sq1 values are always single digits (-6..6), so a '-' always governs
-        // exactly ONE following digit. Consume exactly one digit per negative token.
-        //
-        // Both-negative pair detection: if '-'digit is immediately followed by
-        // another '-'digit (no space), apply barRight + barLeft so the bars connect.
-        QString result;
-        int i = 0;
-        while (i < algOnly.size()) {
-            QChar c = algOnly[i];
-            if (c == '-' && i + 1 < algOnly.size() && algOnly[i + 1].isDigit()) {
-                // Peek: is there a second '-'digit immediately after this one?
-                bool bothNeg = (i + 2 < algOnly.size() && algOnly[i + 2] == '-' &&
-                                i + 3 < algOnly.size() && algOnly[i + 3].isDigit());
-                if (bothNeg) {
-                    result += barRight(algOnly[i + 1].digitValue()); // first  → barRight
-                    i += 2;
-                    result += barLeft(algOnly[i + 1].digitValue());  // second → barLeft
-                    i += 2;
-                } else {
-                    result += singleBar(algOnly[i + 1].digitValue());
-                    i += 2;
-                }
-            } else if (c.isDigit()) {
-                result += normalCp(c.digitValue());
-                ++i;
-            } else {
-                result += c;
-                ++i;
-            }
-        }
-        return result;
-    }
-}
-
 // Applies the normalize-ABF display transform to a single raw WCA alg line.
 // Only touches the alg portion; the bracket is preserved unchanged.
 // mode: 0=Both 1=PreABF 2=PostABF 3=None
@@ -3887,10 +3790,10 @@ void MainWindow::showSettingsModal()
 
     // ── Abid's Notation ───────────────────────────────────────────────────────
     QCheckBox *chkAbid = new QCheckBox("Abid's notation");
-    chkAbid->setChecked(m_abidNotation && !m_abidFontFamily.isEmpty());
-    chkAbid->setEnabled(!m_abidFontFamily.isEmpty());
+    chkAbid->setChecked(m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty());
+    chkAbid->setEnabled(!OutputConverter::s_abidFontFamily.isEmpty());
     chkAbid->setToolTip("Display negative numbers as barred digits using the Kompact font for display.");
-    if (m_abidFontFamily.isEmpty())
+    if (OutputConverter::s_abidFontFamily.isEmpty())
         chkAbid->setToolTip(chkAbid->toolTip() +
                             "\n\n⚠ kompact-font.ttf not found — visual effect unavailable.");
     chkAbid->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
@@ -4220,7 +4123,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
         // If Ctrl+C fires on a table-cell label while Abid's notation is on,
         // copy the clean (minus-sign) text instead of the PUA glyphs.
-        if (m_abidNotation && !m_abidFontFamily.isEmpty()) {
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
             if (QLabel *lbl = qobject_cast<QLabel *>(watched)) {
                 QVariant v = lbl->property("cleanAlg");
                 if (v.isValid()) {

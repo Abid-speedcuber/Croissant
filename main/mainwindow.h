@@ -182,9 +182,6 @@ private:
     int           m_normalizeAbfMode{3}; // 0=Both 1=PreABF 2=PostABF 3=None
     QButtonGroup* m_normalizeAbfDisplayGroup{nullptr}; // the new below-terminal pill
     QString       applyNormalizeAbf(const QString& rawAlgLine) const;
-    QString       m_abidFontFamily;
-    QString       abidifyDisplay(const QString& algOnly) const;
-
     QWidget*      m_sidebar{nullptr};
     QWidget*      m_sidebarOverlay{nullptr};
     bool          m_sidebarOpen{false};
