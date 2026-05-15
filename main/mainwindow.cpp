@@ -946,14 +946,10 @@ void MainWindow::buildUI()
     chkGenerator->setToolTip("If selected, generated algs will set up to the case from a solved cube,\n"
                              "else the algs will solve the case.");
 
-    chk2gen = new TightCheckBox("2Gen  (top layer + slices only)");
-    chk2gen->setObjectName("chk2gen");
-    chk2gen->setToolTip("Restrict to 2-gen moves: top-layer turns and slices only.\n"
-                        "Requires the bottom left pieces to already be solved.");
-
-    chkPseudo2gen = new TightCheckBox("Pseudo 2Gen  (bottom: ±1 only)");
-    chkPseudo2gen->setObjectName("chkPseudo2gen");
-    chkPseudo2gen->setToolTip("Restrict bottom-layer turns to ±1 only (2-gen with bottom 1 moves).\n");
+    QWidget *twoGenRadioRow = makeRadioRow("2 Gen", {"2 Gen", "Pseudo 2 Gen", "None"}, 2, m_twoGenGroup, "twoGenRadioRow", "twoGenPill");
+    twoGenRadioRow->setToolTip("2 Gen         \342\200\223 restrict to top-layer turns and slices only\n"
+                               "Pseudo 2 Gen  \342\200\223 restrict bottom-layer turns to \302\2611 only\n"
+                               "None          \342\200\223 no 2-gen restriction");
 
     chkCubeshape = new TightCheckBox("Stay in cubeshape");
     chkCubeshape->setObjectName("chkCubeshape");
@@ -1053,16 +1049,10 @@ void MainWindow::buildUI()
         rowLeft(row)->addWidget(chkGenerator);
         grid->addWidget(row);
     }
-    // Row: 2Gen (full width)
+    // Row: 2 Gen radio (full width)
     {
         QWidget *row = makeRow("optionRow_2gen");
-        rowLeft(row)->addWidget(chk2gen);
-        grid->addWidget(row);
-    }
-    // Row: Pseudo 2Gen (full width)
-    {
-        QWidget *row = makeRow("optionRow_pseudo2gen");
-        rowLeft(row)->addWidget(chkPseudo2gen);
+        rowLeft(row)->addWidget(twoGenRadioRow, 1);
         grid->addWidget(row);
     }
     // Row: Stay in cubeshape (full width)
@@ -1143,8 +1133,8 @@ void MainWindow::buildUI()
         chkDepths->blockSignals(false);
         upd(); });
     connect(chkGenerator, &QCheckBox::toggled, this, upd);
-    connect(chk2gen, &QCheckBox::toggled, this, upd);
-    connect(chkPseudo2gen, &QCheckBox::toggled, this, upd);
+    connect(m_twoGenGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int)
+            { upd(); });
     connect(chkCubeshape, &QCheckBox::toggled, this, upd);
     connect(chkIgnoreEquator, &QCheckBox::toggled, this, [this, upd](bool checked) {
         if (checked) {
@@ -1901,8 +1891,8 @@ void MainWindow::rebuildTerminalView()
 // -------------------------------------------------------
 void MainWindow::updateConstraints()
 {
-    const bool is2gen = chk2gen->isChecked();
-    const bool isPseudo = chkPseudo2gen->isChecked();
+    const int tgId = m_twoGenGroup ? m_twoGenGroup->checkedId() : 2;
+    const bool is2gen = (tgId == 0);
     const bool isAllOpt = chkAllOptimal->isChecked();
     const bool isDepths = chkDepths->isChecked();
 
@@ -1931,20 +1921,13 @@ void MainWindow::updateConstraints()
     else
         chkCubeshape->setEnabled(cubeWidget->inCubeshape());
 
-    if (chkCubeshape->isChecked())
-        disableCheck(chk2gen);
-    else if (!is2gen)
-        chk2gen->setEnabled(true);
-
-    if (is2gen)
-        disableCheck(chkPseudo2gen);
-    else
-        chkPseudo2gen->setEnabled(true);
-
-    if (isPseudo)
-        disableCheck(chk2gen);
-    else if (!chkCubeshape->isChecked())
-        chk2gen->setEnabled(true);
+    if (chkCubeshape->isChecked() && is2gen)
+    {
+        m_twoGenGroup->blockSignals(true);
+        if (auto *btn = m_twoGenGroup->button(2))
+            btn->setChecked(true);
+        m_twoGenGroup->blockSignals(false);
+    }
 
     spnSuboptimal->setVisible(isAllOpt && !isDepthsNow);
     if (QLabel *lbl = m_mainWidget->findChild<QLabel *>("lblSuboptLabel")) {
@@ -2012,10 +1995,14 @@ QStringList MainWindow::buildArgList()
 
     if (chkGenerator->isChecked())
         args << "-g";
-    if (chk2gen->isChecked())
-        args << "-2";
-    if (chkPseudo2gen->isChecked())
-        args << "-p";
+    {
+        int id = m_twoGenGroup ? m_twoGenGroup->checkedId() : 2;
+        if (id == 0)
+            args << "-2";
+        else if (id == 1)
+            args << "-p";
+        // id == 2 (None): no flag
+    }
     if (chkCubeshape->isChecked())
         args << "-c";
     if (chkIgnoreEquator->isChecked())

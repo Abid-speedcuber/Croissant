@@ -40,7 +40,7 @@ QWidget#optionRow_allopt        { min-height: 28px; }
 QWidget#optionRow_depths        { min-height: 28px; }
 QWidget#optionRow_generator     { min-height: 28px; margin-top: 3px; }
 QWidget#optionRow_2gen          { min-height: 28px; }
-QWidget#optionRow_pseudo2gen    { min-height: 28px; }
+
 QWidget#optionRow_cubeshape     { min-height: 28px; }
 QWidget#optionRow_ignoremid     { min-height: 28px; margin-bottom: 3px; }
 QWidget#optionRow_angle         { min-height: 28px; max-height: 32px; margin-top: 3px; }
@@ -52,8 +52,7 @@ QWidget#optionRow_maxtotal      { min-height: 28px; }
 /* --- checkbox styling by name --- */
 QCheckBox#chkAllOptimal,
 QCheckBox#chkGenerator,
-QCheckBox#chk2gen,
-QCheckBox#chkPseudo2gen,
+
 QCheckBox#chkCubeshape,
 QCheckBox#chkIgnoreEquator,
 QCheckBox#chkKarnotation,
@@ -102,7 +101,8 @@ QLineEdit#txtDepths[inactive="true"] {
 /* --- radio pill containers --- */
 QWidget#metricPill,
 QWidget#anglePill,
-QWidget#normalizeAbfPill {
+QWidget#normalizeAbfPill,
+QWidget#twoGenPill {
     background: --radio-pill-bg;
     border-radius: 7px;
     min-height: 24px;
@@ -112,7 +112,8 @@ QWidget#normalizeAbfPill {
 /* --- radio pill buttons base --- */
 QWidget#metricPill > QPushButton,
 QWidget#anglePill  > QPushButton,
-QWidget#normalizeAbfPill > QPushButton {
+QWidget#normalizeAbfPill > QPushButton,
+QWidget#twoGenPill > QPushButton {
     background: transparent;
     border: none;
     color: --radio-btn-text;
@@ -128,14 +129,16 @@ QWidget#normalizeAbfPill > QPushButton {
 /* --- first/last rounding --- */
 QWidget#metricPill > QPushButton#metricPill_first,
 QWidget#anglePill  > QPushButton#anglePill_first,
-QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_first {
+QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_first,
+QWidget#twoGenPill > QPushButton#twoGenPill_first {
     border-top-left-radius: 5px;
     border-bottom-left-radius: 5px;
 }
 
 QWidget#metricPill > QPushButton#metricPill_last,
 QWidget#anglePill  > QPushButton#anglePill_last,
-QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_last {
+QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_last,
+QWidget#twoGenPill > QPushButton#twoGenPill_last {
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
 }
@@ -143,7 +146,8 @@ QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_last {
 /* --- checked state --- */
 QWidget#metricPill > QPushButton:checked,
 QWidget#anglePill  > QPushButton:checked,
-QWidget#normalizeAbfPill > QPushButton:checked {
+QWidget#normalizeAbfPill > QPushButton:checked,
+QWidget#twoGenPill > QPushButton:checked {
     background: --radio-btn-checked-bg;
     color: --radio-btn-checked-text;
     border-radius: 5px;
@@ -153,7 +157,8 @@ QWidget#normalizeAbfPill > QPushButton:checked {
 /* --- hover unchecked --- */
 QWidget#metricPill > QPushButton:hover:!checked,
 QWidget#anglePill  > QPushButton:hover:!checked,
-QWidget#normalizeAbfPill > QPushButton:hover:!checked {
+QWidget#normalizeAbfPill > QPushButton:hover:!checked,
+QWidget#twoGenPill > QPushButton:hover:!checked {
     background: --radio-btn-hover-bg;
     border-radius: 5px;
 }
@@ -161,7 +166,8 @@ QWidget#normalizeAbfPill > QPushButton:hover:!checked {
 /* --- radio row labels --- */
 QLabel#metricRadioRow_label,
 QLabel#angleRadioRow_label,
-QLabel#normalizeAbfRow_label {
+QLabel#normalizeAbfRow_label,
+QLabel#twoGenRadioRow_label {
     font-size: 12px;
     color: --text-secondary;
 }
@@ -206,8 +212,7 @@ QCheckBox#chkRankErgo::indicator:checked {
 QCheckBox:disabled,
 QCheckBox#chkAllOptimal:disabled,
 QCheckBox#chkGenerator:disabled,
-QCheckBox#chk2gen:disabled,
-QCheckBox#chkPseudo2gen:disabled,
+
 QCheckBox#chkCubeshape:disabled,
 QCheckBox#chkIgnoreEquator:disabled,
 QCheckBox#chkKarnotation:disabled,

@@ -76,8 +76,7 @@ private:
     QCheckBox*    chkDepths;
     QLineEdit*    txtDepths;
     QCheckBox*    chkGenerator;
-    QCheckBox*    chk2gen;
-    QCheckBox*    chkPseudo2gen;
+    QButtonGroup*  m_twoGenGroup{nullptr};  // 0=2Gen 1=Pseudo2Gen 2=None(default)
     QCheckBox*    chkCubeshape;
     QCheckBox*    chkIgnoreEquator;     // -m: ignore equator
     QCheckBox*    chkKarnotation;
