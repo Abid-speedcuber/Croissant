@@ -2618,6 +2618,11 @@ void MainWindow::fillNextTableBatch()
 
     const int batchSize = 50;
     int count = qMin(batchSize, m_pendingTableRows.size());
+
+    // Grow the table by exactly the rows we're about to fill — no blank rows.
+    int newRowCount = m_tableFilledCount + count;
+    m_solutionTable->setRowCount(newRowCount);
+
     for (int b = 0; b < count; b++) {
         const TableRow &r = m_pendingTableRows[b];
         int i = m_tableFilledCount;
@@ -2639,36 +2644,29 @@ void MainWindow::fillNextTableBatch()
         { QFont f = numItem->font(); f.setPointSize(m_expanded ? fontSize - 2 : 10); f.setItalic(false); numItem->setFont(f); }
         m_solutionTable->setItem(i, 0, numItem);
 
-        QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
-        QLabel *algLabel = new QLabel(algDisplay);
-        algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        algLabel->setContextMenuPolicy(Qt::CustomContextMenu);
-        algLabel->setProperty("cleanAlg", r.alg);
-        algLabel->setCursor(Qt::ArrowCursor);
-        algLabel->setContentsMargins(4, 0, 4, 0);
+        // Alg column: plain QTableWidgetItem, selectable via SelectableDelegate
+        QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+                             ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
+        QTableWidgetItem *algItem = new QTableWidgetItem(algDisplay);
+        algItem->setData(Qt::UserRole, r.alg); // clean alg for Ctrl+C copy
+        algItem->setBackground(bg);
+        algItem->setForeground(textCol);
+        algItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+        algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
         if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
-            algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; font-family: '%3'; font-size: %4pt; }")
-                .arg(bg.name(), textCol.name(), OutputConverter::s_abidFontFamily, QString::number(fontSize + 2)));
-        } else {
-            algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
-                .arg(bg.name(), textCol.name(), m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
+            QFont f; f.setFamily(OutputConverter::s_abidFontFamily); f.setPointSize(fontSize + 2);
+            algItem->setFont(f);
+        } else if (m_expanded) {
+            QFont f = algItem->font(); f.setPointSize(fontSize); algItem->setFont(f);
         }
-        algLabel->installEventFilter(this);
-        m_solutionTable->setCellWidget(i, 1, algLabel);
+        m_solutionTable->setItem(i, 1, algItem);
 
         if (metricId == 0)      { cell(2, QString::number(r.slices), true); }
         else if (metricId == 1) { cell(2, QString::number(r.moves), true); cell(3, QString::number(r.slices), true); }
         else                    { cell(2, QString::number(r.angle), true); cell(3, QString::number(r.moves), true); cell(4, QString::number(r.slices), true); }
 
         if (showErgo) {
-            if (std::isnan(r.ergo)) {
-                auto *warn = new QLabel("⚠");
-                warn->setAlignment(Qt::AlignCenter);
-                warn->setStyleSheet(QString("QLabel { color: #cc2020; background: %1; font-size: 14px; }").arg(bg.name()));
-                m_solutionTable->setCellWidget(i, baseColCount, warn);
-            } else {
-                cell(baseColCount, QString::number(r.ergo, 'f', 1), true);
-            }
+            cell(baseColCount, std::isnan(r.ergo) ? "⚠" : QString::number(r.ergo, 'f', 1), true);
         }
         m_solutionTable->setRowHeight(i, rowH);
         m_tableFilledCount++;
@@ -2798,8 +2796,39 @@ void MainWindow::rebuildTable()
     const int rowH = m_expanded ? 36 : 24;
     const int fontSize = m_expanded ? 15 : 12;
 
+    // Install SelectableDelegate on the alg column so items are copy-pasteable
+    // via a read-only QLineEdit editor — without using QLabel cell widgets which
+    // grab mouse events and break table scrolling.
+    m_solutionTable->setItemDelegateForColumn(1, new SelectableDelegate(m_solutionTable));
+
+    // Helper: build a QTableWidgetItem for the alg column
+    auto makeAlgItem = [&](const Row &r, const QColor &bg) -> QTableWidgetItem * {
+        QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+                             ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
+        QTableWidgetItem *item = new QTableWidgetItem(algDisplay);
+        item->setData(Qt::UserRole, r.alg); // clean alg for Ctrl+C copy
+        item->setBackground(bg);
+        item->setForeground(textCol);
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+        item->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
+            QFont f;
+            f.setFamily(OutputConverter::s_abidFontFamily);
+            f.setPointSize(fontSize + 2);
+            item->setFont(f);
+        } else if (m_expanded) {
+            QFont f = item->font();
+            f.setPointSize(fontSize);
+            item->setFont(f);
+        }
+        return item;
+    };
+
     const int firstBatch = qMin(50, rows.size());
-    m_solutionTable->setRowCount(rows.size());  // allocate all rows upfront (fast)
+    // Only pre-allocate rows that will actually be filled in this pass.
+    // Remaining rows are added incrementally by fillNextTableBatch so the
+    // scrollbar never extends into blank, empty-cell territory.
+    m_solutionTable->setRowCount(firstBatch);
     for (int i = 0; i < firstBatch; i++)
     {
         const Row &r = rows[i];
@@ -2835,31 +2864,7 @@ void MainWindow::rebuildTable()
         }
         m_solutionTable->setItem(i, 0, numItem);
 
-        // Solution column: selectable QLabel
-        QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
-                             ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
-        QLabel *algLabel = new QLabel(algDisplay);
-        algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        algLabel->setContextMenuPolicy(Qt::CustomContextMenu);
-        algLabel->setProperty("cleanAlg", r.alg);
-        algLabel->setCursor(Qt::ArrowCursor);
-        algLabel->setContentsMargins(4, 0, 4, 0);
-        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
-            // Font family must live inside the stylesheet — setFont() is overridden by it.
-            // Bump point size +2 to match the kompact font's smaller cap-height.
-            int abidPt = fontSize + 2;
-            algLabel->setStyleSheet(QString(
-                "QLabel { background: %1; color: %2; font-family: '%3'; font-size: %4pt; }")
-                .arg(bg.name(), textCol.name(), OutputConverter::s_abidFontFamily, QString::number(abidPt)));
-        } else {
-            algLabel->setStyleSheet(QString("QLabel { background: %1; color: %2; %3 }")
-                                        .arg(bg.name(),
-                                             textCol.name(),
-                                             m_expanded ? QString("font-size: %1pt;").arg(fontSize) : QString()));
-        }
-        // Install event filter to show IBeam only when hovering over the text itself
-        algLabel->installEventFilter(this);
-        m_solutionTable->setCellWidget(i, 1, algLabel);
+        m_solutionTable->setItem(i, 1, makeAlgItem(r, bg));
 
         if (metricId == 0) {
             cell(2, QString::number(r.slices), true);
@@ -2874,19 +2879,9 @@ void MainWindow::rebuildTable()
         if (showErgo)
         {
             if (std::isnan(r.ergo))
-            {
-                // Rating failed for this alg — show a red warning icon instead of a score
-                auto *warn = new QLabel("⚠");
-                warn->setAlignment(Qt::AlignCenter);
-                warn->setStyleSheet(QString(
-                                        "QLabel { color: #cc2020; background: %1; font-size: 14px; }")
-                                        .arg(bg.name()));
-                m_solutionTable->setCellWidget(i, baseColCount, warn);
-            }
+                cell(baseColCount, "⚠", true);
             else
-            {
                 cell(baseColCount, QString::number(r.ergo, 'f', 1), true);
-            }
         }
         m_solutionTable->setRowHeight(i, rowH);
     }
@@ -4042,26 +4037,6 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
-    // ── IBeam cursor only over actual label text ──────────────────────────────
-    if (event->type() == QEvent::MouseMove)
-    {
-        if (QLabel *lbl = qobject_cast<QLabel *>(watched))
-        {
-            if (lbl->parent() && qobject_cast<QTableWidget *>(lbl->parent()->parent()))
-            {
-                QMouseEvent *me = static_cast<QMouseEvent *>(event);
-                // Check if the mouse is within the bounding rect of the actual text
-                QFontMetrics fm(lbl->font());
-                QRect textRect = fm.boundingRect(
-                    lbl->contentsRect(), Qt::AlignVCenter | Qt::AlignLeft | Qt::TextWordWrap,
-                    lbl->text());
-                textRect.adjust(4, 0, 0, 0); // match contentsMargins
-                lbl->setCursor(textRect.contains(me->pos()) ? Qt::IBeamCursor : Qt::ArrowCursor);
-                return false;
-            }
-        }
-    }
-
     if (event->type() == QEvent::Resize && watched == m_outputWrapper)
     {
         int w = m_outputWrapper->width();
@@ -4108,11 +4083,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             stopSolver();
             return true; // consume — don't copy
         }
-        // If Ctrl+C fires on a table-cell label while Abid's notation is on,
+        // If Ctrl+C fires on a table-cell item while Abid's notation is on,
         // copy the clean (minus-sign) text instead of the PUA glyphs.
         if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
-            if (QLabel *lbl = qobject_cast<QLabel *>(watched)) {
-                QVariant v = lbl->property("cleanAlg");
+            QModelIndex idx = m_solutionTable->currentIndex();
+            if (idx.isValid() && idx.column() == 1) {
+                QVariant v = m_solutionTable->model()->data(idx, Qt::UserRole);
                 if (v.isValid()) {
                     QApplication::clipboard()->setText(v.toString());
                     return true;
