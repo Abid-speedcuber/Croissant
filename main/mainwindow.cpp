@@ -319,57 +319,57 @@ public:
 // -------------------------------------------------------
 namespace
 {
-std::mutex g_solverStreamMutex;
+    std::mutex g_solverStreamMutex;
 
-class SolverStreamBuffer : public std::streambuf
-{
-public:
-    explicit SolverStreamBuffer(SolverWorker *worker) : m_worker(worker) {}
-
-    ~SolverStreamBuffer() override
+    class SolverStreamBuffer : public std::streambuf
     {
-        flushLine();
-    }
+    public:
+        explicit SolverStreamBuffer(SolverWorker *worker) : m_worker(worker) {}
 
-protected:
-    int overflow(int ch) override
-    {
-        if (ch == traits_type::eof())
-            return traits_type::not_eof(ch);
-
-        char c = static_cast<char>(ch);
-        if (c == '\n')
+        ~SolverStreamBuffer() override
+        {
             flushLine();
-        else if (c != '\r')
-            m_line.push_back(c);
-        return ch;
-    }
+        }
 
-    std::streamsize xsputn(const char *s, std::streamsize count) override
-    {
-        for (std::streamsize i = 0; i < count; ++i)
-            overflow(static_cast<unsigned char>(s[i]));
-        return count;
-    }
+    protected:
+        int overflow(int ch) override
+        {
+            if (ch == traits_type::eof())
+                return traits_type::not_eof(ch);
 
-    int sync() override
-    {
-        flushLine();
-        return 0;
-    }
+            char c = static_cast<char>(ch);
+            if (c == '\n')
+                flushLine();
+            else if (c != '\r')
+                m_line.push_back(c);
+            return ch;
+        }
 
-private:
-    void flushLine()
-    {
-        if (m_line.empty())
-            return;
-        emit m_worker->lineReady(QString::fromStdString(m_line).trimmed());
-        m_line.clear();
-    }
+        std::streamsize xsputn(const char *s, std::streamsize count) override
+        {
+            for (std::streamsize i = 0; i < count; ++i)
+                overflow(static_cast<unsigned char>(s[i]));
+            return count;
+        }
 
-    SolverWorker *m_worker;
-    std::string m_line;
-};
+        int sync() override
+        {
+            flushLine();
+            return 0;
+        }
+
+    private:
+        void flushLine()
+        {
+            if (m_line.empty())
+                return;
+            emit m_worker->lineReady(QString::fromStdString(m_line).trimmed());
+            m_line.clear();
+        }
+
+        SolverWorker *m_worker;
+        std::string m_line;
+    };
 }
 
 void SolverWorker::requestStop()
@@ -459,7 +459,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // ── Load Abid's notation font (embedded resource) ─────────────────────────
     OutputConverter::loadAbidFont();
     buildStyles();
-    if (m_mainWidget) m_mainWidget->setStyleSheet(buildStyleSheet());
+    if (m_mainWidget)
+        m_mainWidget->setStyleSheet(buildStyleSheet());
     updateCommand();
 
     m_sliceTimer = new QTimer(this);
@@ -525,10 +526,10 @@ static QString invertScrambleStr(const QString &str)
 void MainWindow::buildUI()
 {
     // ── Zoom scaffold: QGraphicsView wraps everything so we can scale the whole UI ──
-    m_mainWidget = new QWidget();   // this is the real UI root
+    m_mainWidget = new QWidget(); // this is the real UI root
     QWidget *realInner = m_mainWidget;
     m_zoomScene = new QGraphicsScene(this);
-    m_zoomView  = new QGraphicsView(m_zoomScene, this);
+    m_zoomView = new QGraphicsView(m_zoomScene, this);
     m_zoomView->setFrameShape(QFrame::NoFrame);
     m_zoomView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_zoomView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -538,7 +539,7 @@ void MainWindow::buildUI()
     m_zoomProxy = m_zoomScene->addWidget(realInner);
     setCentralWidget(m_zoomView);
 
-    QWidget *outerWidget = realInner;  // rest of buildUI builds into realInner
+    QWidget *outerWidget = realInner; // rest of buildUI builds into realInner
     QVBoxLayout *outerLayout = new QVBoxLayout(outerWidget);
     outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->setSpacing(0);
@@ -620,7 +621,8 @@ void MainWindow::buildUI()
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
     connect(cubeWidget, &Sq1Widget::userInteracted, this, &MainWindow::pushUndoState);
-    connect(cubeWidget, &Sq1Widget::positionChanged, this, [this]() {
+    connect(cubeWidget, &Sq1Widget::positionChanged, this, [this]()
+            {
         bool cs = cubeWidget->inCubeshape();
         if (!cs && chkCubeshape->isChecked()) {
             chkCubeshape->blockSignals(true);
@@ -629,9 +631,9 @@ void MainWindow::buildUI()
             updateConstraints();
             updateCommand();
         }
-        chkCubeshape->setEnabled(cs);
-    });
-    connect(cubeWidget, &Sq1Widget::equatorStateChanged, this, [this](int state) {
+        chkCubeshape->setEnabled(cs); });
+    connect(cubeWidget, &Sq1Widget::equatorStateChanged, this, [this](int state)
+            {
         bool shouldBeChecked = (state == 2);
         if (chkIgnoreEquator->isChecked() != shouldBeChecked) {
             if (!shouldBeChecked) {
@@ -643,8 +645,7 @@ void MainWindow::buildUI()
             chkIgnoreEquator->blockSignals(false);
             updateConstraints();
             updateCommand();
-        }
-    });
+        } });
     {
         // cubeWithReset fills the full width of leftContainer; reset button overlaps absolutely
         QWidget *cubeWithReset = new QWidget();
@@ -703,8 +704,10 @@ void MainWindow::buildUI()
 
     // Grid: U' | Slice (rowspan 2) | U
     //        D |                   | D'
-    QGridLayout *moveGrid = new QGridLayout();
+    m_moveButtonsWidget = new QWidget();
+    QGridLayout *moveGrid = new QGridLayout(m_moveButtonsWidget);
     moveGrid->setSpacing(4);
+    moveGrid->setContentsMargins(0, 0, 0, 0);
 
     QPushButton *btnUP = new QPushButton("U'");
     QPushButton *btnU = new QPushButton("U");
@@ -726,7 +729,7 @@ void MainWindow::buildUI()
     moveGrid->setRowStretch(0, 1);
     moveGrid->setRowStretch(1, 1);
 
-    leftCol->addLayout(moveGrid);
+    leftCol->addWidget(m_moveButtonsWidget);
 
     // Row 3: Undo | Redo
     QHBoxLayout *undoResetRedoRow = new QHBoxLayout();
@@ -875,6 +878,7 @@ void MainWindow::buildUI()
 
         QLabel *lbl = new QLabel(labelText);
         lbl->setObjectName(rowName + "_label");
+        lbl->setStyleSheet(QString("color: %1; font-size: 12px;").arg(Theme::textSecondary(m_lightTheme)));
         rLay->addWidget(lbl);
         rLay->addStretch();
 
@@ -906,7 +910,8 @@ void MainWindow::buildUI()
         return row;
     };
 
-    QWidget *metricRadioRow = makeRadioRow("Metric", {"Slice", "Move", "Angle"}, 0, m_metricGroup, "metricRadioRow", "metricPill");
+    m_metricRadioRow = makeRadioRow("Metric", {"Slice", "Move", "Angle"}, 0, m_metricGroup, "metricRadioRow", "metricPill");
+    QWidget *metricRadioRow = m_metricRadioRow;
     metricRadioRow->setToolTip("Choose how move length of an alg is counted:\n"
                                "Slice – only slices count\n"
                                "Move  – layer turns count too\n"
@@ -923,8 +928,9 @@ void MainWindow::buildUI()
     spnSuboptimal->setValue(0);
     spnSuboptimal->setToolTip("Extra moves beyond optimal to *also* find (0 = optimal only).");
 
-    QLabel *lblSuboptLabel = new QLabel("+suboptimal:");
+    lblSuboptLabel = new QLabel("+suboptimal:");
     lblSuboptLabel->setObjectName("lblSuboptLabel");
+    lblSuboptLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(Theme::textSecondary(m_lightTheme)));
 
     chkDepths = new TightCheckBox("Specific depths:");
     chkDepths->setObjectName("chkDepths");
@@ -946,7 +952,8 @@ void MainWindow::buildUI()
     chkGenerator->setToolTip("If selected, generated algs will set up to the case from a solved cube,\n"
                              "else the algs will solve the case.");
 
-    QWidget *twoGenRadioRow = makeRadioRow("2 Gen", {"2 Gen", "Pseudo 2 Gen", "None"}, 2, m_twoGenGroup, "twoGenRadioRow", "twoGenPill");
+    m_twoGenRadioRow = makeRadioRow("2 Gen", {"2 Gen", "Pseudo 2 Gen", "None"}, 2, m_twoGenGroup, "twoGenRadioRow", "twoGenPill");
+    QWidget *twoGenRadioRow = m_twoGenRadioRow;
     twoGenRadioRow->setToolTip("2 Gen         \342\200\223 restrict to top-layer turns and slices only\n"
                                "Pseudo 2 Gen  \342\200\223 restrict bottom-layer turns to \302\2611 only\n"
                                "None          \342\200\223 no 2-gen restriction");
@@ -963,8 +970,9 @@ void MainWindow::buildUI()
     chkKarnotation->setObjectName("chkKarnotation");
     chkKarnotation->setToolTip("Display solutions in karnotation instead of WCA notation.");
 
-    QWidget *angleRadioRow = makeRadioRow("Lock layer angle on preabf",
-                                          {"Both", "Top", "Bottom", "None"}, 3, m_angleGroup, "angleRadioRow", "anglePill");
+    m_angleRadioRow = makeRadioRow("Lock layer angle on preabf",
+                                   {"Both", "Top", "Bottom", "None"}, 3, m_angleGroup, "angleRadioRow", "anglePill");
+    QWidget *angleRadioRow = m_angleRadioRow;
     angleRadioRow->setToolTip("Lock the pre-ABF angle move to ±1 or 0.\n"
                               "Both   – restricts top and bottom\n"
                               "Top    – restricts top layer only\n"
@@ -972,7 +980,7 @@ void MainWindow::buildUI()
                               "None   – no restriction");
 
     m_normalizeAbfRow = makeRadioRow("Normalize ABF",
-        {"Both", "PreABF", "PostABF", "None"}, 3, m_normalizeAbfGroup, "normalizeAbfRow", "normalizeAbfPill");
+                                     {"Both", "PreABF", "PostABF", "None"}, 3, m_normalizeAbfGroup, "normalizeAbfRow", "normalizeAbfPill");
     m_normalizeAbfRow->setEnabled(true);
     QWidget *normalizeAbfRow = m_normalizeAbfRow;
     // TODO: update this tooltip text with a precise description of what normalizing does
@@ -1029,6 +1037,7 @@ void MainWindow::buildUI()
     // Row: All optimal + suboptimal
     {
         QWidget *row = makeRow("optionRow_allopt");
+        m_allOptRow = row;
         rowLeft(row)->addWidget(chkAllOptimal);
         QHBoxLayout *rr = rowRight(row);
         rr->addWidget(lblSuboptLabel);
@@ -1136,15 +1145,15 @@ void MainWindow::buildUI()
     connect(m_twoGenGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, [upd](int)
             { upd(); });
     connect(chkCubeshape, &QCheckBox::toggled, this, upd);
-    connect(chkIgnoreEquator, &QCheckBox::toggled, this, [this, upd](bool checked) {
+    connect(chkIgnoreEquator, &QCheckBox::toggled, this, [this, upd](bool checked)
+            {
         if (checked) {
             m_preIgnoreMidState = cubeWidget->getEquatorState();
             cubeWidget->setEquatorState(2); // gray / partial
         } else {
             cubeWidget->setEquatorState(m_preIgnoreMidState);
         }
-        upd();
-    });
+        upd(); });
     connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool /*checked*/)
             {
         upd();
@@ -1590,8 +1599,10 @@ void MainWindow::buildUI()
     btnTableMode->setVisible(false);
 
     outputWrapperLay->addWidget(txtOutput);
-    auto pauseAutoScroll = [this]() {
-        if (!m_autoScrollPaused && worker && worker->isRunning()) {
+    auto pauseAutoScroll = [this]()
+    {
+        if (!m_autoScrollPaused && worker && worker->isRunning())
+        {
             m_autoScrollPaused = true;
             btnScrollToBottom->setGraphicsEffect(nullptr);
             btnScrollToBottom->setText("⌄");
@@ -1604,13 +1615,13 @@ void MainWindow::buildUI()
         }
     };
     connect(txtOutput->verticalScrollBar(), &QScrollBar::sliderPressed, this, pauseAutoScroll);
-    connect(txtOutput->verticalScrollBar(), &QScrollBar::actionTriggered, this, [pauseAutoScroll](int action) {
+    connect(txtOutput->verticalScrollBar(), &QScrollBar::actionTriggered, this, [pauseAutoScroll](int action)
+            {
         // SliderSingleStepAdd/Sub = arrow keys/buttons, SliderPageStepAdd/Sub = track click
         if (action == QAbstractSlider::SliderPageStepAdd ||
             action == QAbstractSlider::SliderPageStepSub ||
             action == QAbstractSlider::SliderMove)
-            pauseAutoScroll();
-    });
+            pauseAutoScroll(); });
 
     m_tableContainer = new QWidget();
     m_tableContainer->setVisible(false);
@@ -1692,8 +1703,7 @@ void MainWindow::buildUI()
                     "QPushButton#btnScrollToBottom:hover { background: #3a3a6a; }");
                 btnScrollToBottom->setToolTip("Scroll to bottom and resume auto-scroll");
                 txtOutput->verticalScrollBar()->setValue(
-                    txtOutput->verticalScrollBar()->maximum());
-            });
+                    txtOutput->verticalScrollBar()->maximum()); });
     connect(btnTableMode, &QPushButton::clicked, this, [this]
             {
                 m_tableVisible = !m_tableVisible;
@@ -1824,13 +1834,15 @@ void MainWindow::rebuildTerminalView()
     }
 
     // Helper: insert a solution line with optional Abid font on the alg portion.
-    auto insertSolLine = [this](QTextCursor &cur, const QString &line, const QTextCharFormat &fmt) {
-        if (!m_abidNotation || OutputConverter::s_abidFontFamily.isEmpty()) {
+    auto insertSolLine = [this](QTextCursor &cur, const QString &line, const QTextCharFormat &fmt)
+    {
+        if (!m_abidNotation || OutputConverter::s_abidFontFamily.isEmpty())
+        {
             cur.insertText(line, fmt);
             return;
         }
         int lb = line.lastIndexOf('[');
-        QString algPart     = lb > 0 ? line.left(lb).trimmed() : line;
+        QString algPart = lb > 0 ? line.left(lb).trimmed() : line;
         QString bracketPart = lb > 0 ? "  " + line.mid(lb).trimmed() : QString();
         QTextCharFormat abidFmt = fmt;
         abidFmt.setFontFamily(OutputConverter::s_abidFontFamily);
@@ -1847,10 +1859,14 @@ void MainWindow::rebuildTerminalView()
     {
         bool isSol = rawLine.contains('[') && rawLine.contains(']');
         QString line = isSol ? applyNormalizeAbf(rawLine) : rawLine;
-        if (isSol) {
+        if (isSol)
+        {
             int lb = line.lastIndexOf('[');
             QString key = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-            if (seenAlgs.contains(key)) { continue; }
+            if (seenAlgs.contains(key))
+            {
+                continue;
+            }
             seenAlgs.insert(key);
         }
         if (!cur.atStart())
@@ -1891,6 +1907,10 @@ void MainWindow::rebuildTerminalView()
 // -------------------------------------------------------
 void MainWindow::updateConstraints()
 {
+    // Don't re-enable any widgets while the solver is running — setSolverRunning
+    // owns the enabled state during that time.
+    const bool solverRunning = worker && worker->isRunning();
+
     const int tgId = m_twoGenGroup ? m_twoGenGroup->checkedId() : 2;
     const bool is2gen = (tgId == 0);
     const bool isAllOpt = chkAllOptimal->isChecked();
@@ -1918,7 +1938,7 @@ void MainWindow::updateConstraints()
 
     if (is2gen)
         disableCheck(chkCubeshape);
-    else
+    else if (!solverRunning)
         chkCubeshape->setEnabled(cubeWidget->inCubeshape());
 
     if (chkCubeshape->isChecked() && is2gen)
@@ -1930,20 +1950,20 @@ void MainWindow::updateConstraints()
     }
 
     spnSuboptimal->setVisible(isAllOpt && !isDepthsNow);
-    if (QLabel *lbl = m_mainWidget->findChild<QLabel *>("lblSuboptLabel")) {
-        lbl->setVisible(isAllOpt && !isDepthsNow);
-        lbl->setStyleSheet(QString("QLabel { color: %1; font-size: 13px; }")
-                               .arg(m_lightTheme ? "#2a2a3a" : "#c8cad8"));
-    }
+    if (lblSuboptLabel)
+        lblSuboptLabel->setVisible(isAllOpt && !isDepthsNow);
 
     // txtDepths is always enabled so the user can click into it and activate the option.
     // Style it to look inactive when the checkbox is off.
     txtDepths->setProperty("inactive", !isDepthsNow);
     txtDepths->style()->polish(txtDepths);
 
-    spnMaxX->setEnabled(chkMaxX->isChecked());
-    spnMaxY->setEnabled(chkMaxY->isChecked());
-    spnMaxTotal->setEnabled(chkMaxTotal->isChecked());
+    if (!solverRunning)
+    {
+        spnMaxX->setEnabled(chkMaxX->isChecked());
+        spnMaxY->setEnabled(chkMaxY->isChecked());
+        spnMaxTotal->setEnabled(chkMaxTotal->isChecked());
+    }
 }
 
 // -------------------------------------------------------
@@ -2109,18 +2129,8 @@ void MainWindow::onSolve()
     m_solveStartMs = QDateTime::currentMSecsSinceEpoch();
     m_firstSolutionMs = 0;
     m_hadFirstSolution = false;
-    chkKarnotation->setEnabled(false);
-    if (m_normalizeAbfGroup) {
-        for (QAbstractButton *btn : m_normalizeAbfGroup->buttons()) {
-            btn->setStyleSheet("color: #4a4a5a; background: transparent;");
-            btn->setCursor(Qt::ArrowCursor);
-        }
-    }
-    if (m_normalizeAbfRow) {
-        m_normalizeAbfRow->setEnabled(false);
-        if (QLabel *lbl = m_normalizeAbfRow->findChild<QLabel*>("normalizeAbfRow_label"))
-            lbl->setStyleSheet("color: #4a4a5a;");
-    }
+    // Disable all interactive controls while solver runs; only Stop is usable.
+    setSolverRunning(true);
     worker->start();
 }
 
@@ -2132,6 +2142,100 @@ void MainWindow::stopSolver()
     m_stopped = true;
     if (worker && worker->isRunning())
         worker->requestStop();
+}
+
+// -------------------------------------------------------
+// setSolverRunning — disable/enable all interactive controls
+// while the solver is active. btnSolve itself is handled
+// separately (it becomes the Stop button).
+// -------------------------------------------------------
+void MainWindow::setSolverRunning(bool running)
+{
+    // Options panel widgets
+    auto setRowEnabled = [&](QWidget *row, bool enabled)
+    {
+        if (!row)
+            return;
+        row->setEnabled(enabled);
+        for (QWidget *child : row->findChildren<QWidget *>())
+        {
+            child->style()->unpolish(child);
+            child->style()->polish(child);
+            child->update();
+        }
+        // Drive label color directly — QSS :disabled via parent propagation
+        // is unreliable across Qt versions without an explicit polish pass.
+        const QString labelColor = enabled
+                                       ? QString("color: %1; font-size: 12px;").arg(Theme::textSecondary(m_lightTheme))
+                                       : QString("color: %1; font-size: 12px;").arg(Theme::textDisabled(m_lightTheme));
+        if (QLabel *lbl = row->findChild<QLabel *>(row->objectName() + "_label"))
+            lbl->setStyleSheet(labelColor);
+    };
+    setRowEnabled(m_metricRadioRow, !running);
+    setRowEnabled(m_twoGenRadioRow, !running);
+    setRowEnabled(m_angleRadioRow, !running);
+    setRowEnabled(m_normalizeAbfRow, !running);
+    // Qt doesn't reliably re-polish children disabled via parent propagation,
+    // so drive the label color directly — inline style always wins over QSS.
+    if (lblSuboptLabel)
+        lblSuboptLabel->setStyleSheet(
+            running ? QString("color: %1; font-size: 12px;").arg(Theme::textDisabled(m_lightTheme))
+                    : QString("color: %1; font-size: 12px;").arg(Theme::textSecondary(m_lightTheme)));
+    // allOptRow: disable both the row and widgets directly — direct setEnabled
+    // calls survive Qt's parent-propagation and guard against updateConstraints interference.
+    if (m_allOptRow)
+        m_allOptRow->setEnabled(!running);
+    chkAllOptimal->setEnabled(!running);
+    spnSuboptimal->setEnabled(!running);
+    chkDepths->setEnabled(!running);
+    txtDepths->setEnabled(!running);
+    chkGenerator->setEnabled(!running);
+    chkCubeshape->setEnabled(!running);
+    chkIgnoreEquator->setEnabled(!running);
+    chkMaxX->setEnabled(!running);
+    spnMaxX->setEnabled(!running);
+    chkMaxY->setEnabled(!running);
+    spnMaxY->setEnabled(!running);
+    chkMaxTotal->setEnabled(!running);
+    spnMaxTotal->setEnabled(!running);
+
+    // Output options (below terminal)
+    chkKarnotation->setEnabled(!running);
+
+    // Input bar
+    btnApply->setEnabled(!running);
+    m_inputMode->setEnabled(!running);
+    m_inputModeArrow->setEnabled(!running);
+    m_mainInput->setEnabled(!running);
+
+    // Cube interaction buttons (left panel)
+    cubeWidget->setEnabled(!running);
+    m_moveButtonsWidget->setEnabled(!running);
+    btnUndo->setEnabled(!running && !m_undoStack.isEmpty());
+    btnRedo->setEnabled(!running && !m_redoStack.isEmpty());
+    btnReset->setEnabled(!running);
+
+    // Settings modal checkboxes — disable if the modal is currently open.
+    // We DON'T disable btnHamburger itself; the menu can open but settings
+    // checkboxes inside it will be grayed out when running.
+    if (chkSmartKarn)
+        chkSmartKarn->setEnabled(!running);
+    if (chkIgnoreTransSetting)
+        chkIgnoreTransSetting->setEnabled(!running);
+    // Light theme and Abid notation toggles: find them by their checked state
+    // in the settings card if it's open. Since the modal is rebuilt each open,
+    // we reach them through the overlay child hierarchy.
+    if (auto *central = this->centralWidget())
+    {
+        // Find the settings card if it's currently shown
+        for (QWidget *child : central->findChildren<QWidget *>("settingsCard"))
+        {
+            for (QCheckBox *cb : child->findChildren<QCheckBox *>())
+            {
+                cb->setEnabled(!running);
+            }
+        }
+    }
 }
 
 // -------------------------------------------------------
@@ -2245,7 +2349,8 @@ void MainWindow::onSolverLine(QString line)
 
     // Which version to display live?
     QString displayLine = isSolution && chkKarnotation->isChecked() ? karnLine : line;
-    if (isSolution) displayLine = applyNormalizeAbf(displayLine);
+    if (isSolution)
+        displayLine = applyNormalizeAbf(displayLine);
 
     if (isSolution)
     {
@@ -2287,9 +2392,10 @@ void MainWindow::onSolverLine(QString line)
             fmt.setForeground(QColor(col));
             fmt.setFontWeight(m_expanded ? QFont::Bold : QFont::Normal);
             fmt.setFontPointSize(m_expanded ? 13 : 10);
-            if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
+            if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+            {
                 int lb = displayLine.lastIndexOf('[');
-                QString algPart     = lb > 0 ? displayLine.left(lb).trimmed() : displayLine;
+                QString algPart = lb > 0 ? displayLine.left(lb).trimmed() : displayLine;
                 QString bracketPart = lb > 0 ? "  " + displayLine.mid(lb).trimmed() : QString();
                 QTextCharFormat abidFmt = fmt;
                 abidFmt.setFontFamily(OutputConverter::s_abidFontFamily);
@@ -2297,7 +2403,9 @@ void MainWindow::onSolverLine(QString line)
                 cur.insertText(OutputConverter::abidifyDisplay(algPart), abidFmt);
                 if (!bracketPart.isEmpty())
                     cur.insertText(bracketPart, fmt);
-            } else {
+            }
+            else
+            {
                 cur.insertText(displayLine, fmt);
             }
             {
@@ -2342,19 +2450,8 @@ void MainWindow::onSolverLine(QString line)
 // -------------------------------------------------------
 void MainWindow::onSolverDone(int code)
 {
-    // Revert solve button and controls immediately so the UI looks "done"
-    chkKarnotation->setEnabled(true);
-    if (m_normalizeAbfGroup) {
-        for (QAbstractButton *btn : m_normalizeAbfGroup->buttons()) {
-            btn->setStyleSheet(""); // revert to QSS
-            btn->setCursor(Qt::PointingHandCursor);
-        }
-    }
-    if (m_normalizeAbfRow) {
-        m_normalizeAbfRow->setEnabled(true);
-        if (QLabel *lbl = m_normalizeAbfRow->findChild<QLabel*>("normalizeAbfRow_label"))
-            lbl->setStyleSheet(""); // revert to QSS
-    }
+    // Re-enable all controls now that solver is done.
+    setSolverRunning(false);
     btnSolve->setText("▶  Solve  [Ctrl+Enter]");
     btnSolve->setStyleSheet(""); // revert to stylesheet-defined look
     // Progress bar stays visible in indeterminate mode while ergo ranks
@@ -2433,15 +2530,15 @@ void MainWindow::onSolverDone(int code)
         m_cachedRatedOrder = indexScores;
         m_ratingsValid = true;
         // Defer the terminal rebuild so the progress bar gets one repaint first
-        QTimer::singleShot(0, this, [this]() {
+        QTimer::singleShot(0, this, [this]()
+                           {
             // Let the indeterminate bar render at least one frame
             QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
             onRankErgoToggled(true);
             // Let the terminal repaint before building the table
             QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
             progressBar->setRange(0, 100);
-            progressBar->setVisible(false);
-        });
+            progressBar->setVisible(false); });
     }
 
     if (!m_cubeshapeWasActive || m_rawFinalScores.isEmpty())
@@ -2453,7 +2550,8 @@ void MainWindow::onSolverDone(int code)
 
     if (!m_solutionLines.isEmpty())
     {
-        if (m_autoScrollPaused) {
+        if (m_autoScrollPaused)
+        {
             // User is browsing — flag it and animate the scroll button
             m_solveFinishedWhilePaused = true;
             // Animate: checkmark for 1.5s, then table icon
@@ -2465,27 +2563,29 @@ void MainWindow::onSolverDone(int code)
                 auto *stepTimer = new QTimer(btnScrollToBottom);
                 stepTimer->setInterval(16);
                 auto *step = new int(0);
-                auto applyCheckStyle = [this](int alpha) {
+                auto applyCheckStyle = [this](int alpha)
+                {
                     btnScrollToBottom->setStyleSheet(QString(
-                        "QPushButton#btnScrollToBottom {"
-                        "  background: #1a5c1a; border: 1px solid #2ecc40; border-radius: 16px;"
-                        "  color: rgba(46,204,64,%1); font-size: 18px; font-weight: bold;"
-                        "  padding: 0px; margin: 0px; text-align: center; }"
-                        "QPushButton#btnScrollToBottom:hover { background: #236b23; }")
-                        .arg(alpha));
+                                                         "QPushButton#btnScrollToBottom {"
+                                                         "  background: #1a5c1a; border: 1px solid #2ecc40; border-radius: 16px;"
+                                                         "  color: rgba(46,204,64,%1); font-size: 18px; font-weight: bold;"
+                                                         "  padding: 0px; margin: 0px; text-align: center; }"
+                                                         "QPushButton#btnScrollToBottom:hover { background: #236b23; }")
+                                                         .arg(alpha));
                 };
                 applyCheckStyle(0);
-                connect(stepTimer, &QTimer::timeout, this, [this, stepTimer, step, applyCheckStyle]() mutable {
+                connect(stepTimer, &QTimer::timeout, this, [this, stepTimer, step, applyCheckStyle]() mutable
+                        {
                     *step += 1;
                     int alpha = qMin((int)(*step * 255 / 22), 255); // ~350ms at 16ms steps
                     applyCheckStyle(alpha);
-                    if (*step >= 22) { stepTimer->stop(); delete step; }
-                });
+                    if (*step >= 22) { stepTimer->stop(); delete step; } });
                 stepTimer->start();
             }
 
             // After 1.5s: fade out checkmark text, swap to table icon, fade in
-            QTimer::singleShot(1500, this, [this] {
+            QTimer::singleShot(1500, this, [this]
+                               {
                 if (!m_solveFinishedWhilePaused) return;
                 auto *stepOut = new QTimer(btnScrollToBottom);
                 stepOut->setInterval(16);
@@ -2530,9 +2630,10 @@ void MainWindow::onSolverDone(int code)
                         stepIn->start();
                     }
                 });
-                stepOut->start();
-            });
-        } else {
+                stepOut->start(); });
+        }
+        else
+        {
             qint64 elapsed = m_hadFirstSolution
                                  ? (QDateTime::currentMSecsSinceEpoch() - m_firstSolutionMs)
                                  : 3000;
@@ -2604,7 +2705,8 @@ void MainWindow::appendStatusLine(const QString &msg)
 
 void MainWindow::fillNextTableBatch()
 {
-    if (m_pendingTableRows.isEmpty()) return;
+    if (m_pendingTableRows.isEmpty())
+        return;
 
     const QColor rowA = QColor(Theme::rowAltDark(m_lightTheme));
     const QColor rowB = m_lightTheme ? rowA : QColor(Theme::rowAltLight(m_lightTheme));
@@ -2614,7 +2716,8 @@ void MainWindow::fillNextTableBatch()
     const int fontSize = m_expanded ? 15 : 12;
     const bool showErgo = m_cubeshapeWasActive;
     const int metricId = m_metricGroup ? m_metricGroup->checkedId() : 0;
-    const int baseColCount = (metricId == 0) ? 3 : (metricId == 1) ? 4 : 5;
+    const int baseColCount = (metricId == 0) ? 3 : (metricId == 1) ? 4
+                                                                   : 5;
 
     const int batchSize = 50;
     int count = qMin(batchSize, m_pendingTableRows.size());
@@ -2623,49 +2726,84 @@ void MainWindow::fillNextTableBatch()
     int newRowCount = m_tableFilledCount + count;
     m_solutionTable->setRowCount(newRowCount);
 
-    for (int b = 0; b < count; b++) {
+    for (int b = 0; b < count; b++)
+    {
         const TableRow &r = m_pendingTableRows[b];
         int i = m_tableFilledCount;
         QColor bg = (i % 2 == 0) ? rowA : rowB;
 
-        auto cell = [&](int col, const QString &txt, bool isMeta = false) {
+        auto cell = [&](int col, const QString &txt, bool isMeta = false)
+        {
             QTableWidgetItem *item = new QTableWidgetItem(txt);
             item->setBackground(bg);
             item->setForeground(isMeta ? metaCol : textCol);
             item->setFlags(Qt::ItemIsEnabled);
-            if (m_expanded) { QFont f = item->font(); f.setPointSize(fontSize); item->setFont(f); }
+            if (m_expanded)
+            {
+                QFont f = item->font();
+                f.setPointSize(fontSize);
+                item->setFont(f);
+            }
             item->setTextAlignment(Qt::AlignCenter);
             m_solutionTable->setItem(i, col, item);
         };
 
         QTableWidgetItem *numItem = new QTableWidgetItem(QString::number(i + 1));
-        numItem->setBackground(bg); numItem->setForeground(metaCol);
-        numItem->setFlags(Qt::ItemIsEnabled); numItem->setTextAlignment(Qt::AlignCenter);
-        { QFont f = numItem->font(); f.setPointSize(m_expanded ? fontSize - 2 : 10); f.setItalic(false); numItem->setFont(f); }
+        numItem->setBackground(bg);
+        numItem->setForeground(metaCol);
+        numItem->setFlags(Qt::ItemIsEnabled);
+        numItem->setTextAlignment(Qt::AlignCenter);
+        {
+            QFont f = numItem->font();
+            f.setPointSize(m_expanded ? fontSize - 2 : 10);
+            f.setItalic(false);
+            numItem->setFont(f);
+        }
         m_solutionTable->setItem(i, 0, numItem);
 
         // Alg column: plain QTableWidgetItem, selectable via SelectableDelegate
         QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
-                             ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
+                                 ? OutputConverter::abidifyDisplay(r.alg)
+                                 : r.alg;
         QTableWidgetItem *algItem = new QTableWidgetItem(algDisplay);
         algItem->setData(Qt::UserRole, r.alg); // clean alg for Ctrl+C copy
         algItem->setBackground(bg);
         algItem->setForeground(textCol);
         algItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         algItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
-            QFont f; f.setFamily(OutputConverter::s_abidFontFamily); f.setPointSize(fontSize + 2);
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+        {
+            QFont f;
+            f.setFamily(OutputConverter::s_abidFontFamily);
+            f.setPointSize(fontSize + 2);
             algItem->setFont(f);
-        } else if (m_expanded) {
-            QFont f = algItem->font(); f.setPointSize(fontSize); algItem->setFont(f);
+        }
+        else if (m_expanded)
+        {
+            QFont f = algItem->font();
+            f.setPointSize(fontSize);
+            algItem->setFont(f);
         }
         m_solutionTable->setItem(i, 1, algItem);
 
-        if (metricId == 0)      { cell(2, QString::number(r.slices), true); }
-        else if (metricId == 1) { cell(2, QString::number(r.moves), true); cell(3, QString::number(r.slices), true); }
-        else                    { cell(2, QString::number(r.angle), true); cell(3, QString::number(r.moves), true); cell(4, QString::number(r.slices), true); }
+        if (metricId == 0)
+        {
+            cell(2, QString::number(r.slices), true);
+        }
+        else if (metricId == 1)
+        {
+            cell(2, QString::number(r.moves), true);
+            cell(3, QString::number(r.slices), true);
+        }
+        else
+        {
+            cell(2, QString::number(r.angle), true);
+            cell(3, QString::number(r.moves), true);
+            cell(4, QString::number(r.slices), true);
+        }
 
-        if (showErgo) {
+        if (showErgo)
+        {
             cell(baseColCount, std::isnan(r.ergo) ? "⚠" : QString::number(r.ergo, 'f', 1), true);
         }
         m_solutionTable->setRowHeight(i, rowH);
@@ -2678,7 +2816,8 @@ void MainWindow::fillNextTableBatch()
 
 void MainWindow::rebuildTable()
 {
-    if (m_tableFillTimer) m_tableFillTimer->stop();
+    if (m_tableFillTimer)
+        m_tableFillTimer->stop();
     m_pendingTableRows.clear();
     m_tableFilledCount = 0;
     const bool ergo = m_ratingsValid && m_cubeshapeWasActive;
@@ -2688,7 +2827,8 @@ void MainWindow::rebuildTable()
     // Slice: cols = #, Solution, Slices
     // Move:  cols = #, Solution, Moves, Slices
     // Angle: cols = #, Solution, Angle, Moves, Slices
-    int baseColCount = (metricId == 0) ? 3 : (metricId == 1) ? 4 : 5;
+    int baseColCount = (metricId == 0) ? 3 : (metricId == 1) ? 4
+                                                             : 5;
     m_solutionTable->setColumnCount(showErgo ? baseColCount + 1 : baseColCount);
     if (metricId == 0)
         m_solutionTable->setHorizontalHeaderLabels(
@@ -2762,7 +2902,8 @@ void MainWindow::rebuildTable()
             parseCounts(dline, mv, sl, ang);
             int lb = dline.lastIndexOf('[');
             QString alg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
-            if (seenTableAlgs.contains(alg)) continue;
+            if (seenTableAlgs.contains(alg))
+                continue;
             seenTableAlgs.insert(alg);
             rows.append({alg, mv, sl, ang, score});
         }
@@ -2776,7 +2917,8 @@ void MainWindow::rebuildTable()
             parseCounts(line, mv, sl, ang);
             int lb = line.lastIndexOf('[');
             QString alg = lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-            if (seenTableAlgs.contains(alg)) continue;
+            if (seenTableAlgs.contains(alg))
+                continue;
             seenTableAlgs.insert(alg);
             rows.append({alg, mv, sl, ang, 0.0});
         }
@@ -2802,21 +2944,26 @@ void MainWindow::rebuildTable()
     m_solutionTable->setItemDelegateForColumn(1, new SelectableDelegate(m_solutionTable));
 
     // Helper: build a QTableWidgetItem for the alg column
-    auto makeAlgItem = [&](const Row &r, const QColor &bg) -> QTableWidgetItem * {
+    auto makeAlgItem = [&](const Row &r, const QColor &bg) -> QTableWidgetItem *
+    {
         QString algDisplay = (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
-                             ? OutputConverter::abidifyDisplay(r.alg) : r.alg;
+                                 ? OutputConverter::abidifyDisplay(r.alg)
+                                 : r.alg;
         QTableWidgetItem *item = new QTableWidgetItem(algDisplay);
         item->setData(Qt::UserRole, r.alg); // clean alg for Ctrl+C copy
         item->setBackground(bg);
         item->setForeground(textCol);
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         item->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+        {
             QFont f;
             f.setFamily(OutputConverter::s_abidFontFamily);
             f.setPointSize(fontSize + 2);
             item->setFont(f);
-        } else if (m_expanded) {
+        }
+        else if (m_expanded)
+        {
             QFont f = item->font();
             f.setPointSize(fontSize);
             item->setFont(f);
@@ -2866,12 +3013,17 @@ void MainWindow::rebuildTable()
 
         m_solutionTable->setItem(i, 1, makeAlgItem(r, bg));
 
-        if (metricId == 0) {
+        if (metricId == 0)
+        {
             cell(2, QString::number(r.slices), true);
-        } else if (metricId == 1) {
+        }
+        else if (metricId == 1)
+        {
             cell(2, QString::number(r.moves), true);
             cell(3, QString::number(r.slices), true);
-        } else {
+        }
+        else
+        {
             cell(2, QString::number(r.angle), true);
             cell(3, QString::number(r.moves), true);
             cell(4, QString::number(r.slices), true);
@@ -2888,12 +3040,15 @@ void MainWindow::rebuildTable()
     // Store overflow rows for deferred fill
     m_pendingTableRows.clear();
     m_tableFilledCount = firstBatch;
-    for (int i = firstBatch; i < rows.size(); i++) {
+    for (int i = firstBatch; i < rows.size(); i++)
+    {
         const Row &r = rows[i];
         m_pendingTableRows.append({r.alg, r.moves, r.slices, r.angle, r.ergo});
     }
-    if (!m_pendingTableRows.isEmpty()) {
-        if (!m_tableFillTimer) {
+    if (!m_pendingTableRows.isEmpty())
+    {
+        if (!m_tableFillTimer)
+        {
             m_tableFillTimer = new QTimer(this);
             m_tableFillTimer->setSingleShot(true);
             connect(m_tableFillTimer, &QTimer::timeout, this, &MainWindow::fillNextTableBatch);
@@ -2910,7 +3065,8 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::applyZoom()
 {
-    if (!m_zoomProxy || !m_zoomScene || !m_zoomView) return;
+    if (!m_zoomProxy || !m_zoomScene || !m_zoomView)
+        return;
     QTransform t;
     t.scale(m_zoomScale, m_zoomScale);
     m_zoomView->setTransform(t);
@@ -3001,14 +3157,17 @@ void MainWindow::onRankErgoToggled(bool checked)
         fmt.setForeground(QColor(color));
         fmt.setFontWeight(bold ? QFont::Bold : QFont::Normal);
         fmt.setFontPointSize(ptSize);
-        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+        {
             QTextCharFormat abidFmt = fmt;
             abidFmt.setFontFamily(OutputConverter::s_abidFontFamily);
             abidFmt.setFontPointSize(ptSize + 2);
             cur.insertText(OutputConverter::abidifyDisplay(algPart), abidFmt);
             if (!suffix.isEmpty())
                 cur.insertText(suffix, fmt);
-        } else {
+        }
+        else
+        {
             cur.insertText(algPart + suffix, fmt);
         }
     };
@@ -3036,9 +3195,9 @@ void MainWindow::onRankErgoToggled(bool checked)
             solIdx++;
             continue;
         }
-        const QString &dline = displaySols[idx];
+        const QString dline = applyNormalizeAbf(displaySols[idx]);
         int lb = dline.lastIndexOf('[');
-        QString displayAlg  = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
+        QString displayAlg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
         QString bracketPart = lb > 0 ? dline.mid(lb).trimmed() : QString();
 
         bool isAlt = (solIdx % 2 == 1);
@@ -3053,8 +3212,7 @@ void MainWindow::onRankErgoToggled(bool checked)
         }
         else
         {
-            QString suffix = (bracketPart.isEmpty() ? QString() : "  " + bracketPart)
-                             + QString("  (%1)").arg(score, 0, 'f', 2);
+            QString suffix = (bracketPart.isEmpty() ? QString() : "  " + bracketPart) + QString("  (%1)").arg(score, 0, 'f', 2);
             insertSolLine(displayAlg, suffix, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         }
         solIdx++;
@@ -3456,7 +3614,8 @@ void MainWindow::showOldDocsPopup()
 // mode: 0=Both 1=PreABF 2=PostABF 3=None
 QString MainWindow::applyNormalizeAbf(const QString &rawAlgLine) const
 {
-    if (m_normalizeAbfMode == 3) return rawAlgLine;
+    if (m_normalizeAbfMode == 3)
+        return rawAlgLine;
 
     // 1. Separate the length bracket (e.g., " [8]")
     int lb = rawAlgLine.lastIndexOf('[');
@@ -3469,21 +3628,25 @@ QString MainWindow::applyNormalizeAbf(const QString &rawAlgLine) const
     int lastSep = algPart.lastIndexOf(sepRegex);
 
     // 3. Define the normalization logic for a single block (e.g., "1,-3" or "12")
-    auto normLambda = [](QString block) -> QString {
-        auto n = [](int v) { return ((v % 3 + 3) % 3 == 2) ? -1 : (v % 3 + 3) % 3; };
+    auto normLambda = [](QString block) -> QString
+    {
+        auto n = [](int v)
+        { return ((v % 3 + 3) % 3 == 2) ? -1 : (v % 3 + 3) % 3; };
         static QRegularExpression moveRegex("(-?\\d)(,?)(-?\\d)");
         QRegularExpressionMatch m = moveRegex.match(block);
-        if (m.hasMatch()) {
+        if (m.hasMatch())
+        {
             return block.replace(m.captured(0), QString("%1%2%3").arg(n(m.captured(1).toInt())).arg(m.captured(2)).arg(n(m.captured(3).toInt())));
         }
         return block;
     };
 
     // 4. Split, normalize, and add back together
-    bool normPre  = (m_normalizeAbfMode == 0 || m_normalizeAbfMode == 1);
+    bool normPre = (m_normalizeAbfMode == 0 || m_normalizeAbfMode == 1);
     bool normPost = (m_normalizeAbfMode == 0 || m_normalizeAbfMode == 2);
 
-    if (firstSep == -1) {
+    if (firstSep == -1)
+    {
         // Only one move in the string
         return normLambda(algPart) + bracketPart;
     }
@@ -3492,8 +3655,10 @@ QString MainWindow::applyNormalizeAbf(const QString &rawAlgLine) const
     QString middle = algPart.mid(firstSep, lastSep - firstSep + 1); // Includes the delimiters
     QString last = algPart.mid(lastSep + 1);
 
-    if (normPre) first = normLambda(first);
-    if (normPost) last = normLambda(last);
+    if (normPre)
+        first = normLambda(first);
+    if (normPost)
+        last = normLambda(last);
 
     return first + middle + last + bracketPart;
 }
@@ -3718,9 +3883,12 @@ void MainWindow::showSettingsModal()
     lay->addWidget(title);
 
     // Theme toggle
+    const bool solverRunning = worker && worker->isRunning();
+
     QCheckBox *chkLight = new QCheckBox("Light theme");
     chkLight->setChecked(m_lightTheme);
-    chkLight->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
+    chkLight->setEnabled(!solverRunning);
+    chkLight->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
     chkLight->setToolTip("Switch between dark (default) and light theme.\n"
                          "The change applies immediately.");
     connect(chkLight, &QCheckBox::toggled, this, [this, overlay](bool checked)
@@ -3733,10 +3901,11 @@ void MainWindow::showSettingsModal()
 
     QCheckBox *chkSmart = new QCheckBox("Use smarter karnotation");
     chkSmart->setChecked(m_smartKarn);
+    chkSmart->setEnabled(!solverRunning);
     chkSmart->setToolTip("When 'Karnotation output' is on, use cubeshape-aware karnify.\n"
                          "i.e. apply different karn rules depending on whether the puzzle\n"
                          "is in cubeshape at each move.");
-    chkSmart->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
+    chkSmart->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
     connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked)
             {
         m_smartKarn = checked;
@@ -3773,33 +3942,34 @@ void MainWindow::showSettingsModal()
     // ── Abid's Notation ───────────────────────────────────────────────────────
     QCheckBox *chkAbid = new QCheckBox("Abid's notation");
     chkAbid->setChecked(m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty());
-    chkAbid->setEnabled(!OutputConverter::s_abidFontFamily.isEmpty());
+    chkAbid->setEnabled(!OutputConverter::s_abidFontFamily.isEmpty() && !solverRunning);
     chkAbid->setToolTip("Display negative numbers as barred digits using the Kompact font for display.");
     if (OutputConverter::s_abidFontFamily.isEmpty())
         chkAbid->setToolTip(chkAbid->toolTip() +
                             "\n\n⚠ kompact-font.ttf not found — visual effect unavailable.");
-    chkAbid->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
-    connect(chkAbid, &QCheckBox::toggled, this, [this](bool checked) {
+    chkAbid->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
+    connect(chkAbid, &QCheckBox::toggled, this, [this](bool checked)
+            {
         m_abidNotation = checked;
         if (!m_rawLines.isEmpty()) {
             if (m_tableVisible) rebuildTable();
             else if (m_ratingsValid && m_cubeshapeWasActive) onRankErgoToggled(true);
             else rebuildTerminalView();
-        }
-    });
+        } });
     lay->addWidget(chkAbid);
 
     QCheckBox *chkIgnoreTrans = new QCheckBox("Ignore move equivalences (-x)");
+    chkIgnoreTrans->setEnabled(!solverRunning);
     chkIgnoreTrans->setToolTip("REALLY generate all possible algs - with all the y2 possibilities and things.\n"
-                                "Only useful if you don't anticipate a lot of algs initially.\n"
-                                "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)");
+                               "Only useful if you don't anticipate a lot of algs initially.\n"
+                               "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)");
     chkIgnoreTrans->setChecked(m_ignoreTrans);
-    chkIgnoreTrans->setStyleSheet(QString("color:%1;background:transparent;font-size:13px;").arg(textPrimary));
+    chkIgnoreTrans->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
     chkIgnoreTransSetting = chkIgnoreTrans;
-    connect(chkIgnoreTrans, &QCheckBox::toggled, this, [this](bool checked) {
+    connect(chkIgnoreTrans, &QCheckBox::toggled, this, [this](bool checked)
+            {
         m_ignoreTrans = checked;
-        updateCommand();
-    });
+        updateCommand(); });
     lay->addWidget(chkIgnoreTrans);
 
     card->show();
@@ -4023,9 +4193,11 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── Right-click copy on table-cell labels (always copies clean notation) ──
     if (event->type() == QEvent::ContextMenu)
     {
-        if (QLabel *lbl = qobject_cast<QLabel *>(watched)) {
+        if (QLabel *lbl = qobject_cast<QLabel *>(watched))
+        {
             QVariant v = lbl->property("cleanAlg");
-            if (v.isValid()) {
+            if (v.isValid())
+            {
                 QMenu menu;
                 QAction *copyAct = menu.addAction("Copy");
                 QAction *chosen = menu.exec(
@@ -4085,11 +4257,14 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
         // If Ctrl+C fires on a table-cell item while Abid's notation is on,
         // copy the clean (minus-sign) text instead of the PUA glyphs.
-        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty()) {
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+        {
             QModelIndex idx = m_solutionTable->currentIndex();
-            if (idx.isValid() && idx.column() == 1) {
+            if (idx.isValid() && idx.column() == 1)
+            {
                 QVariant v = m_solutionTable->model()->data(idx, Qt::UserRole);
-                if (v.isValid()) {
+                if (v.isValid())
+                {
                     QApplication::clipboard()->setText(v.toString());
                     return true;
                 }
@@ -4098,28 +4273,32 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         return QMainWindow::eventFilter(watched, event);
     }
 
-
     // ── Ctrl+= / Ctrl+- — zoom in / out ─────────────────────────────────────
     if (ke->modifiers() == Qt::ControlModifier)
     {
         if (ke->key() == Qt::Key_Equal || ke->key() == Qt::Key_Plus)
         {
             m_zoomScale = qMin(m_zoomScale + 0.1, 2.0);
-            applyZoom(); return true;
+            applyZoom();
+            return true;
         }
         if (ke->key() == Qt::Key_Minus)
         {
             m_zoomScale = qMax(m_zoomScale - 0.1, 0.5);
-            applyZoom(); return true;
+            applyZoom();
+            return true;
         }
         if (ke->key() == Qt::Key_0)
         {
-            m_zoomScale = 1.0; applyZoom(); return true;
+            m_zoomScale = 1.0;
+            applyZoom();
+            return true;
         }
     }
 
     // ── Ctrl+Z / Ctrl+Y — undo / redo (work from any widget, including inputs) ─
-    if (ke->modifiers() == Qt::ControlModifier)
+    // Blocked while solver is running (controls are disabled).
+    if (ke->modifiers() == Qt::ControlModifier && !(worker && worker->isRunning()))
     {
         if (ke->key() == Qt::Key_Z)
         {
@@ -4154,7 +4333,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── Enter / Shift+Enter in m_mainInput ───────────────────────────────────
     // Enter        = apply alg/scramble from current cube state
     // Shift+Enter  = apply alg/scramble from solved state (resets first)
-    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput) && ke->key() == Qt::Key_Return)
+    // Blocked while solver is running (Apply is disabled).
+    if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput) && ke->key() == Qt::Key_Return && !(worker && worker->isRunning()))
     {
         if (ke->modifiers() & Qt::ShiftModifier)
         {
@@ -4182,7 +4362,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     }
 
     // ── (2) Route cube shortcuts from any other widget ────────────────────────
-    if (ke->modifiers() == Qt::NoModifier)
+    // Blocked while solver is running (cube is disabled).
+    if (ke->modifiers() == Qt::NoModifier && !(worker && worker->isRunning()))
     {
         auto sendCube = [this](Qt::Key k)
         {

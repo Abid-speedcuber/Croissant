@@ -65,6 +65,17 @@ QCheckBox#chkMaxTotal {
     spacing: 6px;
 }
 
+QCheckBox#chkAllOptimal:disabled,
+QCheckBox#chkGenerator:disabled,
+QCheckBox#chkCubeshape:disabled,
+QCheckBox#chkIgnoreEquator:disabled,
+QCheckBox#chkKarnotation:disabled,
+QCheckBox#chkMaxX:disabled,
+QCheckBox#chkMaxY:disabled,
+QCheckBox#chkMaxTotal:disabled {
+    color: --text-disabled;
+}
+
 QCheckBox#chkDepths {
     font-size: 12px;
     color: --text-disabled;
@@ -163,6 +174,26 @@ QWidget#twoGenPill > QPushButton:hover:!checked {
     border-radius: 5px;
 }
 
+/* --- disabled state (whole pill disabled) --- */
+QWidget#metricPill > QPushButton:disabled,
+QWidget#anglePill  > QPushButton:disabled,
+QWidget#normalizeAbfPill > QPushButton:disabled,
+QWidget#twoGenPill > QPushButton:disabled {
+    background: transparent;
+    color: --text-disabled;
+    border: none;
+}
+
+QWidget#metricPill > QPushButton:checked:disabled,
+QWidget#anglePill  > QPushButton:checked:disabled,
+QWidget#normalizeAbfPill > QPushButton:checked:disabled,
+QWidget#twoGenPill > QPushButton:checked:disabled {
+    background: --disabled-bg;
+    color: --text-disabled;
+    border: 1px solid --border-dark;
+    border-radius: 5px;
+}
+
 /* --- radio row labels --- */
 QLabel#metricRadioRow_label,
 QLabel#angleRadioRow_label,
@@ -170,6 +201,15 @@ QLabel#normalizeAbfRow_label,
 QLabel#twoGenRadioRow_label {
     font-size: 12px;
     color: --text-secondary;
+}
+
+/* ========== Settings Modal ========== */
+QWidget#settingsCard QCheckBox {
+    color: --text-primary;
+}
+
+QWidget#settingsCard QCheckBox:disabled {
+    color: --text-disabled;
 }
 
 /* ========== GroupBox ========== */
@@ -204,6 +244,16 @@ QCheckBox::indicator:checked {
     border-color: --checkbox-check-blue;
 }
 
+QCheckBox::indicator:checked:disabled {
+    background: --text-disabled;
+    border-color: --border-dark;
+}
+
+QCheckBox#chkRankErgo::indicator:checked:disabled {
+    background: --text-disabled;
+    border-color: --border-dark;
+}
+
 QCheckBox#chkRankErgo::indicator:checked {
     background: --checkbox-check-orange;
     border-color: --checkbox-check-orange;
@@ -212,14 +262,13 @@ QCheckBox#chkRankErgo::indicator:checked {
 QCheckBox:disabled,
 QCheckBox#chkAllOptimal:disabled,
 QCheckBox#chkGenerator:disabled,
-
 QCheckBox#chkCubeshape:disabled,
 QCheckBox#chkIgnoreEquator:disabled,
 QCheckBox#chkKarnotation:disabled,
 QCheckBox#chkMaxX:disabled,
 QCheckBox#chkMaxY:disabled,
 QCheckBox#chkMaxTotal:disabled {
-    color: #4a4a5a;
+    color: --text-disabled;
 }
 
 QCheckBox::indicator:disabled {
@@ -316,8 +365,10 @@ QPushButton:hover {
     border-color: --button-border;
 }
 
-QPushButton:pressed {
-    background: --pressed-bg;
+QPushButton:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
 }
 
 QPushButton#btnSolve {
@@ -373,10 +424,23 @@ QPushButton#btnReset:hover {
     color: --button-text;
 }
 
+QPushButton#btnReset:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
 QPushButton#btnUndo, QPushButton#btnRedo {
     background: --button-bg;
     border-color: --button-border;
     color: --button-text;
+}
+
+/* Generic disabled state for all left-panel action buttons */
+QPushButton:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
 }
 
 QPushButton#btnUndo:hover, QPushButton#btnRedo:hover {
@@ -509,6 +573,25 @@ QPushButton#btnApply:hover {
     color: --input-apply-hover-text;
 }
 
+QPushButton#btnApply:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QPushButton#btnInputMode:disabled,
+QPushButton#btnInputModeArrow:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QLineEdit#txtMainInput:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
 QLineEdit#txtMainInput {
     border-radius: 9px;
     border: 1px solid --input-field-border;
@@ -607,6 +690,12 @@ QPushButton#btnReset:hover {
     color: --button-text;
 }
 
+QPushButton#btnReset:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
 /* ========== ProgressBar ========== */
 QProgressBar {
     border: none;
@@ -635,6 +724,10 @@ QLabel#lblCommandError  {
     color: --text-error;
     font-size: 11px;
     padding: 2px 2px;
+}
+
+QLabel#lblSuboptLabel:disabled {
+    color: --text-disabled;
 }
 
 /* ========== ScrollBars ========== */

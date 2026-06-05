@@ -61,6 +61,7 @@ private slots:
     void updateConstraints();       // enforces option incompatibilities + enables/disables fields
     void onRankErgoToggled(bool checked);
     void stopSolver();              // kill worker and update UI
+    void setSolverRunning(bool running); // enable/disable all controls during solve
     void toggleExpand();            // expand / shrink the output terminal
 
 private:
@@ -83,6 +84,9 @@ private:
     QButtonGroup*  m_angleGroup{nullptr};   // 0=Both 1=Top 2=Bottom 3=None(default)
     QButtonGroup*  m_normalizeAbfGroup{nullptr}; // 0=Both 1=PreABF 2=PostABF 3=None(default)
     QWidget*       m_normalizeAbfRow{nullptr};
+    QWidget*       m_metricRadioRow{nullptr};
+    QWidget*       m_twoGenRadioRow{nullptr};
+    QWidget*       m_angleRadioRow{nullptr};
     QCheckBox*    chkMaxX;
     QSpinBox*     spnMaxX;
     QCheckBox*    chkMaxY;
@@ -94,9 +98,12 @@ private:
     QPushButton*  btnCopy;
     QPushButton*  btnApply{nullptr};
     QPushButton*  btnReset;
+    QWidget*      m_moveButtonsWidget{nullptr}; // U/U'/D/D'/Slice grid container
     QPushButton*  btnUndo;
     QPushButton*  btnRedo;
     QLabel*       lblCommandError;  // red error shown below the command line
+    QLabel*       lblSuboptLabel{nullptr}; // "+suboptimal:" label next to spnSuboptimal
+    QWidget*      m_allOptRow{nullptr};    // the whole "all optimal + suboptimal" row
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
