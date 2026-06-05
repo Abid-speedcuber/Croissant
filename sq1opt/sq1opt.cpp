@@ -1090,6 +1090,9 @@ class PositionSolver {
 
 	PositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable& pr10, PrunTable& pr20 )
 		: stt(stt0), scte(scte0), sctc(sctc0), pr1(pr10), pr2(pr20) {};
+	virtual bool checkKeepCubeShape() {
+		return (shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163);
+	}
 	void set(FullPosition& p, bool findAll0, bool ignoreTrans0){
 		int cc0 = p.getCornerColouring(0);
 		int cc1 = p.getCornerColouring(1);
@@ -1146,7 +1149,7 @@ class PositionSolver {
 		}
 		if (keepCubeShape) {
 			// check that it's in cube shape and of the right parity
-			if (!((shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163))) {
+			if (!checkKeepCubeShape()) {
 				return 19;
 			}
 			if (twoGen == 1) {
@@ -1316,7 +1319,7 @@ class PositionSolver {
 			lastTurns[4]=0;
 			lastTurns[5]=0;
 			doMove(2);
-			if (!keepCubeShape || ((shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163))) {
+			if (!keepCubeShape || checkKeepCubeShape()) {
 				moveList[moveLen++]=0;
 				// note that if angle metric is defined to count slices as 0, it will sometimes miss the optimal solution because the current pruning tables count how many slices a position is away from solved
 				r+=search(l-1, 2, nodes, twoGen, keepCubeShape, false, false);
@@ -1416,6 +1419,11 @@ class PartialPositionSolver : public PositionSolver {
 public:
 	PartialPositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable& pr10, PrunTable& pr20 )
 	    : PositionSolver(stt0, scte0, sctc0, pr10, pr20) {}
+	bool checkKeepCubeShape() override {
+		bool primary = (shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163);
+		bool secondary = (shpx==5052 || shpx==4148 || shpx==5039 || shpx==4163) && (shpx2==5052 || shpx2==4148 || shpx2==5039 || shpx2==4163);
+		return primary || secondary;
+	}
 	void set(FullPosition& p, bool findAll0, bool ignoreTrans0){
 		PositionSolver::set(p, findAll0, ignoreTrans0);
 		shpx = stt.getShape(p.getShape(),!p.getParityOdd());
@@ -1469,7 +1477,7 @@ public:
 		}
 		if (keepCubeShape) {
 			// check that it's in cube shape and of the right parity
-			if (!((shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163))) {
+			if (!checkKeepCubeShape()) {
 				return 19;
 			}
 		}
