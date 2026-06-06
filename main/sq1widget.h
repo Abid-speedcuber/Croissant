@@ -21,7 +21,6 @@ public:
     QString getPositionString();
 
     void reset();
-    void setLightTheme(bool light) { m_lightTheme = light; update(); }
     int  getEquatorState() const { return equator_partial > 0 ? 2 : equator; }
     bool inCubeshape() const {
         // Each half (0-11, 12-23) must have alternating corner/edge slots.
@@ -75,7 +74,6 @@ private:
     int hovered;          // index of hovered piece, or -1
     QMap<int, qreal> m_hoverProgress; // 0.0 = no hover, 1.0 = full hover
     QTimer* m_hoverTimer{nullptr};
-    bool m_lightTheme{false};
 
     // --- Drawing constants ---
     static constexpr int W = 300, H = 500;

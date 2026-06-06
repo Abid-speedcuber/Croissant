@@ -181,7 +181,6 @@ private:
     void showAboutModal();
 
     // settings stuffs
-    bool          m_lightTheme{false};
     bool          m_smartKarn{true};
     bool          m_abidNotation{false};
     bool          m_ignoreTrans{false};
@@ -199,7 +198,6 @@ private:
     void showHowToUseModal();
     void openSidebar();
     void closeSidebar();
-    void applyTheme();
     std::function<void()> m_updateLogo;
     QString buildStyleSheet();
     QString convertLine(const QString& rawLine);
