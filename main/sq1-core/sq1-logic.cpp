@@ -152,7 +152,20 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
     double PHASE4 = bonus * W4 / sliceCount;
 
     double FINAL = PHASE1 - PHASE2 - PHASE3 + PHASE4;
-    return {FINAL, sliceStart, true};
+    AlgRating result;
+    result.FINAL      = FINAL;
+    result.sliceStart = sliceStart;
+    result.valid      = true;
+    result.PHASE1     = PHASE1;
+    result.PHASE2     = PHASE2;
+    result.PHASE3     = PHASE3;
+    result.PHASE4     = PHASE4;
+    result.sliceCount = sliceCount;
+    result.ergo_up    = ergo_up;
+    result.ergo_down  = ergo_down;
+    result.movement   = movement;
+    result.bonus      = bonus;
+    return result;
 }
 
 std::vector<std::pair<QString, double>>

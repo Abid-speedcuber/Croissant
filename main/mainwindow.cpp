@@ -400,7 +400,7 @@ void SolverWorker::run()
     SolverStreamBuffer outBuffer(this);
     std::streambuf *oldOut = std::cout.rdbuf(&outBuffer);
     std::streambuf *oldErr = std::cerr.rdbuf(&outBuffer);
-        int exitCode = -1;
+    int exitCode = -1;
     try
     {
         exitCode = sq1optMain(static_cast<int>(argv.size()), argv.data());
@@ -1763,6 +1763,23 @@ void MainWindow::toggleExpand()
 void MainWindow::rebuildTerminalView()
 {
     txtOutput->clear();
+    // ── Debug lines ───────────────────────────────────────────
+    if (m_debugOutput && !m_debugBuffer.isEmpty())
+    {
+        QTextCursor cur(txtOutput->document());
+        QTextCharFormat fmt;
+        fmt.setForeground(QColor(Theme::textMuted()));
+        fmt.setFontItalic(false);
+        fmt.setFontPointSize(m_expanded ? 11 : 9);
+        QTextBlockFormat blkFmt;
+        blkFmt.setLineHeight(120, QTextBlockFormat::ProportionalHeight);
+        for (const QString &dbg : std::as_const(m_debugBuffer))
+        {
+            cur.setBlockFormat(blkFmt);
+            cur.insertText(dbg, fmt);
+            cur.insertBlock();
+        }
+    }
     // Choose which line list to display
     const QStringList &lines = chkKarnotation->isChecked() ? m_karnLines : m_rawLines;
     if (lines.isEmpty())
@@ -1797,6 +1814,7 @@ void MainWindow::rebuildTerminalView()
     };
 
     QTextCursor cur(txtOutput->document());
+    cur.movePosition(QTextCursor::End);
     int solIdx = 0;
     QSet<QString> seenAlgs;
     for (const QString &rawLine : std::as_const(lines))
@@ -1827,6 +1845,19 @@ void MainWindow::rebuildTerminalView()
             blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
             cur.setBlockFormat(blkFmt);
             insertSolLine(cur, line, fmt);
+            // Per-alg debug annotation right after the alg
+            if (m_debugOutput && solIdx > 0 && solIdx - 1 < m_algAnnLines.size() && !m_algAnnLines[solIdx - 1].isEmpty())
+            {
+                cur.insertBlock();
+                QTextCharFormat afmt;
+                afmt.setForeground(QColor(Theme::textMuted()));
+                afmt.setFontItalic(false);
+                afmt.setFontPointSize(m_expanded ? 11 : 9);
+                QTextBlockFormat ablkFmt;
+                ablkFmt.setLineHeight(120, QTextBlockFormat::ProportionalHeight);
+                cur.setBlockFormat(ablkFmt);
+                cur.insertText(m_algAnnLines[solIdx - 1], afmt);
+            }
             solIdx++;
         }
         else
@@ -2011,6 +2042,43 @@ void MainWindow::onSolveButtonClicked()
 }
 
 // -------------------------------------------------------
+// debugLine — emit a [DEBUG] status line if debug output is enabled.
+// Writes directly to txtOutput and stores in m_debugBuffer so it
+// survives terminal rebuilds without ever entering m_rawLines.
+// -------------------------------------------------------
+void MainWindow::debugLine(const QString &msg)
+{
+    if (!m_debugOutput)
+        return;
+    QString text = "[DEBUG] " + msg;
+    // Write directly to txtOutput with non-italic muted styling
+    {
+        int savedScroll = txtOutput->verticalScrollBar()->value();
+        QTextCursor cur = txtOutput->textCursor();
+        cur.movePosition(QTextCursor::End);
+        if (!txtOutput->document()->isEmpty())
+            cur.insertBlock();
+        QTextCharFormat fmt;
+        fmt.setForeground(QColor(Theme::textMuted()));
+        fmt.setFontItalic(false);
+        fmt.setFontPointSize(m_expanded ? 11 : 9);
+        QTextBlockFormat blkFmt;
+        blkFmt.setLineHeight(120, QTextBlockFormat::ProportionalHeight);
+        cur.setBlockFormat(blkFmt);
+        cur.insertText(text, fmt);
+        QTextCursor endCur = txtOutput->textCursor();
+        endCur.movePosition(QTextCursor::End);
+        txtOutput->setTextCursor(endCur);
+        if (m_autoScrollPaused)
+            txtOutput->verticalScrollBar()->setValue(savedScroll);
+        else
+            txtOutput->verticalScrollBar()->setValue(
+                txtOutput->verticalScrollBar()->maximum());
+    }
+    m_debugBuffer.append(text);
+}
+
+// -------------------------------------------------------
 // onSolve
 // -------------------------------------------------------
 void MainWindow::onSolve()
@@ -2033,6 +2101,8 @@ void MainWindow::onSolve()
     m_cachedRatedOrder.clear();
     m_ratingsValid = false;
     m_seenSolutions.clear();
+    m_debugBuffer.clear();
+    m_algAnnLines.clear();
     // Always go back to terminal view while solving
     m_tableVisible = false;
     txtOutput->setVisible(true);
@@ -2060,10 +2130,18 @@ void MainWindow::onSolve()
     {
         Sq1Widget::RawState rs = cubeWidget->getRawState();
         sq1optSetPosition(rs.pos, rs.middle);
+        if (m_debugOutput)
+        {
+            QString posArr;
+            for (int i = 0; i < 24; i++)
+                posArr += QString::number(rs.pos[i]) + (i < 23 ? "," : "");
+            debugLine(QString("injected pos=[%1] middle=%2").arg(posArr).arg(rs.middle));
+        }
     }
     worker->positionStr = cubeWidget->getPositionString(); // still used for display/copy
     m_posHex = worker->positionStr;
     worker->flags = buildArgList();
+    debugLine("positionStr=" + worker->positionStr + "  args=[" + worker->flags.join(" ") + "]");
     m_cubeshapeWasActive = chkCubeshape->isChecked();
     connect(worker, &SolverWorker::lineReady, this, &MainWindow::onSolverLine, Qt::QueuedConnection);
     connect(worker, &SolverWorker::finished, this, &MainWindow::onSolverDone, Qt::QueuedConnection);
@@ -2225,6 +2303,7 @@ void MainWindow::onSolverLine(QString line)
 {
     bool isSolution = line.contains('[') && line.contains(']');
     QString karnLine = line; // default: non-solution lines are unchanged
+    QString debugAnn;        // per-alg rating annotation (populated in Step 2)
 
     if (isSolution)
     {
@@ -2260,6 +2339,20 @@ void MainWindow::onSolverLine(QString line)
                 {
                     sliceStr = QString::fromStdString(rating.sliceStart);
                     rawFinal = rating.FINAL;
+                    if (m_debugOutput)
+                    {
+                        debugAnn = QString("[DEBUG]  (P1=%1 P2=%2 P3=%3 P4=%4 F=%5  ergo_up=%6 ergo_dn=%7 sl=%8 mv=%9 bon=%10)")
+                                       .arg(rating.PHASE1, 0, 'f', 1)
+                                       .arg(rating.PHASE2, 0, 'f', 1)
+                                       .arg(rating.PHASE3, 0, 'f', 1)
+                                       .arg(rating.PHASE4, 0, 'f', 1)
+                                       .arg(rating.FINAL, 0, 'f', 2)
+                                       .arg(rating.ergo_up, 0, 'f', 1)
+                                       .arg(rating.ergo_down, 0, 'f', 1)
+                                       .arg(rating.sliceCount)
+                                       .arg(rating.movement)
+                                       .arg(rating.bonus);
+                    }
                 }
             }
             catch (...)
@@ -2272,12 +2365,14 @@ void MainWindow::onSolverLine(QString line)
         // ── Step 3: inject indicator into raw display line (cubeshape only) ──
         QString injectedLine = injectSliceIndicatorDisplay(line, sliceStr);
 
-        // ── Step 4: karnify the CLEAN line, then inject (cubeshape only) ──────
-        // convertLine receives the original (unmodified) 'line' so karnify always
-        // gets valid '/' syntax.  Injection happens into the karn result afterward.
+        // ── Step 4: karnify, then re-inject (cubeshape only) ─────────────────
+        line = injectedLine;
         karnLine = injectSliceIndicatorDisplay(convertLine(line), sliceStr);
 
-        // Cache both display versions
+        // Store per-alg annotation (empty if not cubeshape or debug off)
+        m_algAnnLines.append(debugAnn);
+
+        // Cache both display versions (clean — no annotation appended to lines)
         m_solutionLines.append(injectedLine);
         m_karnSolutionLines.append(karnLine);
 
@@ -2292,11 +2387,19 @@ void MainWindow::onSolverLine(QString line)
     // Which version to display live?
     QString displayLine = isSolution && chkKarnotation->isChecked() ? karnLine : line;
     if (isSolution)
-        displayLine = applyNormalizeAbf(displayLine);
+    {
+        QString normalized = applyNormalizeAbf(displayLine);
+        if (m_debugOutput && m_normalizeAbfMode != 3 && normalized != displayLine)
+            debugLine(QString("normalizeAbf mode=%1: [%2] -> [%3]")
+                          .arg(m_normalizeAbfMode)
+                          .arg(displayLine)
+                          .arg(normalized));
+        displayLine = normalized;
+    }
 
     if (isSolution)
     {
-        if (!m_hadFirstSolution)
+        if (!m_hadFirstSolution && !m_debugOutput)
         {
             m_hadFirstSolution = true;
             m_firstSolutionMs = QDateTime::currentMSecsSinceEpoch();
@@ -2351,6 +2454,28 @@ void MainWindow::onSolverLine(QString line)
             {
                 int saved = txtOutput->verticalScrollBar()->value();
                 txtOutput->setTextCursor(cur);
+                if (m_autoScrollPaused)
+                    txtOutput->verticalScrollBar()->setValue(saved);
+                else
+                    txtOutput->verticalScrollBar()->setValue(
+                        txtOutput->verticalScrollBar()->maximum());
+            }
+            // ── Per-alg debug annotation ──────────────────────────────
+            if (m_debugOutput && !debugAnn.isEmpty())
+            {
+                int saved = txtOutput->verticalScrollBar()->value();
+                QTextCursor acur = txtOutput->textCursor();
+                acur.movePosition(QTextCursor::End);
+                acur.insertBlock();
+                QTextCharFormat afmt;
+                afmt.setForeground(QColor(Theme::textMuted()));
+                afmt.setFontItalic(false);
+                afmt.setFontPointSize(m_expanded ? 11 : 9);
+                QTextBlockFormat ablkFmt;
+                ablkFmt.setLineHeight(120, QTextBlockFormat::ProportionalHeight);
+                acur.setBlockFormat(ablkFmt);
+                acur.insertText(debugAnn, afmt);
+                txtOutput->setTextCursor(acur);
                 if (m_autoScrollPaused)
                     txtOutput->verticalScrollBar()->setValue(saved);
                 else
@@ -2468,6 +2593,10 @@ void MainWindow::onSolverDone(int code)
                          });
         m_cachedRatedOrder = indexScores;
         m_ratingsValid = true;
+        debugLine(QString("ergo: %1 rated, %2 unratable, median=%3")
+                      .arg(valid.size())
+                      .arg(m_rawFinalScores.size() - (int)valid.size())
+                      .arg(median, 0, 'f', 4));
         // Defer the terminal rebuild so the progress bar gets one repaint first
         QTimer::singleShot(0, this, [this]()
                            {
@@ -2787,6 +2916,15 @@ void MainWindow::rebuildTable()
     for (int c = 2; c < m_solutionTable->columnCount(); c++)
         m_solutionTable->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     m_solutionTable->setRowCount(0);
+    debugLine(QString("rebuildTable: solutionLines=%1 karnSolutionLines=%2 "
+                      "ratingsValid=%3 cubeshapeWasActive=%4 ergo=%5 metricId=%6 useKarn=%7")
+                  .arg(m_solutionLines.size())
+                  .arg(m_karnSolutionLines.size())
+                  .arg(m_ratingsValid)
+                  .arg(m_cubeshapeWasActive)
+                  .arg(m_ratingsValid && m_cubeshapeWasActive)
+                  .arg(m_metricGroup ? m_metricGroup->checkedId() : 0)
+                  .arg(chkKarnotation->isChecked()));
     if (m_solutionLines.isEmpty())
         return;
 
@@ -3111,6 +3249,13 @@ void MainWindow::onRankErgoToggled(bool checked)
         }
     };
 
+    // ── Debug lines ────────────────────────────────────────────
+    if (m_debugOutput && !m_debugBuffer.isEmpty())
+    {
+        for (const QString &dbg : std::as_const(m_debugBuffer))
+            insertLine(dbg, Theme::textMuted(), false, m_expanded ? 11 : 9, 120);
+    }
+
     // Non-solution lines first (from the appropriate display list)
     const QStringList &displayLines = useKarn ? m_karnLines : m_rawLines;
     for (const QString &line : std::as_const(displayLines))
@@ -3151,6 +3296,9 @@ void MainWindow::onRankErgoToggled(bool checked)
             QString suffix = (bracketPart.isEmpty() ? QString() : "  " + bracketPart) + QString("  (%1)").arg(score, 0, 'f', 2);
             insertSolLine(displayAlg, suffix, col, m_expanded, m_expanded ? 13 : 10, m_expanded ? 180 : 120);
         }
+        // Per-alg debug annotation right after the alg
+        if (m_debugOutput && idx < m_algAnnLines.size() && !m_algAnnLines[idx].isEmpty())
+            insertLine(m_algAnnLines[idx], Theme::textMuted(), false, m_expanded ? 11 : 9, 120);
         solIdx++;
     }
     appendStatusLine(QString("Ranked %1 algs by ergonomics.").arg((int)m_cachedRatedOrder.size()));
@@ -3868,6 +4016,17 @@ void MainWindow::showSettingsModal()
         m_ignoreTrans = checked;
         updateCommand(); });
     lay->addWidget(chkIgnoreTrans);
+
+    QCheckBox *chkDebug = new QCheckBox("Debug output");
+    chkDebug->setEnabled(!solverRunning);
+    chkDebug->setToolTip("Prepend [DEBUG] lines to the terminal showing internal state:\n"
+                         "solver arguments, injected position, table view variables,\n"
+                         "and normalizeAbf transforms.");
+    chkDebug->setChecked(m_debugOutput);
+    chkDebug->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
+    connect(chkDebug, &QCheckBox::toggled, this, [this](bool checked)
+            { m_debugOutput = checked; });
+    lay->addWidget(chkDebug);
 
     card->show();
     card->adjustSize();

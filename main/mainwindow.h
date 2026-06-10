@@ -146,6 +146,8 @@ private:
     bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
     qint64        m_firstSolutionMs{0};
     bool          m_hadFirstSolution{false};
+    QStringList   m_debugBuffer;
+    QStringList   m_algAnnLines;   // per-alg rating annotation (empty if no rating), parallel to m_solutionLines
     qint64        m_solveStartMs{0};
     bool          m_expanded{false};// true when output terminal is in full-screen mode
     qreal         m_zoomScale{1.0};
@@ -179,6 +181,7 @@ private:
     void              fillNextTableBatch();
     void pushUndoState();
     void showAboutModal();
+    void debugLine(const QString &msg);
 
     // settings stuffs
     bool          m_smartKarn{true};
@@ -193,6 +196,7 @@ private:
     QPushButton*  btnHamburger{nullptr};
     QCheckBox*    chkSmartKarn{nullptr};
     QCheckBox*    chkIgnoreTransSetting{nullptr};
+    bool          m_debugOutput{false};
     QWidget*      m_inputBarOuter{nullptr};
     void showSettingsModal();
     void showHowToUseModal();
