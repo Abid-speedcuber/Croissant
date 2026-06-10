@@ -3729,17 +3729,43 @@ QString MainWindow::applyNormalizeAbf(const QString &rawAlgLine) const
     if (firstSep == -1)
     {
         // Only one move in the string
-        return normLambda(algPart) + bracketPart;
+        QString normalized = normLambda(algPart);
+        if (normalized == "0,0" || normalized == "00")
+            return bracketPart;
+        return normalized + bracketPart;
     }
 
     QString first = algPart.left(firstSep);
     QString middle = algPart.mid(firstSep, lastSep - firstSep + 1); // Includes the delimiters
     QString last = algPart.mid(lastSep + 1);
 
+    bool omitFirst = false;
+    bool omitLast = false;
+
     if (normPre)
+    {
         first = normLambda(first);
+        if (first == "0,0" || first == "00")
+            omitFirst = true;
+    }
     if (normPost)
+    {
         last = normLambda(last);
+        if (last == "0,0" || last == "00")
+            omitLast = true;
+    }
+
+    if (omitFirst)
+    {
+        middle = middle.mid(1); // drop the delimiter following the omitted pre-ABF move
+        first.clear();
+    }
+    if (omitLast)
+    {
+        if (!middle.isEmpty())
+            middle.chop(1); // drop the delimiter preceding the omitted post-ABF move
+        last.clear();
+    }
 
     return first + middle + last + bracketPart;
 }
