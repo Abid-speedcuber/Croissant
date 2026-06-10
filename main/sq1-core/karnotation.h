@@ -1095,6 +1095,4 @@ inline std::string karnifycs(
 
     return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
            ((trailingSlash && !lastIsKarn) ? "/" : "");
-
-    return out;
 }
