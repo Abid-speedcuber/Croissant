@@ -1148,10 +1148,11 @@ void MainWindow::buildUI()
     connect(chkKarnotation, &QCheckBox::toggled, this, [this, upd](bool /*checked*/)
             {
         upd();
-        // Rebuild views from cache — no re-solve needed
         if (!m_rawLines.isEmpty()) {
             if (m_tableVisible)
                 rebuildTable();
+            else if (m_ratingsValid && m_cubeshapeWasActive)
+                onRankErgoToggled(true);
             else
                 rebuildTerminalView();
         } });
@@ -2101,6 +2102,7 @@ void MainWindow::onSolve()
     m_cachedRatedOrder.clear();
     m_ratingsValid = false;
     m_seenSolutions.clear();
+    m_seenNormalizedAlgs.clear();
     m_debugBuffer.clear();
     m_algAnnLines.clear();
     // Always go back to terminal view while solving
@@ -2286,12 +2288,19 @@ static QString injectSliceIndicatorDisplay(const QString &line, const QString &s
     if (algPart[0].isLetter())
         return sliceStr + algPart + rest;
 
-    // Numeric-first: prefer first '/' (raw WCA), fall back to first ' ' (karn)
+    // Numeric-first: find the first delimiter among / \ | and space.
+    // Order matters: / and \ are consumed by karnify (split), but | survives
+    // and will cause a double injection if we search for space first.
     int p = algPart.indexOf('/');
-    if (p < 0)
-        p = algPart.indexOf(' ');
+    if (p < 0) p = algPart.indexOf('\\');
+    if (p < 0) p = algPart.indexOf('|');
+    if (p < 0) p = algPart.indexOf(' ');
     if (p < 0)
         return line; // single-move alg — nowhere to inject
+
+    // If the delimiter is already the indicator, no-op (avoids double injection).
+    if (algPart.mid(p, sliceStr.size()) == sliceStr)
+        return line;
 
     return algPart.left(p) + sliceStr + algPart.mid(p + 1) + rest;
 }
@@ -2395,6 +2404,13 @@ void MainWindow::onSolverLine(QString line)
                           .arg(displayLine)
                           .arg(normalized));
         displayLine = normalized;
+
+        // Dedup: two raw solutions may normalise to the same display string
+        int lbs = displayLine.lastIndexOf('[');
+        QString normKey = lbs > 0 ? displayLine.left(lbs).trimmed() : displayLine.trimmed();
+        if (m_seenNormalizedAlgs.contains(normKey))
+            return;
+        m_seenNormalizedAlgs.insert(normKey);
     }
 
     if (isSolution)
@@ -3273,6 +3289,7 @@ void MainWindow::onRankErgoToggled(bool checked)
 
     // Rated solution lines — read from cache (already sorted, no re-rating)
     int solIdx = 0;
+    QSet<QString> seenNormAlgs;
     for (auto &[idx, score] : m_cachedRatedOrder)
     {
         if (solIdx % 20 == 0)
@@ -3285,6 +3302,12 @@ void MainWindow::onRankErgoToggled(bool checked)
         const QString dline = applyNormalizeAbf(displaySols[idx]);
         int lb = dline.lastIndexOf('[');
         QString displayAlg = lb > 0 ? dline.left(lb).trimmed() : dline.trimmed();
+        if (seenNormAlgs.contains(displayAlg))
+        {
+            solIdx++;
+            continue;
+        }
+        seenNormAlgs.insert(displayAlg);
         QString bracketPart = lb > 0 ? dline.mid(lb).trimmed() : QString();
 
         bool isAlt = (solIdx % 2 == 1);
@@ -3761,13 +3784,16 @@ QString MainWindow::applyNormalizeAbf(const QString &rawAlgLine) const
 
     if (omitFirst)
     {
-        middle = middle.mid(1); // drop the delimiter following the omitted pre-ABF move
+        // Drop whitespace only — preserve slice indicators (/ \ |)
+        if (!middle.isEmpty() && middle[0].isSpace())
+            middle = middle.mid(1);
         first.clear();
     }
     if (omitLast)
     {
-        if (!middle.isEmpty())
-            middle.chop(1); // drop the delimiter preceding the omitted post-ABF move
+        // Drop trailing whitespace only — preserve slice indicators (/ \ |)
+        if (!middle.isEmpty() && middle.back().isSpace())
+            middle.chop(1);
         last.clear();
     }
 

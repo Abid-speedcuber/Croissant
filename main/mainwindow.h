@@ -142,6 +142,7 @@ private:
     QStringList   m_sliceIndicators;  // per-solution slice indicator ("/", "\", or "|"), parallel to m_solutionLines
     QVector<double> m_rawFinalScores; // unormalized FINAL scores from onSolverLine, parallel to m_solutionLinesForRating
     QSet<QString> m_seenSolutions;
+    QSet<QString> m_seenNormalizedAlgs; // dedup on normalizeABF output
     QString       m_posHex;         // position hex captured at solve time for ergo rating
     bool          m_stopped{false}; // true when user hit Stop (vs natural finish)
     qint64        m_firstSolutionMs{0};

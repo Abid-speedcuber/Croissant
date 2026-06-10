@@ -613,11 +613,13 @@ inline std::string karnify(const std::string& algPart) {
     std::string in = trimStr(algPart);
     if (in.empty()) return in;
 
-    bool leadingSlash = (in.front() == '/' || in.front() == '\\');
-    bool trailingSlash   = in.size() > 1 && (in.back() == '/' || in.back() == '\\');
+    bool leadingSlash = (in.front() == '/' || in.front() == '\\' || in.front() == '|');
+    bool trailingSlash   = in.size() > 1 && (in.back() == '/' || in.back() == '\\' || in.back() == '|');
 
-    // Split by slashes into individual move tokens.
+    // Split by slashes/pipes into individual move tokens (pipe is used as
+    // slice indicator by the ergonomic rater — same boundary semantics).
     std::string normalized = replaceAll(in, "\\", "/");
+    normalized = replaceAll(normalized, "|", "/");
     auto parts = splitStr(normalized, '/');
 
     std::vector<std::string> tokens;
@@ -802,11 +804,12 @@ inline std::string karnifycs(
     std::vector<Group> groups;
     std::vector<bool> sliceBefore; // sliceBefore[i] = true if there's a slash before group i
 
-    bool leadingSlash = !algWCA.empty() && (algWCA.front() == '/' || algWCA.front() == '\\');
+    bool leadingSlash = !algWCA.empty() && (algWCA.front() == '/' || algWCA.front() == '\\' || algWCA.front() == '|');
     if (leadingSlash) kcSlice(slotState);
 
-    // Parse move tokens between slashes
+    // Parse move tokens between slashes/pipes
     std::string normalized = replaceAll(algWCA, "\\", "/");
+    normalized = replaceAll(normalized, "|", "/");
     // split by '/'
     auto parts = splitStr(normalized, '/');
 
@@ -849,7 +852,7 @@ inline std::string karnifycs(
     if (!cur.joined.empty())
         groups.push_back(cur);
 
-    bool trailingSlash = !algWCA.empty() && (algWCA.back() == '/' || algWCA.back() == '\\');
+    bool trailingSlash = !algWCA.empty() && (algWCA.back() == '/' || algWCA.back() == '\\' || algWCA.back() == '|');
 
     // Second pass: substitute each group, collect results first so we can
     // inspect the first/last output before deciding on leading/trailing slashes.
