@@ -25,6 +25,7 @@ class QTextEdit;
 class QPushButton;
 class QLabel;
 class QProgressBar;
+class QGraphicsOpacityEffect;
 
 class SolverWorker : public QThread {
     Q_OBJECT
@@ -106,6 +107,10 @@ private:
     QWidget*      m_allOptRow{nullptr};    // the whole "all optimal + suboptimal" row
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
+    QTimer*   m_outputIdleTimer{nullptr};
+    bool      m_outputBtnsFullOpacity{true};
+    void      setOutputBtnsOpacity(qreal target, int durationMs = 200);
+    void      onOutputMouseActive();
     QWidget*      m_topSection;     // options + command + solve + progress (hidden when expanded)
     QWidget*      m_leftPanel;      // cube widget column (hidden when expanded)
     QScrollArea*  leftScroll;       // scroll area for left panel

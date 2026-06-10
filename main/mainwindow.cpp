@@ -446,6 +446,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     buildUI();
     txtOutput->viewport()->installEventFilter(this);
+    txtOutput->viewport()->setMouseTracking(true);
 
     // ── Load Abid's notation font (embedded resource) ─────────────────────────
     OutputConverter::loadAbidFont();
@@ -1543,6 +1544,17 @@ void MainWindow::buildUI()
     btnCopyTerminal->setVisible(false);
     btnTableMode->setVisible(false);
 
+    // Idle-fade timer — fires 2 s after the last mouse move inside the output area.
+    // Scrolling (wheel events) does not reset this; only actual mouse movement does.
+    m_outputIdleTimer = new QTimer(this);
+    m_outputIdleTimer->setSingleShot(true);
+    connect(m_outputIdleTimer, &QTimer::timeout, this, [this]() {
+        setOutputBtnsOpacity(0.15, 400);
+    });
+
+    // Mouse tracking so we receive QEvent::MouseMove without a button held down
+    outputWrapper->setMouseTracking(true);
+
     outputWrapperLay->addWidget(txtOutput);
     auto pauseAutoScroll = [this]()
     {
@@ -1592,6 +1604,7 @@ void MainWindow::buildUI()
     m_solutionTable->setTextElideMode(Qt::ElideNone);
     m_solutionTable->setContextMenuPolicy(Qt::NoContextMenu);
     m_solutionTable->viewport()->setCursor(Qt::ArrowCursor);
+    m_solutionTable->viewport()->setMouseTracking(true);
     tableLay->addWidget(m_solutionTable, 1);
 
     outputWrapperLay->addWidget(m_tableContainer);
@@ -2167,6 +2180,79 @@ void MainWindow::stopSolver()
 }
 
 // -------------------------------------------------------
+// setOutputBtnsOpacity — animate all three floating toolbar
+// buttons (copy / switch-view / expand) to the given opacity.
+// Safe to call at any opacity; skips if already at target.
+// -------------------------------------------------------
+void MainWindow::setOutputBtnsOpacity(qreal target, int durationMs)
+{
+    // IMPORTANT: effects are NEVER installed at opacity 1.0.  Having any
+    // QGraphicsOpacityEffect present — even at full opacity — routes the
+    // button's paint path through an offscreen pixmap and breaks compositing
+    // with the QTextEdit parent, making buttons invisible or flickering on hover.
+    // Effects are installed on-demand only when dimming, and removed entirely
+    // when restoring to full so the button uses its normal rendering path.
+    m_outputBtnsFullOpacity = (target >= 1.0 - 0.01);
+    QPushButton *btns[3] = {btnCopyTerminal, btnTableMode, btnExpand};
+
+    for (auto *btn : btns) {
+        if (!btn) continue;
+        auto *eff = qobject_cast<QGraphicsOpacityEffect *>(btn->graphicsEffect());
+
+        if (m_outputBtnsFullOpacity) {
+            // ── Restoring to full ──────────────────────────────────────────────
+            if (!eff) continue; // already effect-free, nothing to do
+            if (durationMs <= 0) { btn->setGraphicsEffect(nullptr); continue; }
+            // Animate from current opacity → 1.0, then remove the effect.
+            // Parent the animation to btn (not eff) so eff can be safely deleted
+            // in the finished slot without touching a running animation's target.
+            auto *anim = new QPropertyAnimation(eff, "opacity", btn);
+            anim->setDuration(durationMs);
+            anim->setStartValue(eff->opacity());
+            anim->setEndValue(1.0);
+            anim->setEasingCurve(QEasingCurve::OutCubic);
+            QPointer<QPushButton> safeBtn = btn;
+            connect(anim, &QPropertyAnimation::finished, this, [safeBtn]() {
+                if (safeBtn)
+                    // Defer one event-loop tick so the animation's own cleanup
+                    // (DeleteWhenStopped) fires before we delete its target object.
+                    QTimer::singleShot(0, safeBtn, [safeBtn]() {
+                        if (safeBtn) safeBtn->setGraphicsEffect(nullptr);
+                    });
+            });
+            anim->start(QAbstractAnimation::DeleteWhenStopped);
+        } else {
+            // ── Dimming ────────────────────────────────────────────────────────
+            if (!eff) {
+                eff = new QGraphicsOpacityEffect(btn);
+                eff->setOpacity(1.0); // start at full; animation steps down
+                btn->setGraphicsEffect(eff);
+            }
+            if (qAbs(eff->opacity() - target) < 0.01) continue;
+            if (durationMs <= 0) { eff->setOpacity(target); continue; }
+            auto *anim = new QPropertyAnimation(eff, "opacity", btn);
+            anim->setDuration(durationMs);
+            anim->setStartValue(eff->opacity());
+            anim->setEndValue(target);
+            anim->setEasingCurve(QEasingCurve::InCubic);
+            anim->start(QAbstractAnimation::DeleteWhenStopped);
+        }
+    }
+}
+
+// -------------------------------------------------------
+// onOutputMouseActive — called on every MouseMove inside the
+// output wrapper (wheel events excluded).  Resets the idle
+// timer and restores full opacity if the buttons were faded.
+// -------------------------------------------------------
+void MainWindow::onOutputMouseActive()
+{
+    if (m_outputIdleTimer) m_outputIdleTimer->start(2000);
+    if (!m_outputBtnsFullOpacity)
+        setOutputBtnsOpacity(1.0, 150);
+}
+
+// -------------------------------------------------------
 // setSolverRunning — disable/enable all interactive controls
 // while the solver is active. btnSolve itself is handled
 // separately (it becomes the Stop button).
@@ -2437,6 +2523,10 @@ void MainWindow::onSolverLine(QString line)
         btnExpand->setVisible(true);
         btnCopyTerminal->setVisible(true);
         btnTableMode->setVisible(true);
+        // Start idle-fade timer on first reveal; restores to full if a prior solve
+        // had left the buttons faded.
+        setOutputBtnsOpacity(1.0, 0);   // instant snap to full on new results
+        if (m_outputIdleTimer) m_outputIdleTimer->start(2000);
         {
             bool isAlt = (m_solutionLines.size() % 2 == 0);
             QString col = isAlt ? Theme::solutionAltLight() : Theme::textSolution();
@@ -4317,6 +4407,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                     QApplication::clipboard()->setText(v.toString());
                 return true;
             }
+        }
+    }
+
+    // ── Mouse movement inside output wrapper — reset idle-fade timer ──────────
+    // QEvent::Wheel is a distinct event type, so scroll-wheel activity never
+    // reaches this branch and never reactivates the faded buttons.
+    if (event->type() == QEvent::MouseMove && m_outputWrapper) {
+        if (QWidget *w = qobject_cast<QWidget *>(watched)) {
+            if (w == m_outputWrapper || m_outputWrapper->isAncestorOf(w))
+                onOutputMouseActive();
         }
     }
 
