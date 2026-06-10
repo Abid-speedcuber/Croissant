@@ -625,11 +625,11 @@ void MainWindow::buildUI()
         chkCubeshape->setEnabled(cs); });
     connect(cubeWidget, &Sq1Widget::equatorStateChanged, this, [this](int state)
             {
-        bool shouldBeChecked = (state == 2);
+        bool shouldBeChecked = (state == 0);
         if (chkIgnoreEquator->isChecked() != shouldBeChecked) {
             if (!shouldBeChecked) {
                 // leaving gray state — remember nothing, just uncheck
-                m_preIgnoreMidState = 0;
+                m_preIgnoreMidState = 1;
             }
             chkIgnoreEquator->blockSignals(true);
             chkIgnoreEquator->setChecked(shouldBeChecked);
@@ -1140,7 +1140,7 @@ void MainWindow::buildUI()
             {
         if (checked) {
             m_preIgnoreMidState = cubeWidget->getEquatorState();
-            cubeWidget->setEquatorState(2); // gray / partial
+            cubeWidget->setEquatorState(0); // ignore
         } else {
             cubeWidget->setEquatorState(m_preIgnoreMidState);
         }
@@ -2057,7 +2057,11 @@ void MainWindow::onSolve()
     progressBar->setVisible(true);
 
     worker = new SolverWorker();
-    worker->positionStr = cubeWidget->getPositionString();
+    {
+        Sq1Widget::RawState rs = cubeWidget->getRawState();
+        sq1optSetPosition(rs.pos, rs.middle);
+    }
+    worker->positionStr = cubeWidget->getPositionString(); // still used for display/copy
     m_posHex = worker->positionStr;
     worker->flags = buildArgList();
     m_cubeshapeWasActive = chkCubeshape->isChecked();

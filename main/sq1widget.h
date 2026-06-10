@@ -21,7 +21,7 @@ public:
     QString getPositionString();
 
     void reset();
-    int  getEquatorState() const { return equator_partial > 0 ? 2 : equator; }
+    int  getEquatorState() const { return equator; }
     bool inCubeshape() const {
         // Each half (0-11, 12-23) must have alternating corner/edge slots.
         // Corners occupy 2 slots (same value <8 twice), edges occupy 1 slot.
@@ -43,8 +43,7 @@ public:
         return true;
     }
     void setEquatorState(int state) {
-        if (state == 2) { equator_partial = 1; }
-        else { equator_partial = 0; equator = state; }
+        equator = state;
         update();
         emit positionChanged();
     }
@@ -57,10 +56,17 @@ public:
     // Returns false if a slice move is attempted on an unsliceable position.
     bool applyMoves(const QVector<MoveStep>& moves);
 
+    struct RawState {
+        int pos[24];   // piece values, identical encoding to FullPosition::pos[]
+        int middle;    // 1=square, -1=kite, 0=ignore  (FullPosition convention)
+    };
+    // Fill a RawState directly from widget internals — no string round-trip.
+    RawState getRawState() const;
+
 signals:
     void positionChanged(); // emitted whenever cube state changes
     void userInteracted();  // emitted on mouse-driven piece swap/state change (for undo)
-    void equatorStateChanged(int state); // 0=square, 1=kite, 2=gray
+    void equatorStateChanged(int state); // 1=square, -1=kite, 0=ignore
     void cubeshapeChanged(bool inCS);
 
 protected:
@@ -74,8 +80,7 @@ private:
     // --- State (mirrors helper.html JS variables) ---
     std::array<int,24> position;
     std::array<int,24> partiality;  // 0=full, 1=top/bottom, 2=any
-    int equator;           // 0 = square, 1 = kite
-    int equator_partial;   // 0 or 1
+    int equator;           // 1 = square, -1 = kite, 0 = ignore (matches FullPosition::middle)
     int selected;         // index of selected piece, or -1
     int hovered;          // index of hovered piece, or -1
     QMap<int, qreal> m_hoverProgress; // 0.0 = no hover, 1.0 = full hover

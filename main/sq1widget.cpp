@@ -82,16 +82,16 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
         for (int i = 0; i < 8; i++)  if (pieceCount[i] > 2) return false; // corners stored twice
         for (int i = 8; i < 16; i++) if (pieceCount[i] > 1) return false; // edges stored once
 
-        int mid = 0, mid_par = 0;
+        int mid = 1; // default: square
         if (s.size() == 17) {
-            if      (s[16] == '-') { mid = 0; mid_par = 0; }
-            else if (s[16] == '+') { mid = 1; mid_par = 0; }
-            else                   { mid = 0; mid_par = 1; }
-        } else if (s.size() == 16) { mid = 0; mid_par = 1; } // ABCDEFGH12345678 sets partial bar
+            if      (s[16] == '-') mid =  1;
+            else if (s[16] == '+') mid = -1;
+            else                   mid =  0; // '/' or any other char → ignore
+        } else if (s.size() == 16) { mid = 0; } // no equator char → ignore
 
         // All checks passed — commit to state
         for (int i = 0; i < 24; i++) { position[i] = pi[i]; partiality[i] = parArr[i]; }
-        equator = mid; equator_partial = mid_par; selected = -1;
+        equator = mid; selected = -1;
         update();
         return true;
 
@@ -103,7 +103,7 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
 void Sq1Widget::reset() {
     int defPos[] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
     for(int i=0;i<24;i++) { position[i]=defPos[i]; partiality[i]=0; }
-    equator=0; equator_partial=0; selected=-1; hovered=-1;
+    equator=1; selected=-1; hovered=-1;
     update();
     emit positionChanged();
 }
@@ -189,8 +189,8 @@ void Sq1Widget::paintEvent(QPaintEvent*) {
     double x2b = TOP_CX + r_len * 0.28;   // kite end: mirrors left strip width
     qreal midT = m_hoverProgress.value(-2, 0.0);
     drawPoly(p, {{x1,MID_TOP},{x2,MID_TOP},{x2,MID_BOT},{x1,MID_BOT}}, colors[2], midT);
-    QColor rightColor = equator_partial > 0 ? colors[6] : colors[equator == 0 ? 2 : 4];
-    double x_end = (equator == 0 || equator_partial > 0) ? x3 : x2b;
+    QColor rightColor = equator == 0 ? colors[6] : colors[equator == 1 ? 2 : 4];
+    double x_end = (equator != -1) ? x3 : x2b;
     drawPoly(p, {{x2,MID_TOP},{x_end,MID_TOP},{x_end,MID_BOT},{x2,MID_BOT}}, rightColor, midT);
 }
 
@@ -281,26 +281,16 @@ void Sq1Widget::mousePressEvent(QMouseEvent* event) {
         bool rightClick = (event->button() == Qt::RightButton);
         if (!rightClick) {
             // Left click cycles forward: square → kite → gray → square
-            if (equator_partial == 0 && equator == 0) {
-                equator = 1;
-            } else if (equator_partial == 0 && equator == 1) {
-                equator_partial = 1;
-            } else {
-                equator = 0;
-                equator_partial = 0;
-            }
+            if      (equator ==  1) equator = -1;
+            else if (equator == -1) equator =  0;
+            else                    equator =  1;
         } else {
             // Right click cycles backward: square → gray → kite → square
-            if (equator_partial == 0 && equator == 0) {
-                equator_partial = 1;
-            } else if (equator_partial > 0) {
-                equator_partial = 0;
-                equator = 1;
-            } else {
-                equator = 0;
-            }
+            if      (equator ==  1) equator =  0;
+            else if (equator ==  0) equator = -1;
+            else                    equator =  1;
         }
-        emit equatorStateChanged(equator_partial > 0 ? 2 : equator);
+        emit equatorStateChanged(equator);
     } else if(piece >= 0) {
         if(event->button() == Qt::RightButton) {
             emit userInteracted();
@@ -420,7 +410,7 @@ bool Sq1Widget::applyMoves(const QVector<MoveStep>& moves) {
                 std::swap(position[i], position[i+6]);
                 std::swap(partiality[i], partiality[i+6]);
             }
-            equator = 1 - equator;
+            equator = -equator;
         } else {
             rotateTopRaw(mv.x);
             rotateBotRaw(mv.y);
@@ -482,7 +472,7 @@ void Sq1Widget::doSlice() {
         std::swap(position[i],   position[i+6]);
         std::swap(partiality[i], partiality[i+6]);
     }
-    equator = 1 - equator;
+    equator = -equator;
     update(); emit positionChanged();
 }
 
@@ -498,6 +488,13 @@ void Sq1Widget::keyPressEvent(QKeyEvent* e) {
     }
 }
 
+Sq1Widget::RawState Sq1Widget::getRawState() const {
+    RawState s;
+    for (int i = 0; i < 24; i++) s.pos[i] = position[i];
+    s.middle = equator;
+    return s;
+}
+
 QString Sq1Widget::getPositionString() {
     QString out;
     for(int i=0;i<24;i++) {
@@ -506,13 +503,13 @@ QString Sq1Widget::getPositionString() {
         if(pi==0) {
             out += QString("ABCDEFGH12345678")[x];
         } else if(pi==1) {
-            if(x<4) out+='U'; else if(x<8) out+='V';
-            else if(x<12) out+='X'; else out+='Y';
+            if(x < 0) out += (x%3==0 ? 'U' : 'V');       // partial corner: mod3==0→top(U), mod3==-2→bottom(V)
+            else       out += (x%3==0 ? 'X' : 'Y');       // partial edge:   mod3==0→top(X), mod3==1→bottom(Y)
         } else {
-            out += (x<8 ? 'W' : 'Z');
+            out += (x < 0 ? 'W' : 'Z');                   // fully partial: corner→W, edge→Z
         }
         if(x<8) i++; // skip duplicate corner slot
     }
-    if(equator_partial==0) out += (equator==0 ? '-' : '/');
+    if(equator != 0) out += (equator == 1 ? '-' : '/');
     return out;
 }

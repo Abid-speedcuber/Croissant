@@ -78,6 +78,9 @@ std::vector<int> specificDepths;
 
 static std::string tableDirectory = ".";
 static std::atomic_bool stopRequested{false};
+static bool s_hasInjectedPosition = false;
+static int  s_injectedPos[24];
+static int  s_injectedMiddle = 1;
 
 void sq1optSetTableDirectory(const std::string& dir)
 {
@@ -87,6 +90,13 @@ void sq1optSetTableDirectory(const std::string& dir)
 void sq1optRequestStop()
 {
 	stopRequested.store(true);
+}
+
+void sq1optSetPosition(const int pos[24], int middle)
+{
+	for (int i = 0; i < 24; i++) s_injectedPos[i] = pos[i];
+	s_injectedMiddle = middle;
+	s_hasInjectedPosition = true;
 }
 
 static std::string tablePath(const char* fileName)
@@ -1741,8 +1751,11 @@ int sq1optMain(int argc, char* argv[]){
 
 	FullPosition p;
 	std::ifstream is;
-	// parse position/move sequence from argument posArg
-	if( posArg>=0 ){
+	// Use directly injected position if available (bypasses string encoding/decoding)
+	if( s_hasInjectedPosition ){
+		p.set(s_injectedPos, s_injectedMiddle);
+		s_hasInjectedPosition = false;
+	}else if( posArg>=0 ){
 		int r=p.parseInput(argv[posArg]);
 		if(r) return show(r);
 	}else if( inpFile!=NULL ){
