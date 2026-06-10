@@ -49,12 +49,12 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
 
             if      (k >= 'A' && k <= 'H') { k -= 'A'; par = 0; }
             else if (k >= '1' && k <= '8') { k -= ('1' - 8); par = 0; }
-            else if (k == 'U') { k = nextPartialCorner; nextPartialCorner -= 3; par = 1; }
-            else if (k == 'V') { k = nextPartialCorner; nextPartialCorner -= 3; par = 1; }
-            else if (k == 'W') { k = nextPartialCorner; nextPartialCorner -= 3; par = 2; }
-            else if (k == 'X') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 1; }
-            else if (k == 'Y') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 1; }
-            else if (k == 'Z') { k = nextPartialEdge;   nextPartialEdge += 3;  par = 2; }
+            else if (k == 'U') { k = nextPartialCorner + 0; nextPartialCorner -= 3; par = 1; }
+            else if (k == 'V') { k = nextPartialCorner + 1; nextPartialCorner -= 3; par = 1; }
+            else if (k == 'W') { k = nextPartialCorner + 2; nextPartialCorner -= 3; par = 2; }
+            else if (k == 'X') { k = nextPartialEdge   + 0; nextPartialEdge   += 3; par = 1; }
+            else if (k == 'Y') { k = nextPartialEdge   + 1; nextPartialEdge   += 3; par = 1; }
+            else if (k == 'Z') { k = nextPartialEdge   + 2; nextPartialEdge   += 3; par = 2; }
             else return false; // reject any unrecognised character immediately
 
             // Bounds check: concrete piece indices must be 0-15
@@ -69,7 +69,7 @@ bool Sq1Widget::setPositionFromString(const QString& pos) {
 
             // Corner occupies two slots
             bool isConcreteCorner = (k >= 0 && k < 8);
-            bool isPartialCorner  = (k < 0 && (k % 3 == 0 || k % 3 == -2)); // U or V type
+            bool isPartialCorner  = (k < 0); // all partial corners (U, V, W) occupy two slots
             if (isConcreteCorner || isPartialCorner) {
                 if (j >= 24) return false;
                 pi[j] = k; parArr[j] = par; j++;
@@ -391,6 +391,44 @@ void Sq1Widget::swapSelected(int piece) {
 bool Sq1Widget::isSliceable() {
     return position[0]!=position[11] && position[5]!=position[6] &&
            position[12]!=position[23] && position[17]!=position[18];
+}
+
+void Sq1Widget::rotateTopRaw(int twelfths) {
+    twelfths = ((twelfths % 12) + 12) % 12;
+    for (int n = 0; n < twelfths; n++) {
+        int c = position[11]; int d = partiality[11];
+        for (int i = 11; i > 0; i--) { position[i] = position[i-1]; partiality[i] = partiality[i-1]; }
+        position[0] = c; partiality[0] = d;
+    }
+}
+
+void Sq1Widget::rotateBotRaw(int twelfths) {
+    twelfths = ((twelfths % 12) + 12) % 12;
+    for (int n = 0; n < twelfths; n++) {
+        int c = position[23]; int d = partiality[23];
+        for (int i = 23; i > 12; i--) { position[i] = position[i-1]; partiality[i] = partiality[i-1]; }
+        position[12] = c; partiality[12] = d;
+    }
+}
+
+bool Sq1Widget::applyMoves(const QVector<MoveStep>& moves) {
+    selected = -1;
+    for (const MoveStep& mv : moves) {
+        if (mv.isSlice) {
+            if (!isSliceable()) return false;
+            for (int i = 6; i < 12; i++) {
+                std::swap(position[i], position[i+6]);
+                std::swap(partiality[i], partiality[i+6]);
+            }
+            equator = 1 - equator;
+        } else {
+            rotateTopRaw(mv.x);
+            rotateBotRaw(mv.y);
+        }
+    }
+    update();
+    emit positionChanged();
+    return isSliceable();
 }
 
 void Sq1Widget::doU() {

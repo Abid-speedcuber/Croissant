@@ -220,7 +220,7 @@ private:
 
     void applyThemeStyle()
     {
-        m_cachedBg     = Theme::fadingTooltipBg();
+        m_cachedBg = Theme::fadingTooltipBg();
         m_cachedBorder = Theme::fadingTooltipBorder();
         m_label->setStyleSheet(QString(
                                    "QLabel { background: transparent; color: %1; font-size: 11px; }")
@@ -400,7 +400,7 @@ void SolverWorker::run()
     SolverStreamBuffer outBuffer(this);
     std::streambuf *oldOut = std::cout.rdbuf(&outBuffer);
     std::streambuf *oldErr = std::cerr.rdbuf(&outBuffer);
-    int exitCode = -1;
+        int exitCode = -1;
     try
     {
         exitCode = sq1optMain(static_cast<int>(argv.size()), argv.data());
@@ -1321,42 +1321,12 @@ void MainWindow::buildUI()
                     return;
                 }
 
-                int pos[24] = {};
-                int mid = 0;
-                {
-                    std::string s = cubeWidget->getPositionString().toStdString();
-                    int j = 0, nextPC = -3, nextPE = 18;
-                    for (int i = 0; i < 16 && j < 24; i++) {
-                        int k = (unsigned char)s[i];
-                        if (k >= 'a' && k <= 'z') k += ('A'-'a');
-                        if      (k>='A'&&k<='H') k-='A';
-                        else if (k>='1'&&k<='8') k-=('1'-8);
-                        else if (k=='U'||k=='V') { k=nextPC; nextPC-=3; }
-                        else if (k=='W')         { k=nextPC; nextPC-=3; }
-                        else if (k=='X'||k=='Y') { k=nextPE; nextPE+=3; }
-                        else if (k=='Z')         { k=nextPE; nextPE+=3; }
-                        pos[j++]=k;
-                        if (k>=0&&k<8) pos[j++]=k;
-                    }
-                    mid = (s.size()>=17) ? (s[16]=='/'?1:0) : (!s.empty()&&s.back()=='/'?1:0);
-                }
+                QVector<Sq1Widget::MoveStep> widgetMoves;
+                for (const Move& mv : moves)
+                    widgetMoves.append({mv.isSlice, mv.x, mv.y});
 
-                auto doTop = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[11]; for(int i=11;i>0;i--) pos[i]=pos[i-1]; pos[0]=c; } };
-                auto doBot = [&](int m){ m=((m%12)+12)%12; for(int mv=0;mv<m;mv++){ int c=pos[23]; for(int i=23;i>12;i--) pos[i]=pos[i-1]; pos[12]=c; } };
-                auto canSlice = [&](){ return pos[0]!=pos[11]&&pos[5]!=pos[6]&&pos[12]!=pos[23]&&pos[17]!=pos[18]; };
-                auto doSlice = [&](){ if(!canSlice()) return; for(int i=6;i<12;i++) std::swap(pos[i],pos[i+6]); mid=1-mid; };
-
-                for (const Move& mv : moves) {
-                    if (mv.isSlice) doSlice();
-                    else { doTop(mv.x); doBot(mv.y); }
-                }
-
-                // ── Sliceability guard ────────────────────────────────────────────────
-                // The resulting position must be sliceable: no corner piece can straddle
-                // the cut line. canSlice() checks the four boundary index pairs (0/11
-                // and 5/6 on top; 12/23 and 17/18 on bottom) — if any pair holds the
-                // same corner value, that piece is split across the cut.
-                if (!canSlice()) {
+                bool applied = cubeWidget->applyMoves(widgetMoves);
+                if (!applied) {
                     const QString errMsg =
                         "Position after applying this alg is not sliceable — "
                         "a corner is split across the cut line. "
@@ -1364,23 +1334,6 @@ void MainWindow::buildUI()
                     QToolTip::showText(
                         m_mainInput->mapToGlobal(QPoint(0, m_mainInput->height())),
                         errMsg, m_mainInput, {}, 4000);
-                    m_mainInput->setProperty("hasError", true);
-                    style()->polish(m_mainInput);
-                    m_undoStack.removeLast();
-                    btnUndo->setEnabled(!m_undoStack.isEmpty());
-                    return;
-                }
-
-                const QString pieceChars = "ABCDEFGH12345678";
-                QString posStr;
-                for (int i = 0; i < 24; i++) {
-                    posStr += pieceChars[pos[i]];
-                    if (pos[i] < 8) i++;
-                }
-                posStr += (mid == 0 ? '-' : '/');
-
-                bool applied = cubeWidget->setPositionFromString(posStr);
-                if (!applied) {
                     m_mainInput->setProperty("hasError", true);
                     style()->polish(m_mainInput);
                     m_undoStack.removeLast();
@@ -3904,6 +3857,8 @@ void MainWindow::showSettingsModal()
     chkIgnoreTrans->setChecked(m_ignoreTrans);
     chkIgnoreTrans->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
     chkIgnoreTransSetting = chkIgnoreTrans;
+    connect(chkIgnoreTrans, &QObject::destroyed, this, [this]()
+            { chkIgnoreTransSetting = nullptr; });
     connect(chkIgnoreTrans, &QCheckBox::toggled, this, [this](bool checked)
             {
         m_ignoreTrans = checked;

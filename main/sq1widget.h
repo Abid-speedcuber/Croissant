@@ -51,6 +51,12 @@ public:
     // Parse a position string and update the cube display
     bool setPositionFromString(const QString& pos);
 
+    struct MoveStep { bool isSlice; int x; int y; };
+    // Apply a sequence of pre-parsed moves to the current state.
+    // Works correctly whether or not the state contains partial pieces.
+    // Returns false if a slice move is attempted on an unsliceable position.
+    bool applyMoves(const QVector<MoveStep>& moves);
+
 signals:
     void positionChanged(); // emitted whenever cube state changes
     void userInteracted();  // emitted on mouse-driven piece swap/state change (for undo)
@@ -113,6 +119,8 @@ private:
     void doD();
     void doDPrime();
     void doSlice();
+    void rotateTopRaw(int twelfths); // raw rotation, no emit, no sliceability stop
+    void rotateBotRaw(int twelfths);
     void swapSelected(int piece);
 
     int hitTestTop(QPointF pt);
