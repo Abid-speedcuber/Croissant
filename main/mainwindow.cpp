@@ -2939,7 +2939,11 @@ void MainWindow::rebuildTable()
             return;
         QString bracket = line.mid(lb + 1, rb - lb - 1);
         QStringList parts = bracket.split('|');
-        if (parts.size() >= 2)
+        if (parts.size() == 1)
+        {
+            slices = parts[0].trimmed().toInt();
+        }
+        else if (parts.size() >= 2)
         {
             slices = parts[0].trimmed().toInt();
             moves = parts[1].trimmed().toInt();
