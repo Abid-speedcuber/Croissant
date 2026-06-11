@@ -1522,16 +1522,22 @@ void MainWindow::buildUI()
     btnExpand->setObjectName("btnExpand");
     btnExpand->setFixedSize(22, 22);
     btnExpand->setToolTip("Expand terminal");
+    btnExpand->installEventFilter(this);
+    { auto *e = new QGraphicsOpacityEffect(btnExpand); e->setOpacity(1.0); btnExpand->setGraphicsEffect(e); }
 
     btnCopyTerminal = new QPushButton("⎘", outputWrapper);
     btnCopyTerminal->setObjectName("btnCopyTerminal");
     btnCopyTerminal->setFixedSize(22, 22);
     btnCopyTerminal->setToolTip("Copy all algs in terminal");
+    btnCopyTerminal->installEventFilter(this);
+    { auto *e = new QGraphicsOpacityEffect(btnCopyTerminal); e->setOpacity(1.0); btnCopyTerminal->setGraphicsEffect(e); }
 
     btnTableMode = new QPushButton("⊞", outputWrapper);
     btnTableMode->setObjectName("btnTableMode");
     btnTableMode->setFixedSize(22, 22);
     btnTableMode->setToolTip("Switch to table view");
+    btnTableMode->installEventFilter(this);
+    { auto *e = new QGraphicsOpacityEffect(btnTableMode); e->setOpacity(1.0); btnTableMode->setGraphicsEffect(e); }
 
     btnScrollToBottom = new QPushButton("↓", outputWrapper);
     btnScrollToBottom->setObjectName("btnScrollToBottom");
@@ -1544,7 +1550,7 @@ void MainWindow::buildUI()
     btnCopyTerminal->setVisible(false);
     btnTableMode->setVisible(false);
 
-    // Idle-fade timer — fires 2 s after the last mouse move inside the output area.
+    // Idle-fade timer — fires 1.5 s after the last mouse move inside the output area.
     // Scrolling (wheel events) does not reset this; only actual mouse movement does.
     m_outputIdleTimer = new QTimer(this);
     m_outputIdleTimer->setSingleShot(true);
@@ -2182,61 +2188,55 @@ void MainWindow::stopSolver()
 // -------------------------------------------------------
 // setOutputBtnsOpacity — animate all three floating toolbar
 // buttons (copy / switch-view / expand) to the given opacity.
-// Safe to call at any opacity; skips if already at target.
+//
+// Full opacity (target >= 1.0): the QGraphicsOpacityEffect is DISABLED rather
+// than set to 1.0.  An enabled effect at opacity=1.0 still routes through an
+// offscreen pixmap that breaks compositing over QTextEdit, making buttons
+// invisible.  Disabling the effect lets buttons paint through the normal path.
+//
+// Fading (target < 1.0): the effect is enabled (starting at 0.99 if it was
+// previously disabled) and animated to the target.  Starting at 0.99 avoids
+// a single invisible frame that would occur if we enabled at exactly 1.0.
 // -------------------------------------------------------
 void MainWindow::setOutputBtnsOpacity(qreal target, int durationMs)
 {
-    // IMPORTANT: effects are NEVER installed at opacity 1.0.  Having any
-    // QGraphicsOpacityEffect present — even at full opacity — routes the
-    // button's paint path through an offscreen pixmap and breaks compositing
-    // with the QTextEdit parent, making buttons invisible or flickering on hover.
-    // Effects are installed on-demand only when dimming, and removed entirely
-    // when restoring to full so the button uses its normal rendering path.
     m_outputBtnsFullOpacity = (target >= 1.0 - 0.01);
     QPushButton *btns[3] = {btnCopyTerminal, btnTableMode, btnExpand};
 
     for (auto *btn : btns) {
         if (!btn) continue;
         auto *eff = qobject_cast<QGraphicsOpacityEffect *>(btn->graphicsEffect());
+        if (!eff) continue;
 
-        if (m_outputBtnsFullOpacity) {
-            // ── Restoring to full ──────────────────────────────────────────────
-            if (!eff) continue; // already effect-free, nothing to do
-            if (durationMs <= 0) { btn->setGraphicsEffect(nullptr); continue; }
-            // Animate from current opacity → 1.0, then remove the effect.
-            // Parent the animation to btn (not eff) so eff can be safely deleted
-            // in the finished slot without touching a running animation's target.
-            auto *anim = new QPropertyAnimation(eff, "opacity", btn);
-            anim->setDuration(durationMs);
-            anim->setStartValue(eff->opacity());
-            anim->setEndValue(1.0);
-            anim->setEasingCurve(QEasingCurve::OutCubic);
-            QPointer<QPushButton> safeBtn = btn;
-            connect(anim, &QPropertyAnimation::finished, this, [safeBtn]() {
-                if (safeBtn)
-                    // Defer one event-loop tick so the animation's own cleanup
-                    // (DeleteWhenStopped) fires before we delete its target object.
-                    QTimer::singleShot(0, safeBtn, [safeBtn]() {
-                        if (safeBtn) safeBtn->setGraphicsEffect(nullptr);
-                    });
-            });
-            anim->start(QAbstractAnimation::DeleteWhenStopped);
-        } else {
-            // ── Dimming ────────────────────────────────────────────────────────
-            if (!eff) {
-                eff = new QGraphicsOpacityEffect(btn);
-                eff->setOpacity(1.0); // start at full; animation steps down
-                btn->setGraphicsEffect(eff);
-            }
-            if (qAbs(eff->opacity() - target) < 0.01) continue;
-            if (durationMs <= 0) { eff->setOpacity(target); continue; }
-            auto *anim = new QPropertyAnimation(eff, "opacity", btn);
-            anim->setDuration(durationMs);
-            anim->setStartValue(eff->opacity());
-            anim->setEndValue(target);
-            anim->setEasingCurve(QEasingCurve::InCubic);
-            anim->start(QAbstractAnimation::DeleteWhenStopped);
+        // Stop any running animation on this effect
+        for (auto *a : btn->findChildren<QPropertyAnimation *>())
+            if (a->targetObject() == eff) a->stop();
+
+        if (target >= 1.0 - 0.01) {
+            // Full opacity: disable the effect so the button uses the normal paint
+            // path.  An enabled effect at 1.0 produces an invisible compositing glitch.
+            eff->setEnabled(false);
+            continue;
         }
+
+        // Fading: enable the effect if it is currently disabled.  Start at 0.99
+        // (not 1.0) so the very first rendered frame is never at the broken opacity.
+        if (!eff->isEnabled()) {
+            eff->setOpacity(0.99);
+            eff->setEnabled(true);
+        }
+
+        qreal startOpacity = eff->opacity();
+        if (qAbs(startOpacity - target) < 0.01) continue;
+
+        if (durationMs <= 0) { eff->setOpacity(target); continue; }
+
+        auto *anim = new QPropertyAnimation(eff, "opacity", btn);
+        anim->setDuration(durationMs);
+        anim->setStartValue(startOpacity);
+        anim->setEndValue(target);
+        anim->setEasingCurve(QEasingCurve::InCubic);
+        anim->start(QAbstractAnimation::DeleteWhenStopped);
     }
 }
 
@@ -2247,9 +2247,14 @@ void MainWindow::setOutputBtnsOpacity(qreal target, int durationMs)
 // -------------------------------------------------------
 void MainWindow::onOutputMouseActive()
 {
-    if (m_outputIdleTimer) m_outputIdleTimer->start(2000);
+    // Don't restart the idle timer while a button is hovered — MouseMove on a
+    // button child still reaches this path, but the Enter handler owns the timer
+    // in that state.
+    bool anyBtnHovered = btnCopyTerminal->underMouse() || btnTableMode->underMouse() || btnExpand->underMouse();
+    if (!anyBtnHovered && m_outputIdleTimer)
+        m_outputIdleTimer->start(1500);
     if (!m_outputBtnsFullOpacity)
-        setOutputBtnsOpacity(1.0, 150);
+        setOutputBtnsOpacity(1.0, 0);
 }
 
 // -------------------------------------------------------
@@ -2526,7 +2531,7 @@ void MainWindow::onSolverLine(QString line)
         // Start idle-fade timer on first reveal; restores to full if a prior solve
         // had left the buttons faded.
         setOutputBtnsOpacity(1.0, 0);   // instant snap to full on new results
-        if (m_outputIdleTimer) m_outputIdleTimer->start(2000);
+        if (m_outputIdleTimer) m_outputIdleTimer->start(1500);
         {
             bool isAlt = (m_solutionLines.size() % 2 == 0);
             QString col = isAlt ? Theme::solutionAltLight() : Theme::textSolution();
@@ -4407,6 +4412,44 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                     QApplication::clipboard()->setText(v.toString());
                 return true;
             }
+        }
+    }
+
+    // ── Enter/Leave on floating buttons — keep visible while hovering ─────────
+    // Effects are disabled at full opacity (setOutputBtnsOpacity handles this),
+    // so no special effect toggling is needed on hover — QSS :hover works fine
+    // through the normal paint path.
+    // Qt delivers Enter to the newly-entered widget BEFORE Leave to the old one,
+    // so underMouse() is already accurate when any Leave handler runs.
+    auto anyBtnHovered = [this]() {
+        return btnCopyTerminal->underMouse() || btnTableMode->underMouse() || btnExpand->underMouse();
+    };
+    if (event->type() == QEvent::Enter) {
+        if (watched == btnCopyTerminal || watched == btnTableMode || watched == btnExpand) {
+            if (m_outputIdleTimer) m_outputIdleTimer->stop();
+            if (!m_outputBtnsFullOpacity)
+                setOutputBtnsOpacity(1.0, 0);
+            return false;
+        }
+    }
+    if (event->type() == QEvent::Leave) {
+        if (watched == btnCopyTerminal || watched == btnTableMode || watched == btnExpand) {
+            if (anyBtnHovered()) return false; // moved to another button
+            // All buttons left — resume idle timer if still in the output area,
+            // or start fading now if the cursor left the area entirely.
+            if (m_outputWrapper && m_outputWrapper->rect().contains(
+                    m_outputWrapper->mapFromGlobal(QCursor::pos()))) {
+                if (m_outputIdleTimer) m_outputIdleTimer->start(1500);
+            } else {
+                if (m_outputIdleTimer) m_outputIdleTimer->stop();
+                setOutputBtnsOpacity(0.15, 400);
+            }
+            return false;
+        }
+        if (watched == m_outputWrapper && !anyBtnHovered()) {
+            if (m_outputIdleTimer) m_outputIdleTimer->stop();
+            setOutputBtnsOpacity(0.15, 400);
+            return false;
         }
     }
 
