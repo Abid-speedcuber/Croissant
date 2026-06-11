@@ -1021,7 +1021,7 @@ void MainWindow::buildUI()
     QWidget *metricRadioRow = m_metricRadioRow;
     metricRadioRow->setToolTip("Choose how move length of an alg is counted:\n"
                                "Slice – only slices count\n"
-                               "Move  – layer turns count too\n"
+                               "Move – layer turns count too\n"
                                "Angle – layer turns are weighted by angle amount");
     // (pill objectName set inside makeRadioRow)
 
@@ -1033,11 +1033,12 @@ void MainWindow::buildUI()
     spnSuboptimal->setObjectName("spnSuboptimal");
     spnSuboptimal->setRange(0, 9);
     spnSuboptimal->setValue(0);
-    spnSuboptimal->setToolTip("Extra moves beyond optimal to *also* find (0 = optimal only).");
+    spnSuboptimal->setToolTip("Extra moves beyond optimal to ALSO find (0 = optimal only).");
 
     lblSuboptLabel = new QLabel("+suboptimal:");
     lblSuboptLabel->setObjectName("lblSuboptLabel");
     lblSuboptLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(Theme::textSecondary()));
+    lblSuboptLabel->setToolTip(spnSuboptimal->toolTip());
 
     chkDepths = new TightCheckBox("Specific depths:");
     chkDepths->setObjectName("chkDepths");
@@ -1061,9 +1062,9 @@ void MainWindow::buildUI()
 
     m_twoGenRadioRow = makeRadioRow("2 Gen", {"2 Gen", "Pseudo 2 Gen", "None"}, 2, m_twoGenGroup, "twoGenRadioRow", "twoGenPill");
     QWidget *twoGenRadioRow = m_twoGenRadioRow;
-    twoGenRadioRow->setToolTip("2 Gen         \342\200\223 restrict to top-layer turns and slices only\n"
-                               "Pseudo 2 Gen  \342\200\223 restrict bottom-layer turns to \302\2611 only\n"
-                               "None          \342\200\223 no 2-gen restriction");
+    twoGenRadioRow->setToolTip("2 Gen \342\200\223 restrict to top-layer turns and slices only\n"
+                               "Pseudo 2 Gen \342\200\223 restrict bottom-layer turns to \302\2611 only\n"
+                               "None \342\200\223 no 2-gen restriction");
 
     chkCubeshape = new TightCheckBox("Stay in cubeshape");
     chkCubeshape->setObjectName("chkCubeshape");
@@ -1081,21 +1082,21 @@ void MainWindow::buildUI()
                                    {"Both", "Top", "Bottom", "None"}, 3, m_angleGroup, "angleRadioRow", "anglePill");
     QWidget *angleRadioRow = m_angleRadioRow;
     angleRadioRow->setToolTip("Lock the pre-ABF angle move to ±1 or 0.\n"
-                              "Both   – restricts top and bottom\n"
-                              "Top    – restricts top layer only\n"
+                              "Both – restricts top and bottom\n"
+                              "Top – restricts top layer only\n"
                               "Bottom – restricts bottom layer only\n"
-                              "None   – no restriction");
+                              "None – no restriction");
 
     m_normalizeAbfRow = makeRadioRow("Normalize ABF",
                                      {"Both", "PreABF", "PostABF", "None"}, 3, m_normalizeAbfGroup, "normalizeAbfRow", "normalizeAbfPill");
     m_normalizeAbfRow->setEnabled(true);
     QWidget *normalizeAbfRow = m_normalizeAbfRow;
     // TODO: update this tooltip text with a precise description of what normalizing does
-    normalizeAbfRow->setToolTip("Control which AUF moves are normalized in the output. (e.g. 3-1 → 0-1)\n"
-                                "PreABF  – normalize the move before the first slice\n"
+    normalizeAbfRow->setToolTip("Control which ABF moves are normalized in the output. (e.g. 3-1 → 0-1, 43 → 10)\n"
+                                "PreABF – normalize the move before the first slice\n"
                                 "PostABF – normalize the move after the last slice\n"
-                                "Both    – normalize both ends\n"
-                                "None    – no normalization");
+                                "Both – normalize both pre- and post-ABF\n"
+                                "None – no normalization");
 
     chkMaxX = new TightCheckBox("Max top turn:");
     chkMaxX->setObjectName("chkMaxX");
@@ -1660,7 +1661,7 @@ void MainWindow::buildUI()
     btnFavorites = new QPushButton("♥", outputWrapper);
     btnFavorites->setObjectName("btnFavorites");
     btnFavorites->setFixedSize(22, 22);
-    btnFavorites->setToolTip("Favorites bin");
+    btnFavorites->setToolTip("Open the favorites bin");
     btnFavorites->installEventFilter(this);
     {
         auto *e = new QGraphicsOpacityEffect(btnFavorites);
@@ -4261,7 +4262,7 @@ void MainWindow::showSettingsModal()
     chkSmart->setChecked(m_smartKarn);
     chkSmart->setEnabled(!solverRunning);
     chkSmart->setToolTip("When 'Karnotation output' is on, use cubeshape-aware karnify.\n"
-                         "i.e. don't karnify less obvious karns, like T, when out of CS.");
+                         "i.e. don't karnify less obvious karns, like \"T\", when out of CS.");
     chkSmart->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
     connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked)
             {
@@ -4315,7 +4316,7 @@ void MainWindow::showSettingsModal()
         } });
     lay->addWidget(chkAbid);
 
-    QCheckBox *chkIgnoreTrans = new QCheckBox("Ignore move equivalences (-x)");
+    QCheckBox *chkIgnoreTrans = new QCheckBox("Ignore move equivalences");
     chkIgnoreTrans->setEnabled(!solverRunning);
     chkIgnoreTrans->setToolTip("REALLY generate all possible algs - with all the y2 possibilities and things.\n"
                                "Only useful if you don't anticipate a lot of algs initially.\n"
@@ -4333,7 +4334,7 @@ void MainWindow::showSettingsModal()
 
     QCheckBox *chkDebug = new QCheckBox("Debug output");
     chkDebug->setEnabled(!solverRunning);
-    chkDebug->setToolTip("Prepend [DEBUG] lines to the terminal showing internal state:\n"
+    chkDebug->setToolTip("Show [DEBUG] lines in the terminal showing internal states:\n"
                          "solver arguments, injected position, table view variables,\n"
                          "and normalizeAbf transforms.");
     chkDebug->setChecked(m_debugOutput);
@@ -4794,18 +4795,18 @@ void MainWindow::showHowToUseModal()
                       "Use the mode button (to the left of the input) to switch between three modes: "
                       "<b>Scram</b> (applies moves forward as a scramble), "
                       "<b>Alg</b> (inverts before applying, useful for testing algs), and "
-                      "<b>Pos</b> (interprets the input as a raw position string).<br><br>"
+                      "<b>Pos</b> (interprets the input as a string of the raw state).<br><br>"
                       "<b style='color:%1;font-size:13px;'>Favorites</b><br>"
                       "Algs can be saved to bins for later reference. "
-                      "Right-click an alg in the terminal, or click any row in the table, to open a context menu with two options:<br>"
-                      "• <b>⧉ Copy alg</b> — copies the alg text (without the move-count brackets).<br>"
-                      "• <b>♥ Add to Favorites Bin</b> — saves the alg to a bin for the current solve configuration.<br>"
-                      "Bins are keyed by configuration (position + flags), so algs from the same setup always land in the same bin regardless of when they were added. "
-                      "Click the <b>♥</b> button (visible in the terminal area) to open the Favorites modal, where you can:<br>"
+                      "Right-click a generated alg to:<br>"
+                      "• <b>⧉ Copy alg</b> — copies the alg itself (without the move-count brackets).<br>"
+                      "• <b>♥ Add to Favorites Bin</b> — saves the alg to a bin associated with the current solve configurations.<br>"
+                      "Bins are identified by their configurations, so algs from the same setup always land in the same bin regardless of when they were added. "
+                      "Click the <b>♥</b> button (visible in the terminal area) to open the Favorites Bin, where you can:<br>"
                       "• Click a <b>bin title</b> to re-apply that configuration and clear the terminal.<br>"
                       "• Use <b>✏</b> to rename a bin, <b>⧉</b> to copy all its algs, or <b>🗑</b> to delete the bin entirely.<br>"
-                      "• Click <b>✕</b> next to any alg to remove just that entry.<br>"
-                      "Favorited algs are stored as displayed (including notation style) and persist between sessions.<br><br>"
+                      "• Click <b>✕</b> next to any alg to remove it.<br>"
+                      "Favorited algs persist between sessions, unless you delete them.<br><br>"
                       "<b style='color:%1;font-size:13px;'>Options</b><br>"
                       "Hover over any option to read its description. Quick reference:<br>"
                       "• <b>Metric</b>: how move length is counted — <b>Slice</b> (only slices), <b>Move</b> (layer turns too), or <b>Angle</b>.<br>"
@@ -4816,17 +4817,16 @@ void MainWindow::showHowToUseModal()
                       "• <b>2 Gen / Pseudo 2 Gen</b>: restrict moves to top-layer turns and slices (or a pseudo variant).<br>"
                       "• <b>Stay in cubeshape</b>: restrict to algs that keep the puzzle in cubeshape throughout.<br>"
                       "• <b>Karnotation output</b>: display solutions in karn instead of WCA notation.<br>"
-                      "• <b>Lock layer angle on pre-ABF</b>: constrain the pre-AUF move to ±1 or 0.<br>"
-                      "• <b>Normalize ABF</b>: simplify AUF moves in the output (e.g. 3,-1 → 0,-1).<br>"
+                      "• <b>Lock layer angle on pre-ABF</b>: constrain the pre-ABF move to ±1 or 0 on either/both layers.<br>"
+                      "• <b>Normalize ABF</b>: simplify ABF moves in the output (e.g. 3-1 → 0-1, 43 → 10).<br>"
                       "• <b>Max top / bottom / total turns</b>: cap how large layer turns can be.<br><br>"
                       "<b style='color:%1;font-size:13px;'>Output</b><br>"
                       "Solutions appear in the terminal as they are found. Once algs are present, several buttons appear in the corner of the terminal area:<br>"
                       "• <b>⧉</b> — copy all algs in the terminal to the clipboard.<br>"
+                      "• <b>♥</b>"
                       "• <b>⊞</b> — switch between terminal view and table view.<br>"
                       "• <b>⤢</b> — expand the terminal to full screen.<br>"
-                      "In table view, clicking any row opens the context menu (copy alg or add to favorites). "
-                      "In terminal view, right-click an alg line for the same menu.<br>"
-                      "If <b>Stay in cubeshape</b> was active, a <b>Roughly rank algs by ergonomics</b> button appears below the terminal — click it to sort algs by an estimated speed score.<br>")
+                      "If <b>Stay in cubeshape</b> was active, algs will be roughly sorted by their <b>ergonomics</b>. The numbers are relative and for reference only.<br>")
                       .arg(textPrimary, textCyan));
 
     sa->setWidget(body);
