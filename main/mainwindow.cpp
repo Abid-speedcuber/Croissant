@@ -161,11 +161,11 @@ private:
 
         m_dismissTimer = new QTimer(this);
         m_dismissTimer->setSingleShot(true);
-        connect(m_dismissTimer, &QTimer::timeout, this, [this] {
+        connect(m_dismissTimer, &QTimer::timeout, this, [this]
+                {
             m_currentText.clear();
             m_effect->setOpacity(0.0);
-            hide();
-        });
+            hide(); });
 
         hide();
     }
@@ -200,7 +200,11 @@ private:
         // Same text already visible (or grace-pending with same text) — just reposition
         if ((isVisible() || gracePending) && m_currentText == text)
         {
-            if (!isVisible()) { m_effect->setOpacity(1.0); show(); }
+            if (!isVisible())
+            {
+                m_effect->setOpacity(1.0);
+                show();
+            }
             showNow();
             return;
         }
@@ -218,10 +222,16 @@ private:
 
     void dismissImpl()
     {
-        m_hoverTimer->stop();
         m_closeTimer->stop();
         if (!isVisible())
+        {
+            // Don't stop the hover timer here. A stray dismiss from scene/viewport
+            // hover processing fires immediately after arm() for WA_Hover widgets
+            // (e.g. buttons) and would kill the pending timer. showNow() validates
+            // the cursor position before actually showing anything.
             return;
+        }
+        m_hoverTimer->stop();
         stopAnim();
         // Short grace period: if arm() fires within this window the tooltip
         // updates instantly without flickering through a hidden state
@@ -243,6 +253,11 @@ private:
 
     void showNow()
     {
+        // If the cursor moved more than ~40px from where arm() last fired, the
+        // user left the tooltip widget before the timer fired — skip showing.
+        if ((QCursor::pos() - m_pendingPos).manhattanLength() > 40)
+            return;
+
         m_currentText = m_pendingText;
         applyThemeStyle();
         m_label->setText(m_currentText);
@@ -263,7 +278,7 @@ private:
             x = cur.x() - width() - 4;
 
         // Final clamp so it always stays inside the window
-        x = qBound(4, x, win->width()  - width()  - 4);
+        x = qBound(4, x, win->width() - width() - 4);
         y = qBound(4, y, win->height() - height() - 4);
 
         move(x, y);
@@ -451,7 +466,8 @@ void SolverWorker::run()
 // -------------------------------------------------------
 // MainWindow
 // -------------------------------------------------------
-class AlgBlockData : public QTextBlockUserData {
+class AlgBlockData : public QTextBlockUserData
+{
 public:
     QString rawLine;
     explicit AlgBlockData(const QString &r) : rawLine(r) {}
@@ -1557,28 +1573,44 @@ void MainWindow::buildUI()
     btnExpand->setFixedSize(22, 22);
     btnExpand->setToolTip("Expand terminal");
     btnExpand->installEventFilter(this);
-    { auto *e = new QGraphicsOpacityEffect(btnExpand); e->setOpacity(1.0); btnExpand->setGraphicsEffect(e); }
+    {
+        auto *e = new QGraphicsOpacityEffect(btnExpand);
+        e->setOpacity(1.0);
+        btnExpand->setGraphicsEffect(e);
+    }
 
     btnCopyTerminal = new QPushButton("⧉", outputWrapper);
     btnCopyTerminal->setObjectName("btnCopyTerminal");
     btnCopyTerminal->setFixedSize(22, 22);
     btnCopyTerminal->setToolTip("Copy all algs in terminal");
     btnCopyTerminal->installEventFilter(this);
-    { auto *e = new QGraphicsOpacityEffect(btnCopyTerminal); e->setOpacity(1.0); btnCopyTerminal->setGraphicsEffect(e); }
+    {
+        auto *e = new QGraphicsOpacityEffect(btnCopyTerminal);
+        e->setOpacity(1.0);
+        btnCopyTerminal->setGraphicsEffect(e);
+    }
 
     btnFavorites = new QPushButton("♥", outputWrapper);
     btnFavorites->setObjectName("btnFavorites");
     btnFavorites->setFixedSize(22, 22);
     btnFavorites->setToolTip("Favorites bin");
     btnFavorites->installEventFilter(this);
-    { auto *e = new QGraphicsOpacityEffect(btnFavorites); e->setOpacity(1.0); btnFavorites->setGraphicsEffect(e); }
+    {
+        auto *e = new QGraphicsOpacityEffect(btnFavorites);
+        e->setOpacity(1.0);
+        btnFavorites->setGraphicsEffect(e);
+    }
 
     btnTableMode = new QPushButton("⊞", outputWrapper);
     btnTableMode->setObjectName("btnTableMode");
     btnTableMode->setFixedSize(22, 22);
     btnTableMode->setToolTip("Switch to table view");
     btnTableMode->installEventFilter(this);
-    { auto *e = new QGraphicsOpacityEffect(btnTableMode); e->setOpacity(1.0); btnTableMode->setGraphicsEffect(e); }
+    {
+        auto *e = new QGraphicsOpacityEffect(btnTableMode);
+        e->setOpacity(1.0);
+        btnTableMode->setGraphicsEffect(e);
+    }
 
     btnScrollToBottom = new QPushButton("↓", outputWrapper);
     btnScrollToBottom->setObjectName("btnScrollToBottom");
@@ -1596,9 +1628,8 @@ void MainWindow::buildUI()
     // Scrolling (wheel events) does not reset this; only actual mouse movement does.
     m_outputIdleTimer = new QTimer(this);
     m_outputIdleTimer->setSingleShot(true);
-    connect(m_outputIdleTimer, &QTimer::timeout, this, [this]() {
-        setOutputBtnsOpacity(0.15, 400);
-    });
+    connect(m_outputIdleTimer, &QTimer::timeout, this, [this]()
+            { setOutputBtnsOpacity(0.15, 400); });
 
     // Mouse tracking so we receive QEvent::MouseMove without a button held down
     outputWrapper->setMouseTracking(true);
@@ -2256,16 +2287,21 @@ void MainWindow::setOutputBtnsOpacity(qreal target, int durationMs)
     m_outputBtnsFullOpacity = (target >= 1.0 - 0.01);
     QPushButton *btns[4] = {btnCopyTerminal, btnFavorites, btnTableMode, btnExpand};
 
-    for (auto *btn : btns) {
-        if (!btn) continue;
+    for (auto *btn : btns)
+    {
+        if (!btn)
+            continue;
         auto *eff = qobject_cast<QGraphicsOpacityEffect *>(btn->graphicsEffect());
-        if (!eff) continue;
+        if (!eff)
+            continue;
 
         // Stop any running animation on this effect
         for (auto *a : btn->findChildren<QPropertyAnimation *>())
-            if (a->targetObject() == eff) a->stop();
+            if (a->targetObject() == eff)
+                a->stop();
 
-        if (target >= 1.0 - 0.01) {
+        if (target >= 1.0 - 0.01)
+        {
             // Full opacity: disable the effect so the button uses the normal paint
             // path.  An enabled effect at 1.0 produces an invisible compositing glitch.
             eff->setEnabled(false);
@@ -2274,15 +2310,21 @@ void MainWindow::setOutputBtnsOpacity(qreal target, int durationMs)
 
         // Fading: enable the effect if it is currently disabled.  Start at 0.99
         // (not 1.0) so the very first rendered frame is never at the broken opacity.
-        if (!eff->isEnabled()) {
+        if (!eff->isEnabled())
+        {
             eff->setOpacity(0.99);
             eff->setEnabled(true);
         }
 
         qreal startOpacity = eff->opacity();
-        if (qAbs(startOpacity - target) < 0.01) continue;
+        if (qAbs(startOpacity - target) < 0.01)
+            continue;
 
-        if (durationMs <= 0) { eff->setOpacity(target); continue; }
+        if (durationMs <= 0)
+        {
+            eff->setOpacity(target);
+            continue;
+        }
 
         auto *anim = new QPropertyAnimation(eff, "opacity", btn);
         anim->setDuration(durationMs);
@@ -2436,9 +2478,12 @@ static QString injectSliceIndicatorDisplay(const QString &line, const QString &s
     // Order matters: / and \ are consumed by karnify (split), but | survives
     // and will cause a double injection if we search for space first.
     int p = algPart.indexOf('/');
-    if (p < 0) p = algPart.indexOf('\\');
-    if (p < 0) p = algPart.indexOf('|');
-    if (p < 0) p = algPart.indexOf(' ');
+    if (p < 0)
+        p = algPart.indexOf('\\');
+    if (p < 0)
+        p = algPart.indexOf('|');
+    if (p < 0)
+        p = algPart.indexOf(' ');
     if (p < 0)
         return line; // single-move alg — nowhere to inject
 
@@ -2584,8 +2629,9 @@ void MainWindow::onSolverLine(QString line)
         btnTableMode->setVisible(true);
         // Start idle-fade timer on first reveal; restores to full if a prior solve
         // had left the buttons faded.
-        setOutputBtnsOpacity(1.0, 0);   // instant snap to full on new results
-        if (m_outputIdleTimer) m_outputIdleTimer->start(1500);
+        setOutputBtnsOpacity(1.0, 0); // instant snap to full on new results
+        if (m_outputIdleTimer)
+            m_outputIdleTimer->start(1500);
         {
             bool isAlt = (m_solutionLines.size() % 2 == 0);
             QString col = isAlt ? Theme::solutionAltLight() : Theme::textSolution();
@@ -4273,14 +4319,14 @@ void MainWindow::showSettingsModal()
 void MainWindow::showFavoritesModal()
 {
     QWidget *central = this->centralWidget();
-    QString modalBg      = Theme::primaryBg();
-    QString modalBorder  = Theme::borderGroup();
-    QString textPrimary  = Theme::textPrimary();
-    QString textMuted    = Theme::textMuted();
-    QString textSol      = Theme::textSolution();
-    QString scrollBg     = Theme::scrollbarBg();
+    QString modalBg = Theme::primaryBg();
+    QString modalBorder = Theme::borderGroup();
+    QString textPrimary = Theme::textPrimary();
+    QString textMuted = Theme::textMuted();
+    QString textSol = Theme::textSolution();
+    QString scrollBg = Theme::scrollbarBg();
     QString scrollHandle = Theme::scrollbarHandle();
-    QString hoverColor   = Theme::hoverBg();
+    QString hoverColor = Theme::hoverBg();
 
     QWidget *overlay = new QWidget(central);
     overlay->setGeometry(central->rect());
@@ -4295,8 +4341,8 @@ void MainWindow::showFavoritesModal()
     card->setObjectName("favoritesCard");
     card->setFixedSize(cardW, cardH);
     card->setStyleSheet(QString(
-        "QWidget#favoritesCard { background:%1; border:1px solid %2; border-radius:10px; }")
-        .arg(modalBg, modalBorder));
+                            "QWidget#favoritesCard { background:%1; border:1px solid %2; border-radius:10px; }")
+                            .arg(modalBg, modalBorder));
 
     QVBoxLayout *cardLay = new QVBoxLayout(card);
     cardLay->setContentsMargins(24, 20, 24, 20);
@@ -4311,11 +4357,11 @@ void MainWindow::showFavoritesModal()
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setStyleSheet(QString(
-        "QScrollArea { background: transparent; border: none; }"
-        "QScrollBar:vertical { background:%1; width:6px; border-radius:3px; }"
-        "QScrollBar::handle:vertical { background:%2; border-radius:3px; min-height:20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
-        .arg(scrollBg, scrollHandle));
+                              "QScrollArea { background: transparent; border: none; }"
+                              "QScrollBar:vertical { background:%1; width:6px; border-radius:3px; }"
+                              "QScrollBar::handle:vertical { background:%2; border-radius:3px; min-height:20px; }"
+                              "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                              .arg(scrollBg, scrollHandle));
     cardLay->addWidget(scroll, 1);
 
     QWidget *scrollContent = new QWidget();
@@ -4326,14 +4372,16 @@ void MainWindow::showFavoritesModal()
     binsLay->addStretch(1);
     scroll->setWidget(scrollContent);
 
-    QString binBg     = QString("rgba(255,255,255,12)");
+    QString binBg = QString("rgba(255,255,255,12)");
     QString binBorder = modalBorder;
 
     // Shared button stylesheet snippet for title-row icon buttons
-    auto iconBtnStyle = [&](const QString &normalColor, const QString &hoverC) {
+    auto iconBtnStyle = [&](const QString &normalColor, const QString &hoverC)
+    {
         return QString(
-            "QPushButton { background:transparent; border:none; color:%1; font-size:13px; padding:0; }"
-            "QPushButton:hover { color:%2; }").arg(normalColor, hoverC);
+                   "QPushButton { background:transparent; border:none; color:%1; font-size:13px; padding:0; }"
+                   "QPushButton:hover { color:%2; }")
+            .arg(normalColor, hoverC);
     };
 
     QLabel *emptyLabel = new QLabel("No favorites yet.\nRight-click an alg in terminal or table view to add one.");
@@ -4342,15 +4390,18 @@ void MainWindow::showFavoritesModal()
     emptyLabel->setWordWrap(true);
     binsLay->insertWidget(0, emptyLabel);
 
-    auto addBinWidget = [=, this](const QString &binKey) {
+    auto addBinWidget = [=, this](const QString &binKey)
+    {
         const QStringList algs = m_favorites.value(binKey);
         const QString displayName = m_favNames.value(binKey, binKey);
 
         // Per-bin font: if any alg contains Abid PUA chars, use the Abid font for all
-        const bool binNeedsAbid = !OutputConverter::s_abidFontFamily.isEmpty() && [&]() {
+        const bool binNeedsAbid = !OutputConverter::s_abidFontFamily.isEmpty() && [&]()
+        {
             for (const QString &a : algs)
                 for (QChar c : a)
-                    if (c.unicode() >= 0xe000) return true;
+                    if (c.unicode() >= 0xe000)
+                        return true;
             return false;
         }();
         QFont binAlgFont;
@@ -4362,8 +4413,9 @@ void MainWindow::showFavoritesModal()
         QFrame *binFrame = new QFrame();
         binFrame->setObjectName("binFrame");
         binFrame->setStyleSheet(QString(
-            "QFrame#binFrame { background:%1; border:1px solid %2; border-radius:8px; }"
-            "QFrame#binFrame * { background:transparent; }").arg(binBg, binBorder));
+                                    "QFrame#binFrame { background:%1; border:1px solid %2; border-radius:8px; }"
+                                    "QFrame#binFrame * { background:transparent; }")
+                                    .arg(binBg, binBorder));
 
         QVBoxLayout *binLay = new QVBoxLayout(binFrame);
         binLay->setContentsMargins(12, 10, 12, 10);
@@ -4376,12 +4428,12 @@ void MainWindow::showFavoritesModal()
         QLabel *keyLabel = new QLabel(displayName);
         keyLabel->setWordWrap(true);
         keyLabel->setToolTip(hasCustomName
-            ? QString("Apply the configurations from this solve and clear terminal.\n\nConfig: %1").arg(binKey)
-            : "Apply the configurations from this solve and clear terminal.");
+                                 ? QString("Apply the configurations from this solve and clear terminal.\n\nConfig: %1").arg(binKey)
+                                 : "Apply the configurations from this solve and clear terminal.");
         keyLabel->setCursor(Qt::PointingHandCursor);
         keyLabel->setStyleSheet(QString(
-            "font-size:12px;font-weight:bold;color:%1;%2")
-            .arg(textPrimary, hasCustomName ? "" : "font-family:monospace;"));
+                                    "font-size:12px;font-weight:bold;color:%1;%2")
+                                    .arg(textPrimary, hasCustomName ? "" : "font-family:monospace;"));
 
         // Rename button (✏)
         QPushButton *renameBinBtn = new QPushButton("✏");
@@ -4435,10 +4487,10 @@ void MainWindow::showFavoritesModal()
             algsEdit->setWordWrapMode(QTextOption::NoWrap);
             algsEdit->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
             algsEdit->setStyleSheet(QString(
-                "QPlainTextEdit { background:transparent; color:%1; border:none; padding:0; "
-                "selection-background-color:%2; font-family:%3; }")
-                .arg(textSol, hoverColor,
-                     binNeedsAbid ? OutputConverter::s_abidFontFamily : QString("monospace")));
+                                        "QPlainTextEdit { background:transparent; color:%1; border:none; padding:0; "
+                                        "selection-background-color:%2; font-family:%3; }")
+                                        .arg(textSol, hoverColor,
+                                             binNeedsAbid ? OutputConverter::s_abidFontFamily : QString("monospace")));
             algsEdit->setFixedHeight(algs.size() * binAlgLineH + 6);
 
             QVBoxLayout *delLay = new QVBoxLayout();
@@ -4454,14 +4506,14 @@ void MainWindow::showFavoritesModal()
                 delAlg->setStyleSheet(iconBtnStyle(textMuted, "#ff6666"));
                 delLay->addWidget(delAlg);
 
-                connect(delAlg, &QPushButton::clicked, this, [=, this]() {
+                connect(delAlg, &QPushButton::clicked, this, [=, this]()
+                        {
                     m_favorites[binKey].removeAll(alg);
                     if (m_favorites[binKey].isEmpty())
                         m_favorites.remove(binKey);
                     saveFavorites();
                     overlay->deleteLater();
-                    showFavoritesModal();
-                });
+                    showFavoritesModal(); });
             }
             delLay->addStretch();
 
@@ -4473,19 +4525,19 @@ void MainWindow::showFavoritesModal()
         binsLay->insertWidget(binsLay->count() - 1, binFrame);
 
         // ── Connections ────────────────────────────────────────────────────────
-        connect(copyBinBtn, &QPushButton::clicked, this, [algs]() {
-            QApplication::clipboard()->setText(algs.join('\n'));
-        });
+        connect(copyBinBtn, &QPushButton::clicked, this, [algs]()
+                { QApplication::clipboard()->setText(algs.join('\n')); });
 
-        connect(delBinBtn, &QPushButton::clicked, this, [=, this]() {
+        connect(delBinBtn, &QPushButton::clicked, this, [=, this]()
+                {
             m_favorites.remove(binKey);
             m_favNames.remove(binKey);
             saveFavorites();
             overlay->deleteLater();
-            showFavoritesModal();
-        });
+            showFavoritesModal(); });
 
-        connect(renameBinBtn, &QPushButton::clicked, this, [=, this]() {
+        connect(renameBinBtn, &QPushButton::clicked, this, [=, this]()
+                {
             QDialog dlg(this);
             dlg.setWindowTitle("Rename Bin");
             dlg.setMinimumWidth(420);
@@ -4523,24 +4575,28 @@ void MainWindow::showFavoritesModal()
                 saveFavorites();
                 overlay->deleteLater();
                 showFavoritesModal();
-            }
-        });
+            } });
 
         // Click title label to apply config
-        struct TitleClick : public QObject {
+        struct TitleClick : public QObject
+        {
             QLabel *lbl;
             std::function<void()> fn;
             TitleClick(QLabel *l, std::function<void()> f) : QObject(l), lbl(l), fn(f) {}
-            bool eventFilter(QObject *w, QEvent *e) override {
+            bool eventFilter(QObject *w, QEvent *e) override
+            {
                 if (e->type() == QEvent::MouseButtonPress && w == lbl)
-                { fn(); return true; }
+                {
+                    fn();
+                    return true;
+                }
                 return false;
             }
         };
-        auto *tc = new TitleClick(keyLabel, [=, this]() {
+        auto *tc = new TitleClick(keyLabel, [=, this]()
+                                  {
             overlay->deleteLater();
-            applyRunConfig(binKey);
-        });
+            applyRunConfig(binKey); });
         keyLabel->installEventFilter(tc);
     };
 
@@ -4558,19 +4614,27 @@ void MainWindow::showFavoritesModal()
     card->show();
     card->adjustSize();
 
-    auto center = [overlay, card, cardW, cardH]() {
+    auto center = [overlay, card, cardW, cardH]()
+    {
         overlay->setGeometry(overlay->parentWidget()->rect());
         card->move((overlay->width() - cardW) / 2, (overlay->height() - cardH) / 2);
     };
     center();
     card->raise();
 
-    struct F : public QObject {
-        QWidget *overlay; QWidget *card; std::function<void()> fn;
+    struct F : public QObject
+    {
+        QWidget *overlay;
+        QWidget *card;
+        std::function<void()> fn;
         F(QWidget *o, QWidget *c, std::function<void()> f) : QObject(o), overlay(o), card(c), fn(f) {}
-        bool eventFilter(QObject *w, QEvent *e) override {
+        bool eventFilter(QObject *w, QEvent *e) override
+        {
             if (e->type() == QEvent::Resize && w == overlay->parentWidget())
-            { fn(); return false; }
+            {
+                fn();
+                return false;
+            }
             if (e->type() == QEvent::MouseButtonPress && w == overlay)
             {
                 if (!card->geometry().contains(static_cast<QMouseEvent *>(e)->pos()))
@@ -4783,13 +4847,50 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             // This makes radio-row containers and spinboxes work without special-casing.
             QWidget *w = qobject_cast<QWidget *>(watched);
             QString tip;
-            while (w && tip.isEmpty()) {
+            while (w && tip.isEmpty())
+            {
                 tip = w->toolTip();
                 w = w->parentWidget();
             }
             if (!tip.isEmpty())
                 FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
             else
+                FadingTooltip::dismiss(m_zoomView);
+        }
+    }
+
+    // ── Tooltip arm/dismiss for hover-only widgets (QPushButton etc.) ─────────
+    // Buttons set WA_Hover and receive HoverEnter/HoverLeave instead of MouseMove.
+    // HoverEnter fires exactly once per entry — no double-dispatch race with viewport.
+    if (event->type() == QEvent::HoverEnter)
+    {
+        if (!qobject_cast<QCheckBox *>(watched))
+        {
+            QWidget *w = qobject_cast<QWidget *>(watched);
+            QString tip;
+            while (w && tip.isEmpty())
+            {
+                tip = w->toolTip();
+                w = w->parentWidget();
+            }
+            if (!tip.isEmpty())
+                FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
+        }
+    }
+    if (event->type() == QEvent::HoverLeave)
+    {
+        if (!qobject_cast<QCheckBox *>(watched))
+        {
+            QWidget *w = qobject_cast<QWidget *>(watched);
+            QString tip;
+            while (w && tip.isEmpty())
+            {
+                tip = w->toolTip();
+                w = w->parentWidget();
+            }
+            // Only dismiss when leaving a widget that actually owned the tooltip,
+            // so viewport HoverLeave (no tooltip) never spuriously dismisses.
+            if (!tip.isEmpty())
                 FadingTooltip::dismiss(m_zoomView);
         }
     }
@@ -4859,33 +4960,47 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // through the normal paint path.
     // Qt delivers Enter to the newly-entered widget BEFORE Leave to the old one,
     // so underMouse() is already accurate when any Leave handler runs.
-    auto anyBtnHovered = [this]() {
+    auto anyBtnHovered = [this]()
+    {
         return btnCopyTerminal->underMouse() || btnFavorites->underMouse() || btnTableMode->underMouse() || btnExpand->underMouse();
     };
-    if (event->type() == QEvent::Enter) {
-        if (watched == btnCopyTerminal || watched == btnFavorites || watched == btnTableMode || watched == btnExpand) {
-            if (m_outputIdleTimer) m_outputIdleTimer->stop();
+    if (event->type() == QEvent::Enter)
+    {
+        if (watched == btnCopyTerminal || watched == btnFavorites || watched == btnTableMode || watched == btnExpand)
+        {
+            if (m_outputIdleTimer)
+                m_outputIdleTimer->stop();
             if (!m_outputBtnsFullOpacity)
                 setOutputBtnsOpacity(1.0, 0);
             return false;
         }
     }
-    if (event->type() == QEvent::Leave) {
-        if (watched == btnCopyTerminal || watched == btnFavorites || watched == btnTableMode || watched == btnExpand) {
-            if (anyBtnHovered()) return false; // moved to another button
+    if (event->type() == QEvent::Leave)
+    {
+        if (watched == btnCopyTerminal || watched == btnFavorites || watched == btnTableMode || watched == btnExpand)
+        {
+            if (anyBtnHovered())
+                return false; // moved to another button
             // All buttons left — resume idle timer if still in the output area,
             // or start fading now if the cursor left the area entirely.
             if (m_outputWrapper && m_outputWrapper->rect().contains(
-                    m_outputWrapper->mapFromGlobal(QCursor::pos()))) {
-                if (m_outputIdleTimer) m_outputIdleTimer->start(1500);
-            } else {
-                if (m_outputIdleTimer) m_outputIdleTimer->stop();
+                                       m_outputWrapper->mapFromGlobal(QCursor::pos())))
+            {
+                if (m_outputIdleTimer)
+                    m_outputIdleTimer->start(1500);
+            }
+            else
+            {
+                if (m_outputIdleTimer)
+                    m_outputIdleTimer->stop();
                 setOutputBtnsOpacity(0.15, 400);
             }
             return false;
         }
-        if (watched == m_outputWrapper && !anyBtnHovered()) {
-            if (m_outputIdleTimer) m_outputIdleTimer->stop();
+        if (watched == m_outputWrapper && !anyBtnHovered())
+        {
+            if (m_outputIdleTimer)
+                m_outputIdleTimer->stop();
             setOutputBtnsOpacity(0.15, 400);
             return false;
         }
@@ -4894,8 +5009,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── Mouse movement inside output wrapper — reset idle-fade timer ──────────
     // QEvent::Wheel is a distinct event type, so scroll-wheel activity never
     // reaches this branch and never reactivates the faded buttons.
-    if (event->type() == QEvent::MouseMove && m_outputWrapper) {
-        if (QWidget *w = qobject_cast<QWidget *>(watched)) {
+    if (event->type() == QEvent::MouseMove && m_outputWrapper)
+    {
+        if (QWidget *w = qobject_cast<QWidget *>(watched))
+        {
             if (w == m_outputWrapper || m_outputWrapper->isAncestorOf(w))
                 onOutputMouseActive();
         }
@@ -5133,20 +5250,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 // -------------------------------------------------------
 void MainWindow::showAlgContextMenu(const QPoint &globalPos, const QString &rawLine)
 {
-    QString menuBg    = Theme::primaryBg();
+    QString menuBg = Theme::primaryBg();
     QString menuBorder = Theme::borderGroup();
-    QString menuText  = Theme::textPrimary();
-    QString menuSel   = Theme::hoverBg();
+    QString menuText = Theme::textPrimary();
+    QString menuSel = Theme::hoverBg();
 
     QMenu menu;
     menu.setStyleSheet(QString(
-        "QMenu { background: %1; border: 1px solid %2; border-radius: 6px; padding: 4px; color: %3; font-size: 12px; }"
-        "QMenu::item { padding: 6px 16px; border-radius: 4px; }"
-        "QMenu::item:selected { background: %4; }")
-        .arg(menuBg, menuBorder, menuText, menuSel));
+                           "QMenu { background: %1; border: 1px solid %2; border-radius: 6px; padding: 4px; color: %3; font-size: 12px; }"
+                           "QMenu::item { padding: 6px 16px; border-radius: 4px; }"
+                           "QMenu::item:selected { background: %4; }")
+                           .arg(menuBg, menuBorder, menuText, menuSel));
 
     QAction *copyAct = menu.addAction("⧉  Copy alg");
-    QAction *favAct  = menu.addAction("♥  Add to Favorites Bin");
+    QAction *favAct = menu.addAction("♥  Add to Favorites Bin");
 
     QAction *chosen = menu.exec(globalPos);
     if (chosen == copyAct)
@@ -5248,10 +5365,21 @@ void MainWindow::applyRunConfig(const QString &key)
     int aVal = 0;
     for (const QString &f : flags)
     {
-        if (f == "-a") { hasA = true; break; }
-        if (f.startsWith("-a") && f.length() > 2) {
-            bool ok; int v = f.mid(2).toInt(&ok);
-            if (ok) { hasA = true; aVal = v; break; }
+        if (f == "-a")
+        {
+            hasA = true;
+            break;
+        }
+        if (f.startsWith("-a") && f.length() > 2)
+        {
+            bool ok;
+            int v = f.mid(2).toInt(&ok);
+            if (ok)
+            {
+                hasA = true;
+                aVal = v;
+                break;
+            }
         }
     }
     chkAllOptimal->setChecked(hasA);
@@ -5265,10 +5393,16 @@ void MainWindow::applyRunConfig(const QString &key)
     QString depStr;
     for (const QString &f : flags)
     {
-        if (f.startsWith("-d") && f.length() > 2) { hasD = true; depStr = f.mid(2); break; }
+        if (f.startsWith("-d") && f.length() > 2)
+        {
+            hasD = true;
+            depStr = f.mid(2);
+            break;
+        }
     }
     chkDepths->setChecked(hasD);
-    if (hasD) txtDepths->setText(depStr);
+    if (hasD)
+        txtDepths->setText(depStr);
 
     // Generator
     chkGenerator->setChecked(flags.contains("-g"));
@@ -5302,13 +5436,24 @@ void MainWindow::applyRunConfig(const QString &key)
     }
 
     // Max limits
-    auto parseLimit = [&](const QString &prefix, QCheckBox *chk, QSpinBox *spn) {
-        bool found = false; int val = 0;
+    auto parseLimit = [&](const QString &prefix, QCheckBox *chk, QSpinBox *spn)
+    {
+        bool found = false;
+        int val = 0;
         for (const QString &f : flags)
             if (f.startsWith(prefix) && f.length() > prefix.length())
-            { bool ok; val = f.mid(prefix.length()).toInt(&ok); if (ok) { found = true; break; } }
+            {
+                bool ok;
+                val = f.mid(prefix.length()).toInt(&ok);
+                if (ok)
+                {
+                    found = true;
+                    break;
+                }
+            }
         chk->setChecked(found);
-        if (found) spn->setValue(val);
+        if (found)
+            spn->setValue(val);
     };
     parseLimit("-X", chkMaxX, spnMaxX);
     parseLimit("-Y", chkMaxY, spnMaxY);
@@ -5324,12 +5469,19 @@ void MainWindow::applyRunConfig(const QString &key)
     cubeWidget->update();
 
     // Clear terminal state
-    m_rawLines.clear(); m_karnLines.clear();
-    m_solutionLines.clear(); m_karnSolutionLines.clear();
-    m_solutionLinesForRating.clear(); m_sliceIndicators.clear();
-    m_rawFinalScores.clear(); m_cachedRatedOrder.clear();
-    m_ratingsValid = false; m_seenSolutions.clear(); m_seenNormalizedAlgs.clear();
-    m_debugBuffer.clear(); m_algAnnLines.clear();
+    m_rawLines.clear();
+    m_karnLines.clear();
+    m_solutionLines.clear();
+    m_karnSolutionLines.clear();
+    m_solutionLinesForRating.clear();
+    m_sliceIndicators.clear();
+    m_rawFinalScores.clear();
+    m_cachedRatedOrder.clear();
+    m_ratingsValid = false;
+    m_seenSolutions.clear();
+    m_seenNormalizedAlgs.clear();
+    m_debugBuffer.clear();
+    m_algAnnLines.clear();
     m_tableVisible = false;
     txtOutput->setVisible(true);
     m_tableContainer->setVisible(false);
