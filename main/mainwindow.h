@@ -217,6 +217,7 @@ private:
     void saveFavorites();
     void loadFavorites();
     QMap<QString, QStringList> m_favorites;
+    QMap<QString, QString>     m_favNames;   // config_key -> custom display name
     QString m_lastRunKey;
     std::function<void()> m_updateLogo;
     QString buildStyleSheet();

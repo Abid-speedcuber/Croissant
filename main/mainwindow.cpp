@@ -36,6 +36,7 @@
 #include <QDialog>
 #include <QShortcut>
 #include <QSettings>
+#include <QPlainTextEdit>
 #include <QDateTime>
 #include <QTextBrowser>
 #include <QString>
@@ -1525,6 +1526,8 @@ void MainWindow::buildUI()
     txtOutput->setReadOnly(true);
     txtOutput->setObjectName("txtOutput");
     txtOutput->setMinimumHeight(120);
+    // Do not set Qt::NoContextMenu here — it redirects ContextMenu events to the
+    // parent before our eventFilter can catch them, breaking right-click entirely.
     txtOutput->document()->setDefaultStyleSheet("div, span { background: transparent !important; }");
 
     btnExpand = new QPushButton("⤢", outputWrapper);
@@ -1534,7 +1537,7 @@ void MainWindow::buildUI()
     btnExpand->installEventFilter(this);
     { auto *e = new QGraphicsOpacityEffect(btnExpand); e->setOpacity(1.0); btnExpand->setGraphicsEffect(e); }
 
-    btnCopyTerminal = new QPushButton("⎘", outputWrapper);
+    btnCopyTerminal = new QPushButton("⧉", outputWrapper);
     btnCopyTerminal->setObjectName("btnCopyTerminal");
     btnCopyTerminal->setFixedSize(22, 22);
     btnCopyTerminal->setToolTip("Copy all algs in terminal");
@@ -1885,9 +1888,8 @@ void MainWindow::rebuildTerminalView()
             blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
             cur.setBlockFormat(blkFmt);
             insertSolLine(cur, line, fmt);
-            // Store the raw (non-karn) line so the context menu can retrieve it
-            if (lineIdx < m_rawLines.size())
-                cur.block().setUserData(new AlgBlockData(m_rawLines[lineIdx]));
+            // Store the displayed line so context menu / favorites gets what is shown
+            cur.block().setUserData(new AlgBlockData(line));
             // Per-alg debug annotation right after the alg
             if (m_debugOutput && solIdx > 0 && solIdx - 1 < m_algAnnLines.size() && !m_algAnnLines[solIdx - 1].isEmpty())
             {
@@ -3129,8 +3131,7 @@ void MainWindow::rebuildTable()
             if (seenTableAlgs.contains(alg))
                 continue;
             seenTableAlgs.insert(alg);
-            QString raw = (idx < m_solutionLines.size()) ? m_solutionLines[idx] : dline;
-            rows.append({alg, mv, sl, ang, score, raw});
+            rows.append({alg, mv, sl, ang, score, dline}); // dline = full display line with brackets
         }
     }
     else
@@ -3145,8 +3146,7 @@ void MainWindow::rebuildTable()
             if (seenTableAlgs.contains(alg))
                 continue;
             seenTableAlgs.insert(alg);
-            QString raw = (di < m_solutionLines.size()) ? m_solutionLines[di] : line;
-            rows.append({alg, mv, sl, ang, 0.0, raw});
+            rows.append({alg, mv, sl, ang, 0.0, line}); // line = full display line with brackets
         }
     }
 
@@ -4258,15 +4258,14 @@ void MainWindow::showSettingsModal()
 void MainWindow::showFavoritesModal()
 {
     QWidget *central = this->centralWidget();
-    QString modalBg     = Theme::primaryBg();
-    QString modalBorder = Theme::borderGroup();
-    QString textPrimary = Theme::textPrimary();
-    QString textMuted   = Theme::textMuted();
-    QString textSol     = Theme::textSolution();
-    QString scrollBg    = Theme::scrollbarBg();
+    QString modalBg      = Theme::primaryBg();
+    QString modalBorder  = Theme::borderGroup();
+    QString textPrimary  = Theme::textPrimary();
+    QString textMuted    = Theme::textMuted();
+    QString textSol      = Theme::textSolution();
+    QString scrollBg     = Theme::scrollbarBg();
     QString scrollHandle = Theme::scrollbarHandle();
-    QString rowA        = Theme::rowAltDark();
-    QString rowB        = Theme::rowAltLight();
+    QString hoverColor   = Theme::hoverBg();
 
     QWidget *overlay = new QWidget(central);
     overlay->setGeometry(central->rect());
@@ -4288,9 +4287,9 @@ void MainWindow::showFavoritesModal()
     cardLay->setContentsMargins(24, 20, 24, 20);
     cardLay->setSpacing(12);
 
-    QLabel *title = new QLabel("Favorites");
-    title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
-    cardLay->addWidget(title);
+    QLabel *titleLbl = new QLabel("Favorites");
+    titleLbl->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
+    cardLay->addWidget(titleLbl);
 
     QScrollArea *scroll = new QScrollArea();
     scroll->setWidgetResizable(true);
@@ -4312,95 +4311,207 @@ void MainWindow::showFavoritesModal()
     binsLay->addStretch(1);
     scroll->setWidget(scrollContent);
 
-    // Bin background slightly lighter/different from card
     QString binBg     = QString("rgba(255,255,255,12)");
     QString binBorder = modalBorder;
 
-    // Label for empty state
+    // Shared button stylesheet snippet for title-row icon buttons
+    auto iconBtnStyle = [&](const QString &normalColor, const QString &hoverC) {
+        return QString(
+            "QPushButton { background:transparent; border:none; color:%1; font-size:13px; padding:0; }"
+            "QPushButton:hover { color:%2; }").arg(normalColor, hoverC);
+    };
+
     QLabel *emptyLabel = new QLabel("No favorites yet.\nRight-click an alg in terminal or table view to add one.");
     emptyLabel->setAlignment(Qt::AlignCenter);
     emptyLabel->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(textMuted));
     emptyLabel->setWordWrap(true);
     binsLay->insertWidget(0, emptyLabel);
 
-    // Helper: build one bin frame and insert before the trailing stretch
     auto addBinWidget = [=, this](const QString &binKey) {
-        const QStringList &algs = m_favorites[binKey];
+        const QStringList algs = m_favorites.value(binKey);
+        const QString displayName = m_favNames.value(binKey, binKey);
+
+        // Per-bin font: if any alg contains Abid PUA chars, use the Abid font for all
+        const bool binNeedsAbid = !OutputConverter::s_abidFontFamily.isEmpty() && [&]() {
+            for (const QString &a : algs)
+                for (QChar c : a)
+                    if (c.unicode() >= 0xe000) return true;
+            return false;
+        }();
+        QFont binAlgFont;
+        binAlgFont.setFamily(binNeedsAbid ? OutputConverter::s_abidFontFamily : QString("monospace"));
+        binAlgFont.setPixelSize(13); // match global QWidget { font-size: 13px }
+        const int binAlgLineH = QFontMetrics(binAlgFont).lineSpacing() + 1;
+        const bool hasCustomName = m_favNames.contains(binKey);
 
         QFrame *binFrame = new QFrame();
+        binFrame->setObjectName("binFrame");
         binFrame->setStyleSheet(QString(
             "QFrame#binFrame { background:%1; border:1px solid %2; border-radius:8px; }"
-            "QFrame#binFrame QLabel { background:transparent; }"
-            "QFrame#binFrame QPushButton { background:transparent; border:none; color:%3; font-size:11px; }"
-            "QFrame#binFrame QPushButton:hover { color:#ff6666; }")
-            .arg(binBg, binBorder, textMuted));
-        binFrame->setObjectName("binFrame");
+            "QFrame#binFrame * { background:transparent; }").arg(binBg, binBorder));
 
         QVBoxLayout *binLay = new QVBoxLayout(binFrame);
         binLay->setContentsMargins(12, 10, 12, 10);
-        binLay->setSpacing(4);
+        binLay->setSpacing(6);
 
+        // ── Title row ──────────────────────────────────────────────────────────
         QHBoxLayout *titleRow = new QHBoxLayout();
-        titleRow->setSpacing(6);
+        titleRow->setSpacing(4);
 
-        QLabel *keyLabel = new QLabel(binKey);
-        keyLabel->setStyleSheet(QString("font-size:12px;font-weight:bold;color:%1;font-family:monospace;background:transparent;").arg(textPrimary));
-        keyLabel->setToolTip("Apply the configurations from this solve and clear terminal.");
+        QLabel *keyLabel = new QLabel(displayName);
+        keyLabel->setWordWrap(true);
+        keyLabel->setToolTip(hasCustomName
+            ? QString("Apply the configurations from this solve and clear terminal.\n\nConfig: %1").arg(binKey)
+            : "Apply the configurations from this solve and clear terminal.");
         keyLabel->setCursor(Qt::PointingHandCursor);
+        keyLabel->setStyleSheet(QString(
+            "font-size:12px;font-weight:bold;color:%1;%2")
+            .arg(textPrimary, hasCustomName ? "" : "font-family:monospace;"));
 
-        QPushButton *delBinBtn = new QPushButton("✕");
-        delBinBtn->setFixedSize(18, 18);
+        // Rename button (✏)
+        QPushButton *renameBinBtn = new QPushButton("✏");
+        renameBinBtn->setFixedSize(20, 20);
+        renameBinBtn->setToolTip("Rename bin");
+        renameBinBtn->setCursor(Qt::PointingHandCursor);
+        renameBinBtn->setStyleSheet(iconBtnStyle(textMuted, textPrimary));
+
+        // Copy-all button (⧉)
+        QPushButton *copyBinBtn = new QPushButton("⧉");
+        copyBinBtn->setFixedSize(20, 20);
+        copyBinBtn->setToolTip("Copy all algs");
+        copyBinBtn->setCursor(Qt::PointingHandCursor);
+        copyBinBtn->setStyleSheet(iconBtnStyle(textMuted, textPrimary));
+
+        // Delete bin button (🗑, red)
+        QPushButton *delBinBtn = new QPushButton("🗑");
+        delBinBtn->setFixedSize(20, 20);
         delBinBtn->setToolTip("Delete this bin");
         delBinBtn->setCursor(Qt::PointingHandCursor);
+        delBinBtn->setStyleSheet(
+            "QPushButton { background:transparent; border:none; color:#bb3333; font-size:13px; padding:0; }"
+            "QPushButton:hover { color:#ff4444; }");
 
         titleRow->addWidget(keyLabel, 1);
+        titleRow->addWidget(renameBinBtn);
+        titleRow->addWidget(copyBinBtn);
         titleRow->addWidget(delBinBtn);
         binLay->addLayout(titleRow);
 
+        // Separator
         QFrame *sep = new QFrame();
         sep->setFrameShape(QFrame::HLine);
-        sep->setStyleSheet(QString("color:%1;background:%1;max-height:1px;border:none;").arg(binBorder));
+        sep->setStyleSheet(QString("background:%1;max-height:1px;border:none;").arg(binBorder));
         binLay->addWidget(sep);
 
-        for (const QString &alg : algs)
+        // ── Algs: wall-of-text QPlainTextEdit + parallel delete buttons ────────
+        if (!algs.isEmpty())
         {
-            QHBoxLayout *algRow = new QHBoxLayout();
-            algRow->setSpacing(6);
+            QHBoxLayout *algsRow = new QHBoxLayout();
+            algsRow->setSpacing(4);
+            algsRow->setContentsMargins(0, 0, 0, 0);
 
-            QLabel *algLabel = new QLabel(alg);
-            algLabel->setStyleSheet(QString("font-size:11px;color:%1;font-family:monospace;background:transparent;").arg(textSol));
-            algLabel->setWordWrap(false);
-            algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            QPlainTextEdit *algsEdit = new QPlainTextEdit(algs.join('\n'));
+            algsEdit->setReadOnly(true);
+            algsEdit->setFont(binAlgFont);
+            algsEdit->setFrameShape(QFrame::NoFrame);
+            algsEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            algsEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            algsEdit->setContextMenuPolicy(Qt::NoContextMenu);
+            algsEdit->setWordWrapMode(QTextOption::NoWrap);
+            algsEdit->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+            algsEdit->setStyleSheet(QString(
+                "QPlainTextEdit { background:transparent; color:%1; border:none; padding:0; "
+                "selection-background-color:%2; font-family:%3; }")
+                .arg(textSol, hoverColor,
+                     binNeedsAbid ? OutputConverter::s_abidFontFamily : QString("monospace")));
+            algsEdit->setFixedHeight(algs.size() * binAlgLineH + 6);
 
-            QPushButton *delAlgBtn = new QPushButton("✕");
-            delAlgBtn->setFixedSize(16, 16);
-            delAlgBtn->setToolTip("Remove from bin");
-            delAlgBtn->setCursor(Qt::PointingHandCursor);
+            QVBoxLayout *delLay = new QVBoxLayout();
+            delLay->setSpacing(0);
+            delLay->setContentsMargins(0, 3, 0, 3);
 
-            algRow->addWidget(algLabel, 1);
-            algRow->addWidget(delAlgBtn);
-            binLay->addLayout(algRow);
+            for (const QString &alg : algs)
+            {
+                QPushButton *delAlg = new QPushButton("✕");
+                delAlg->setFixedSize(14, binAlgLineH);
+                delAlg->setCursor(Qt::PointingHandCursor);
+                delAlg->setToolTip("Remove from bin");
+                delAlg->setStyleSheet(iconBtnStyle(textMuted, "#ff6666"));
+                delLay->addWidget(delAlg);
 
-            QString capturedAlg = alg;
-            connect(delAlgBtn, &QPushButton::clicked, this, [=, this]() mutable {
-                m_favorites[binKey].removeAll(capturedAlg);
-                if (m_favorites[binKey].isEmpty())
-                    m_favorites.remove(binKey);
-                saveFavorites();
-                overlay->deleteLater();
-                showFavoritesModal();
-            });
+                connect(delAlg, &QPushButton::clicked, this, [=, this]() {
+                    m_favorites[binKey].removeAll(alg);
+                    if (m_favorites[binKey].isEmpty())
+                        m_favorites.remove(binKey);
+                    saveFavorites();
+                    overlay->deleteLater();
+                    showFavoritesModal();
+                });
+            }
+            delLay->addStretch();
+
+            algsRow->addWidget(algsEdit, 1);
+            algsRow->addLayout(delLay);
+            binLay->addLayout(algsRow);
         }
 
         binsLay->insertWidget(binsLay->count() - 1, binFrame);
 
-        connect(delBinBtn, &QPushButton::clicked, this, [=, this]() mutable {
+        // ── Connections ────────────────────────────────────────────────────────
+        connect(copyBinBtn, &QPushButton::clicked, this, [algs]() {
+            QApplication::clipboard()->setText(algs.join('\n'));
+        });
+
+        connect(delBinBtn, &QPushButton::clicked, this, [=, this]() {
             m_favorites.remove(binKey);
+            m_favNames.remove(binKey);
             saveFavorites();
             overlay->deleteLater();
             showFavoritesModal();
         });
 
+        connect(renameBinBtn, &QPushButton::clicked, this, [=, this]() {
+            QDialog dlg(this);
+            dlg.setWindowTitle("Rename Bin");
+            dlg.setMinimumWidth(420);
+            dlg.setStyleSheet(QString(
+                "QDialog { background:%1; color:%2; }"
+                "QLabel { color:%2; background:transparent; }"
+                "QPlainTextEdit { background:%3; color:%2; border:1px solid %4; border-radius:4px; padding:4px; }"
+                "QPushButton { background:%3; color:%2; border:1px solid %4; border-radius:4px; padding:4px 12px; }"
+                "QPushButton:hover { background:%5; }")
+                .arg(modalBg, textPrimary, Theme::tertiaryBg(), modalBorder, hoverColor));
+            QVBoxLayout *lay = new QVBoxLayout(&dlg);
+            lay->setSpacing(10);
+            QLabel *hint = new QLabel("Custom display name (leave blank to use the config key):");
+            hint->setWordWrap(true);
+            QPlainTextEdit *edit = new QPlainTextEdit();
+            edit->setPlainText(m_favNames.value(binKey, ""));
+            edit->setFixedHeight(80);
+            QHBoxLayout *btnLay = new QHBoxLayout();
+            QPushButton *ok = new QPushButton("Save");
+            QPushButton *cancel = new QPushButton("Cancel");
+            btnLay->addStretch();
+            btnLay->addWidget(cancel);
+            btnLay->addWidget(ok);
+            lay->addWidget(hint);
+            lay->addWidget(edit);
+            lay->addLayout(btnLay);
+            connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
+            connect(cancel, &QPushButton::clicked, &dlg, &QDialog::reject);
+            if (dlg.exec() == QDialog::Accepted) {
+                QString newName = edit->toPlainText().trimmed();
+                if (newName.isEmpty())
+                    m_favNames.remove(binKey);
+                else
+                    m_favNames[binKey] = newName;
+                saveFavorites();
+                overlay->deleteLater();
+                showFavoritesModal();
+            }
+        });
+
+        // Click title label to apply config
         struct TitleClick : public QObject {
             QLabel *lbl;
             std::function<void()> fn;
@@ -4411,7 +4522,7 @@ void MainWindow::showFavoritesModal()
                 return false;
             }
         };
-        auto *tc = new TitleClick(keyLabel, [=, this]() mutable {
+        auto *tc = new TitleClick(keyLabel, [=, this]() {
             overlay->deleteLater();
             applyRunConfig(binKey);
         });
@@ -4434,9 +4545,7 @@ void MainWindow::showFavoritesModal()
 
     auto center = [overlay, card, cardW, cardH]() {
         overlay->setGeometry(overlay->parentWidget()->rect());
-        int x = (overlay->width()  - cardW) / 2;
-        int y = (overlay->height() - cardH) / 2;
-        card->move(x, y);
+        card->move((overlay->width() - cardW) / 2, (overlay->height() - cardH) / 2);
     };
     center();
     card->raise();
@@ -4658,7 +4767,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             }
         }
         // Right-click on terminal: show alg context menu for solution lines
-        if (txtOutput && watched == txtOutput)
+        if (txtOutput && (watched == txtOutput || watched == txtOutput->viewport()))
         {
             QContextMenuEvent *ce = static_cast<QContextMenuEvent *>(event);
             QPoint vpPos = txtOutput->viewport()->mapFromGlobal(ce->globalPos());
@@ -4985,7 +5094,7 @@ void MainWindow::showAlgContextMenu(const QPoint &globalPos, const QString &rawL
         "QMenu::item:selected { background: %4; }")
         .arg(menuBg, menuBorder, menuText, menuSel));
 
-    QAction *copyAct = menu.addAction("⎘  Copy alg");
+    QAction *copyAct = menu.addAction("⧉  Copy alg");
     QAction *favAct  = menu.addAction("♥  Add to Favorites Bin");
 
     QAction *chosen = menu.exec(globalPos);
@@ -5031,6 +5140,8 @@ void MainWindow::saveFavorites()
     {
         s.setValue(QString("bin%1_key").arg(i), it.key());
         s.setValue(QString("bin%1_algs").arg(i), it.value());
+        if (m_favNames.contains(it.key()))
+            s.setValue(QString("bin%1_name").arg(i), m_favNames[it.key()]);
     }
     s.endGroup();
 }
@@ -5044,8 +5155,13 @@ void MainWindow::loadFavorites()
     {
         QString key = s.value(QString("bin%1_key").arg(i)).toString();
         QStringList algs = s.value(QString("bin%1_algs").arg(i)).toStringList();
+        QString name = s.value(QString("bin%1_name").arg(i)).toString();
         if (!key.isEmpty())
+        {
             m_favorites[key] = algs;
+            if (!name.isEmpty())
+                m_favNames[key] = name;
+        }
     }
     s.endGroup();
 }
@@ -5154,6 +5270,7 @@ void MainWindow::applyRunConfig(const QString &key)
 
     updateConstraints();
     updateCommand();
+    cubeWidget->update();
 
     // Clear terminal state
     m_rawLines.clear(); m_karnLines.clear();
@@ -5167,5 +5284,8 @@ void MainWindow::applyRunConfig(const QString &key)
     m_tableContainer->setVisible(false);
     btnTableMode->setText("⊞");
     btnTableMode->setToolTip("Switch to table view");
+    // Hide output buttons — no solutions after apply
+    btnCopyTerminal->setVisible(false);
+    btnFavorites->setVisible(true);
     rebuildTerminalView();
 }
