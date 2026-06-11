@@ -12,6 +12,7 @@
 #include <QGraphicsView>
 #include <QGraphicsScene>
 #include <QVector>
+#include <QMap>
 #include <atomic>
 #include <functional>
 #include "styles/stylesheet.h"
@@ -181,7 +182,7 @@ private:
     QVector<CubeSnapshot> m_redoStack;
     QVector<CubeSnapshot> m_slicePending;
 
-    struct TableRow { QString alg; int moves; int slices; int angle; double ergo; };
+    struct TableRow { QString alg; int moves; int slices; int angle; double ergo; QString rawLine; };
     QVector<TableRow> m_pendingTableRows;
     QTimer*           m_tableFillTimer{nullptr};
     int               m_tableFilledCount{0};
@@ -207,8 +208,16 @@ private:
     QWidget*      m_inputBarOuter{nullptr};
     void showSettingsModal();
     void showHowToUseModal();
+    void showFavoritesModal();
     void openSidebar();
     void closeSidebar();
+    void showAlgContextMenu(const QPoint &globalPos, const QString &rawLine);
+    void addToFavoritesBin(const QString &algLine);
+    void applyRunConfig(const QString &key);
+    void saveFavorites();
+    void loadFavorites();
+    QMap<QString, QStringList> m_favorites;
+    QString m_lastRunKey;
     std::function<void()> m_updateLogo;
     QString buildStyleSheet();
     QString convertLine(const QString& rawLine);

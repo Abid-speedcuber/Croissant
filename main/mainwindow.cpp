@@ -35,6 +35,7 @@
 #include <QGraphicsOpacityEffect>
 #include <QDialog>
 #include <QShortcut>
+#include <QSettings>
 #include <QDateTime>
 #include <QTextBrowser>
 #include <QString>
@@ -427,6 +428,12 @@ void SolverWorker::run()
 // -------------------------------------------------------
 // MainWindow
 // -------------------------------------------------------
+class AlgBlockData : public QTextBlockUserData {
+public:
+    QString rawLine;
+    explicit AlgBlockData(const QString &r) : rawLine(r) {}
+};
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     setWindowTitle("Solve-A-Squan");
@@ -469,6 +476,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                 btnRedo->setEnabled(false);
                 m_sliceCount = 0;
                 m_slicePending.clear(); });
+
+    loadFavorites();
 }
 
 static QString invertScrambleStr(const QString &str)
@@ -1639,6 +1648,7 @@ void MainWindow::buildUI()
     connect(btnSolve, &QPushButton::clicked, this, &MainWindow::onSolveButtonClicked);
     connect(btnCopy, &QPushButton::clicked, this, &MainWindow::onCopy);
     connect(btnExpand, &QPushButton::clicked, this, &MainWindow::toggleExpand);
+    connect(btnFavorites, &QPushButton::clicked, this, &MainWindow::showFavoritesModal);
     connect(btnCopyTerminal, &QPushButton::clicked, this, [this]
             {
                 // Always copy clean (non-abid) text regardless of display mode.
@@ -1846,8 +1856,9 @@ void MainWindow::rebuildTerminalView()
     cur.movePosition(QTextCursor::End);
     int solIdx = 0;
     QSet<QString> seenAlgs;
-    for (const QString &rawLine : std::as_const(lines))
+    for (int lineIdx = 0; lineIdx < lines.size(); lineIdx++)
     {
+        const QString &rawLine = lines[lineIdx];
         bool isSol = rawLine.contains('[') && rawLine.contains(']');
         QString line = isSol ? applyNormalizeAbf(rawLine) : rawLine;
         if (isSol)
@@ -1874,6 +1885,9 @@ void MainWindow::rebuildTerminalView()
             blkFmt.setLineHeight(m_expanded ? 180 : 120, QTextBlockFormat::ProportionalHeight);
             cur.setBlockFormat(blkFmt);
             insertSolLine(cur, line, fmt);
+            // Store the raw (non-karn) line so the context menu can retrieve it
+            if (lineIdx < m_rawLines.size())
+                cur.block().setUserData(new AlgBlockData(m_rawLines[lineIdx]));
             // Per-alg debug annotation right after the alg
             if (m_debugOutput && solIdx > 0 && solIdx - 1 < m_algAnnLines.size() && !m_algAnnLines[solIdx - 1].isEmpty())
             {
@@ -2118,6 +2132,12 @@ void MainWindow::onSolve()
     m_stopped = false;
     m_autoScrollPaused = false;
     m_solveFinishedWhilePaused = false;
+    {
+        QStringList args = buildArgList();
+        m_lastRunKey = cubeWidget->getPositionString();
+        if (!args.isEmpty())
+            m_lastRunKey += " " + args.join(" ");
+    }
     btnScrollToBottom->setVisible(false);
     txtOutput->clear();
     m_rawLines.clear();
@@ -2942,6 +2962,7 @@ void MainWindow::fillNextTableBatch()
         numItem->setForeground(metaCol);
         numItem->setFlags(Qt::ItemIsEnabled);
         numItem->setTextAlignment(Qt::AlignCenter);
+        numItem->setData(Qt::UserRole, r.rawLine);
         {
             QFont f = numItem->font();
             f.setPointSize(m_expanded ? fontSize - 2 : 10);
@@ -3086,6 +3107,7 @@ void MainWindow::rebuildTable()
         int slices;
         int angle;
         double ergo;
+        QString rawLine;
     };
     QVector<Row> rows;
 
@@ -3107,14 +3129,15 @@ void MainWindow::rebuildTable()
             if (seenTableAlgs.contains(alg))
                 continue;
             seenTableAlgs.insert(alg);
-            rows.append({alg, mv, sl, ang, score});
+            QString raw = (idx < m_solutionLines.size()) ? m_solutionLines[idx] : dline;
+            rows.append({alg, mv, sl, ang, score, raw});
         }
     }
     else
     {
-        for (const QString &rawLine : std::as_const(displayLines))
+        for (int di = 0; di < displayLines.size(); di++)
         {
-            const QString line = applyNormalizeAbf(rawLine);
+            const QString line = applyNormalizeAbf(displayLines[di]);
             int mv, sl, ang;
             parseCounts(line, mv, sl, ang);
             int lb = line.lastIndexOf('[');
@@ -3122,7 +3145,8 @@ void MainWindow::rebuildTable()
             if (seenTableAlgs.contains(alg))
                 continue;
             seenTableAlgs.insert(alg);
-            rows.append({alg, mv, sl, ang, 0.0});
+            QString raw = (di < m_solutionLines.size()) ? m_solutionLines[di] : line;
+            rows.append({alg, mv, sl, ang, 0.0, raw});
         }
     }
 
@@ -3205,6 +3229,7 @@ void MainWindow::rebuildTable()
         numItem->setForeground(metaCol);
         numItem->setFlags(Qt::ItemIsEnabled);
         numItem->setTextAlignment(Qt::AlignCenter);
+        numItem->setData(Qt::UserRole, r.rawLine);
         {
             QFont f = numItem->font();
             f.setPointSize(m_expanded ? fontSize - 2 : 10);
@@ -3245,7 +3270,7 @@ void MainWindow::rebuildTable()
     for (int i = firstBatch; i < rows.size(); i++)
     {
         const Row &r = rows[i];
-        m_pendingTableRows.append({r.alg, r.moves, r.slices, r.angle, r.ergo});
+        m_pendingTableRows.append({r.alg, r.moves, r.slices, r.angle, r.ergo, r.rawLine});
     }
     if (!m_pendingTableRows.isEmpty())
     {
@@ -4227,6 +4252,215 @@ void MainWindow::showSettingsModal()
     overlay->installEventFilter(f);
 }
 
+// -------------------------------------------------------
+// showFavoritesModal
+// -------------------------------------------------------
+void MainWindow::showFavoritesModal()
+{
+    QWidget *central = this->centralWidget();
+    QString modalBg     = Theme::primaryBg();
+    QString modalBorder = Theme::borderGroup();
+    QString textPrimary = Theme::textPrimary();
+    QString textMuted   = Theme::textMuted();
+    QString textSol     = Theme::textSolution();
+    QString scrollBg    = Theme::scrollbarBg();
+    QString scrollHandle = Theme::scrollbarHandle();
+    QString rowA        = Theme::rowAltDark();
+    QString rowB        = Theme::rowAltLight();
+
+    QWidget *overlay = new QWidget(central);
+    overlay->setGeometry(central->rect());
+    overlay->setStyleSheet("background: rgba(0,0,0,160);");
+    overlay->show();
+    overlay->raise();
+
+    int cardW = qMin(640, central->width() - 60);
+    int cardH = qMin(560, central->height() - 60);
+
+    QWidget *card = new QWidget(overlay);
+    card->setObjectName("favoritesCard");
+    card->setFixedSize(cardW, cardH);
+    card->setStyleSheet(QString(
+        "QWidget#favoritesCard { background:%1; border:1px solid %2; border-radius:10px; }")
+        .arg(modalBg, modalBorder));
+
+    QVBoxLayout *cardLay = new QVBoxLayout(card);
+    cardLay->setContentsMargins(24, 20, 24, 20);
+    cardLay->setSpacing(12);
+
+    QLabel *title = new QLabel("Favorites");
+    title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
+    cardLay->addWidget(title);
+
+    QScrollArea *scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setStyleSheet(QString(
+        "QScrollArea { background: transparent; border: none; }"
+        "QScrollBar:vertical { background:%1; width:6px; border-radius:3px; }"
+        "QScrollBar::handle:vertical { background:%2; border-radius:3px; min-height:20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+        .arg(scrollBg, scrollHandle));
+    cardLay->addWidget(scroll, 1);
+
+    QWidget *scrollContent = new QWidget();
+    scrollContent->setStyleSheet("background: transparent;");
+    QVBoxLayout *binsLay = new QVBoxLayout(scrollContent);
+    binsLay->setContentsMargins(0, 0, 6, 0);
+    binsLay->setSpacing(10);
+    binsLay->addStretch(1);
+    scroll->setWidget(scrollContent);
+
+    // Bin background slightly lighter/different from card
+    QString binBg     = QString("rgba(255,255,255,12)");
+    QString binBorder = modalBorder;
+
+    // Label for empty state
+    QLabel *emptyLabel = new QLabel("No favorites yet.\nRight-click an alg in terminal or table view to add one.");
+    emptyLabel->setAlignment(Qt::AlignCenter);
+    emptyLabel->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(textMuted));
+    emptyLabel->setWordWrap(true);
+    binsLay->insertWidget(0, emptyLabel);
+
+    // Helper: build one bin frame and insert before the trailing stretch
+    auto addBinWidget = [=, this](const QString &binKey) {
+        const QStringList &algs = m_favorites[binKey];
+
+        QFrame *binFrame = new QFrame();
+        binFrame->setStyleSheet(QString(
+            "QFrame#binFrame { background:%1; border:1px solid %2; border-radius:8px; }"
+            "QFrame#binFrame QLabel { background:transparent; }"
+            "QFrame#binFrame QPushButton { background:transparent; border:none; color:%3; font-size:11px; }"
+            "QFrame#binFrame QPushButton:hover { color:#ff6666; }")
+            .arg(binBg, binBorder, textMuted));
+        binFrame->setObjectName("binFrame");
+
+        QVBoxLayout *binLay = new QVBoxLayout(binFrame);
+        binLay->setContentsMargins(12, 10, 12, 10);
+        binLay->setSpacing(4);
+
+        QHBoxLayout *titleRow = new QHBoxLayout();
+        titleRow->setSpacing(6);
+
+        QLabel *keyLabel = new QLabel(binKey);
+        keyLabel->setStyleSheet(QString("font-size:12px;font-weight:bold;color:%1;font-family:monospace;background:transparent;").arg(textPrimary));
+        keyLabel->setToolTip("Apply the configurations from this solve and clear terminal.");
+        keyLabel->setCursor(Qt::PointingHandCursor);
+
+        QPushButton *delBinBtn = new QPushButton("✕");
+        delBinBtn->setFixedSize(18, 18);
+        delBinBtn->setToolTip("Delete this bin");
+        delBinBtn->setCursor(Qt::PointingHandCursor);
+
+        titleRow->addWidget(keyLabel, 1);
+        titleRow->addWidget(delBinBtn);
+        binLay->addLayout(titleRow);
+
+        QFrame *sep = new QFrame();
+        sep->setFrameShape(QFrame::HLine);
+        sep->setStyleSheet(QString("color:%1;background:%1;max-height:1px;border:none;").arg(binBorder));
+        binLay->addWidget(sep);
+
+        for (const QString &alg : algs)
+        {
+            QHBoxLayout *algRow = new QHBoxLayout();
+            algRow->setSpacing(6);
+
+            QLabel *algLabel = new QLabel(alg);
+            algLabel->setStyleSheet(QString("font-size:11px;color:%1;font-family:monospace;background:transparent;").arg(textSol));
+            algLabel->setWordWrap(false);
+            algLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+            QPushButton *delAlgBtn = new QPushButton("✕");
+            delAlgBtn->setFixedSize(16, 16);
+            delAlgBtn->setToolTip("Remove from bin");
+            delAlgBtn->setCursor(Qt::PointingHandCursor);
+
+            algRow->addWidget(algLabel, 1);
+            algRow->addWidget(delAlgBtn);
+            binLay->addLayout(algRow);
+
+            QString capturedAlg = alg;
+            connect(delAlgBtn, &QPushButton::clicked, this, [=, this]() mutable {
+                m_favorites[binKey].removeAll(capturedAlg);
+                if (m_favorites[binKey].isEmpty())
+                    m_favorites.remove(binKey);
+                saveFavorites();
+                overlay->deleteLater();
+                showFavoritesModal();
+            });
+        }
+
+        binsLay->insertWidget(binsLay->count() - 1, binFrame);
+
+        connect(delBinBtn, &QPushButton::clicked, this, [=, this]() mutable {
+            m_favorites.remove(binKey);
+            saveFavorites();
+            overlay->deleteLater();
+            showFavoritesModal();
+        });
+
+        struct TitleClick : public QObject {
+            QLabel *lbl;
+            std::function<void()> fn;
+            TitleClick(QLabel *l, std::function<void()> f) : QObject(l), lbl(l), fn(f) {}
+            bool eventFilter(QObject *w, QEvent *e) override {
+                if (e->type() == QEvent::MouseButtonPress && w == lbl)
+                { fn(); return true; }
+                return false;
+            }
+        };
+        auto *tc = new TitleClick(keyLabel, [=, this]() mutable {
+            overlay->deleteLater();
+            applyRunConfig(binKey);
+        });
+        keyLabel->installEventFilter(tc);
+    };
+
+    if (m_favorites.isEmpty())
+    {
+        emptyLabel->setVisible(true);
+    }
+    else
+    {
+        emptyLabel->setVisible(false);
+        for (auto it = m_favorites.constBegin(); it != m_favorites.constEnd(); ++it)
+            addBinWidget(it.key());
+    }
+
+    card->show();
+    card->adjustSize();
+
+    auto center = [overlay, card, cardW, cardH]() {
+        overlay->setGeometry(overlay->parentWidget()->rect());
+        int x = (overlay->width()  - cardW) / 2;
+        int y = (overlay->height() - cardH) / 2;
+        card->move(x, y);
+    };
+    center();
+    card->raise();
+
+    struct F : public QObject {
+        QWidget *overlay; QWidget *card; std::function<void()> fn;
+        F(QWidget *o, QWidget *c, std::function<void()> f) : QObject(o), overlay(o), card(c), fn(f) {}
+        bool eventFilter(QObject *w, QEvent *e) override {
+            if (e->type() == QEvent::Resize && w == overlay->parentWidget())
+            { fn(); return false; }
+            if (e->type() == QEvent::MouseButtonPress && w == overlay)
+            {
+                if (!card->geometry().contains(static_cast<QMouseEvent *>(e)->pos()))
+                    overlay->deleteLater();
+                return true;
+            }
+            return false;
+        }
+    };
+    F *f = new F(overlay, card, center);
+    central->installEventFilter(f);
+    overlay->installEventFilter(f);
+}
+
 void MainWindow::showHowToUseModal()
 {
     QWidget *central = this->centralWidget();
@@ -4421,6 +4655,40 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 if (chosen == copyAct)
                     QApplication::clipboard()->setText(v.toString());
                 return true;
+            }
+        }
+        // Right-click on terminal: show alg context menu for solution lines
+        if (txtOutput && watched == txtOutput)
+        {
+            QContextMenuEvent *ce = static_cast<QContextMenuEvent *>(event);
+            QPoint vpPos = txtOutput->viewport()->mapFromGlobal(ce->globalPos());
+            QTextCursor tc = txtOutput->cursorForPosition(vpPos);
+            if (AlgBlockData *data = dynamic_cast<AlgBlockData *>(tc.block().userData()))
+                showAlgContextMenu(ce->globalPos(), data->rawLine);
+            return true; // always suppress default context menu on terminal
+        }
+    }
+
+    // ── Left or right click on table rows — alg context menu ─────────────────
+    if (event->type() == QEvent::MouseButtonPress && m_solutionTable)
+    {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (watched == m_solutionTable->viewport() &&
+            (me->button() == Qt::LeftButton || me->button() == Qt::RightButton))
+        {
+            int row = m_solutionTable->rowAt(me->pos().y());
+            if (row >= 0)
+            {
+                QTableWidgetItem *numItem = m_solutionTable->item(row, 0);
+                if (numItem)
+                {
+                    QString rawLine = numItem->data(Qt::UserRole).toString();
+                    if (!rawLine.isEmpty())
+                    {
+                        showAlgContextMenu(me->globalPos(), rawLine);
+                        return true;
+                    }
+                }
             }
         }
     }
@@ -4698,4 +4966,206 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true; // consume — letter goes to cube, not to any text field
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+// -------------------------------------------------------
+// showAlgContextMenu — alg context menu from table or terminal
+// -------------------------------------------------------
+void MainWindow::showAlgContextMenu(const QPoint &globalPos, const QString &rawLine)
+{
+    QString menuBg    = Theme::primaryBg();
+    QString menuBorder = Theme::borderGroup();
+    QString menuText  = Theme::textPrimary();
+    QString menuSel   = Theme::hoverBg();
+
+    QMenu menu;
+    menu.setStyleSheet(QString(
+        "QMenu { background: %1; border: 1px solid %2; border-radius: 6px; padding: 4px; color: %3; font-size: 12px; }"
+        "QMenu::item { padding: 6px 16px; border-radius: 4px; }"
+        "QMenu::item:selected { background: %4; }")
+        .arg(menuBg, menuBorder, menuText, menuSel));
+
+    QAction *copyAct = menu.addAction("⎘  Copy alg");
+    QAction *favAct  = menu.addAction("♥  Add to Favorites Bin");
+
+    QAction *chosen = menu.exec(globalPos);
+    if (chosen == copyAct)
+    {
+        // Strip brackets for clipboard copy
+        int lb = rawLine.lastIndexOf('[');
+        QString alg = lb > 0 ? rawLine.left(lb).trimmed() : rawLine.trimmed();
+        QApplication::clipboard()->setText(alg);
+    }
+    else if (chosen == favAct)
+    {
+        addToFavoritesBin(rawLine);
+    }
+}
+
+// -------------------------------------------------------
+// addToFavoritesBin
+// -------------------------------------------------------
+void MainWindow::addToFavoritesBin(const QString &algLine)
+{
+    if (m_lastRunKey.isEmpty())
+        return;
+    QStringList &bin = m_favorites[m_lastRunKey];
+    if (!bin.contains(algLine))
+    {
+        bin.append(algLine);
+        saveFavorites();
+    }
+}
+
+// -------------------------------------------------------
+// saveFavorites / loadFavorites
+// -------------------------------------------------------
+void MainWindow::saveFavorites()
+{
+    QSettings s("Sq1Opt", "sq1opt-ui");
+    s.beginGroup("favorites");
+    s.remove("");
+    s.setValue("count", m_favorites.size());
+    int i = 0;
+    for (auto it = m_favorites.constBegin(); it != m_favorites.constEnd(); ++it, ++i)
+    {
+        s.setValue(QString("bin%1_key").arg(i), it.key());
+        s.setValue(QString("bin%1_algs").arg(i), it.value());
+    }
+    s.endGroup();
+}
+
+void MainWindow::loadFavorites()
+{
+    QSettings s("Sq1Opt", "sq1opt-ui");
+    s.beginGroup("favorites");
+    int count = s.value("count", 0).toInt();
+    for (int i = 0; i < count; i++)
+    {
+        QString key = s.value(QString("bin%1_key").arg(i)).toString();
+        QStringList algs = s.value(QString("bin%1_algs").arg(i)).toStringList();
+        if (!key.isEmpty())
+            m_favorites[key] = algs;
+    }
+    s.endGroup();
+}
+
+// -------------------------------------------------------
+// applyRunConfig — parse "POS flags..." key and apply to UI
+// -------------------------------------------------------
+void MainWindow::applyRunConfig(const QString &key)
+{
+    QStringList parts = key.split(' ', Qt::SkipEmptyParts);
+    if (parts.isEmpty())
+        return;
+
+    // First token is position string, rest are flags
+    QString pos = parts[0];
+    QStringList flags = parts.mid(1);
+
+    cubeWidget->setPositionFromString(pos);
+
+    // Metric radio
+    if (m_metricGroup)
+    {
+        if (flags.contains("-es"))
+            m_metricGroup->button(0)->setChecked(true);
+        else if (flags.contains("-ea"))
+            m_metricGroup->button(2)->setChecked(true);
+        else
+            m_metricGroup->button(1)->setChecked(true);
+    }
+
+    // All optimal / suboptimal
+    bool hasA = false;
+    int aVal = 0;
+    for (const QString &f : flags)
+    {
+        if (f == "-a") { hasA = true; break; }
+        if (f.startsWith("-a") && f.length() > 2) {
+            bool ok; int v = f.mid(2).toInt(&ok);
+            if (ok) { hasA = true; aVal = v; break; }
+        }
+    }
+    chkAllOptimal->setChecked(hasA);
+    if (hasA && aVal > 0)
+        spnSuboptimal->setValue(aVal);
+    else if (hasA)
+        spnSuboptimal->setValue(0);
+
+    // Specific depths
+    bool hasD = false;
+    QString depStr;
+    for (const QString &f : flags)
+    {
+        if (f.startsWith("-d") && f.length() > 2) { hasD = true; depStr = f.mid(2); break; }
+    }
+    chkDepths->setChecked(hasD);
+    if (hasD) txtDepths->setText(depStr);
+
+    // Generator
+    chkGenerator->setChecked(flags.contains("-g"));
+
+    // TwoGen radio
+    if (m_twoGenGroup)
+    {
+        if (flags.contains("-2"))
+            m_twoGenGroup->button(0)->setChecked(true);
+        else if (flags.contains("-p"))
+            m_twoGenGroup->button(1)->setChecked(true);
+        else
+            m_twoGenGroup->button(2)->setChecked(true);
+    }
+
+    // Cubeshape / equator
+    chkCubeshape->setChecked(flags.contains("-c"));
+    chkIgnoreEquator->setChecked(flags.contains("-m"));
+
+    // Angle lock radio
+    if (m_angleGroup)
+    {
+        if (flags.contains("-nb"))
+            m_angleGroup->button(0)->setChecked(true);
+        else if (flags.contains("-nu"))
+            m_angleGroup->button(1)->setChecked(true);
+        else if (flags.contains("-nd"))
+            m_angleGroup->button(2)->setChecked(true);
+        else
+            m_angleGroup->button(3)->setChecked(true);
+    }
+
+    // Max limits
+    auto parseLimit = [&](const QString &prefix, QCheckBox *chk, QSpinBox *spn) {
+        bool found = false; int val = 0;
+        for (const QString &f : flags)
+            if (f.startsWith(prefix) && f.length() > prefix.length())
+            { bool ok; val = f.mid(prefix.length()).toInt(&ok); if (ok) { found = true; break; } }
+        chk->setChecked(found);
+        if (found) spn->setValue(val);
+    };
+    parseLimit("-X", chkMaxX, spnMaxX);
+    parseLimit("-Y", chkMaxY, spnMaxY);
+    parseLimit("-Z", chkMaxTotal, spnMaxTotal);
+
+    // Ignore trans
+    m_ignoreTrans = flags.contains("-x");
+    if (chkIgnoreTransSetting)
+        chkIgnoreTransSetting->setChecked(m_ignoreTrans);
+
+    updateConstraints();
+    updateCommand();
+
+    // Clear terminal state
+    m_rawLines.clear(); m_karnLines.clear();
+    m_solutionLines.clear(); m_karnSolutionLines.clear();
+    m_solutionLinesForRating.clear(); m_sliceIndicators.clear();
+    m_rawFinalScores.clear(); m_cachedRatedOrder.clear();
+    m_ratingsValid = false; m_seenSolutions.clear(); m_seenNormalizedAlgs.clear();
+    m_debugBuffer.clear(); m_algAnnLines.clear();
+    m_tableVisible = false;
+    txtOutput->setVisible(true);
+    m_tableContainer->setVisible(false);
+    btnTableMode->setText("⊞");
+    btnTableMode->setToolTip("Switch to table view");
+    rebuildTerminalView();
 }
