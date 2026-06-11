@@ -124,7 +124,15 @@ class FadingTooltip : public QWidget
 public:
     static void arm(const QString &text, const QPoint &globalPos, QWidget *parent)
     {
-        inst(parent).armImpl(text, globalPos);
+        FadingTooltip &ft = inst(parent);
+        ft.m_buttonMode = false;
+        ft.armImpl(text, globalPos);
+    }
+    // Arm anchored to a button's actual screen rect (computed via QGraphicsView transform).
+    // Tooltip will appear centered below the button, not at the cursor.
+    static void armButton(const QString &text, const QRect &globalRect, QWidget *parent)
+    {
+        inst(parent).armButtonImpl(text, globalRect);
     }
     static void dismiss(QWidget *parent)
     {
@@ -193,6 +201,14 @@ private:
             m_anim->stop();
             m_anim = nullptr;
         }
+    }
+
+    void armButtonImpl(const QString &text, const QRect &globalRect)
+    {
+        m_buttonMode = true;
+        m_btnGlobalRect = globalRect;
+        // Use rect center as pendingPos so the manhattan distance guard still works
+        armImpl(text, globalRect.center());
     }
 
     void armImpl(const QString &text, const QPoint &globalPos)
@@ -297,22 +313,36 @@ private:
         if (reposition)
         {
             QWidget *win = parentWidget();
-            QPoint cur = win->mapFromGlobal(m_pendingPos);
+            int x, y;
 
-            // Prefer below-right; flip above if it would clip the bottom edge
-            int x = cur.x() + 20;
-            int y = (cur.y() + 28 + height() + 8 <= win->height())
-                        ? cur.y() + 28
-                        : cur.y() - height() - 8;
+            if (m_buttonMode && !m_btnGlobalRect.isNull())
+            {
+                // Anchor to button geometry: centered below, 5px gap; flip above if needed.
+                QPoint btnTL = win->mapFromGlobal(m_btnGlobalRect.topLeft());
+                QPoint btnBR = win->mapFromGlobal(m_btnGlobalRect.bottomRight());
+                x = (btnTL.x() + btnBR.x()) / 2 - width() / 2;
+                y = (btnBR.y() + 5 + height() + 4 <= win->height())
+                        ? btnBR.y() + 5
+                        : btnTL.y() - height() - 5;
+            }
+            else
+            {
+                QPoint cur = win->mapFromGlobal(m_pendingPos);
 
-            // Flip left if it would clip the right edge
-            if (x + width() + 8 > win->width())
-                x = cur.x() - width() - 4;
+                // Prefer below-right; flip above if it would clip the bottom edge
+                x = cur.x() + 20;
+                y = (cur.y() + 28 + height() + 8 <= win->height())
+                            ? cur.y() + 28
+                            : cur.y() - height() - 8;
+
+                // Flip left if it would clip the right edge
+                if (x + width() + 8 > win->width())
+                    x = cur.x() - width() - 4;
+            }
 
             // Final clamp so it always stays inside the window
             x = qBound(4, x, win->width() - width() - 4);
             y = qBound(4, y, win->height() - height() - 4);
-
             move(x, y);
         }
 
@@ -352,6 +382,8 @@ private:
     QTimer *m_dismissTimer{nullptr};
     QPropertyAnimation *m_anim{nullptr};
     bool m_armJustFired{false};
+    bool m_buttonMode{false};
+    QRect m_btnGlobalRect;
     QString m_pendingText;
     QPoint m_pendingPos;
     QString m_currentText;
@@ -4881,14 +4913,29 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             // HoverMove on a non-checkbox widget — arm to keep tooltip alive while
             // cursor stays within the widget (e.g. a button that uses WA_Hover).
             QWidget *w = qobject_cast<QWidget *>(watched);
-            QString tip;
-            while (w && tip.isEmpty())
+            QAbstractButton *btn = qobject_cast<QAbstractButton *>(w);
+            if (btn && !btn->toolTip().isEmpty())
             {
-                tip = w->toolTip();
-                w = w->parentWidget();
+                // Re-arm via button geometry so position stays fixed and dismiss is cancelled.
+                QPoint tl = btn->mapTo(m_zoomProxy->widget(), QPoint(0, 0));
+                QPoint br = btn->mapTo(m_zoomProxy->widget(), QPoint(btn->width(), btn->height()));
+                QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
+                QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
+                QRect globalRect(m_zoomView->viewport()->mapToGlobal(viewTL),
+                                  m_zoomView->viewport()->mapToGlobal(viewBR));
+                FadingTooltip::armButton(btn->toolTip(), globalRect, m_zoomView);
             }
-            if (!tip.isEmpty())
-                FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
+            else
+            {
+                QString tip;
+                while (w && tip.isEmpty())
+                {
+                    tip = w->toolTip();
+                    w = w->parentWidget();
+                }
+                if (!tip.isEmpty())
+                    FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
+            }
             // No dismiss on HoverMove — HoverLeave handles leaving the widget.
         }
         else if (event->type() == QEvent::MouseMove)
@@ -4919,9 +4966,15 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         {
             if (qobject_cast<QAbstractButton *>(w) && !w->toolTip().isEmpty())
             {
-                // Use the cursor's actual screen position at entry — mapToGlobal is
-                // unreliable inside QGraphicsView's zoom transform.
-                FadingTooltip::arm(w->toolTip(), QCursor::pos(), m_zoomView);
+                // Compute the button's true screen rect through the zoom transform:
+                // widget → proxy-root → scene → viewport → global.
+                QPoint tl = w->mapTo(m_zoomProxy->widget(), QPoint(0, 0));
+                QPoint br = w->mapTo(m_zoomProxy->widget(), QPoint(w->width(), w->height()));
+                QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
+                QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
+                QRect globalRect(m_zoomView->viewport()->mapToGlobal(viewTL),
+                                  m_zoomView->viewport()->mapToGlobal(viewBR));
+                FadingTooltip::armButton(w->toolTip(), globalRect, m_zoomView);
             }
             else
             {
