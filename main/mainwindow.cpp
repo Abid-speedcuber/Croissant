@@ -3096,12 +3096,6 @@ void MainWindow::rebuildTable()
             angle = parts[2].trimmed().toInt();
     };
 
-    auto stripBracket = [](const QString &line) -> QString
-    {
-        int lb = line.lastIndexOf('[');
-        return lb > 0 ? line.left(lb).trimmed() : line.trimmed();
-    };
-
     struct Row
     {
         QString alg;
@@ -4766,19 +4760,25 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 return true;
             }
         }
-        // Right-click on terminal: show alg context menu for solution lines
+        // Suppress the default QTextEdit context menu on the terminal
         if (txtOutput && (watched == txtOutput || watched == txtOutput->viewport()))
+            return true;
+    }
+
+    // ── Right-click on terminal / Left or right click on table ────────────────
+    if (event->type() == QEvent::MouseButtonPress && txtOutput &&
+        watched == txtOutput->viewport())
+    {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::RightButton)
         {
-            QContextMenuEvent *ce = static_cast<QContextMenuEvent *>(event);
-            QPoint vpPos = txtOutput->viewport()->mapFromGlobal(ce->globalPos());
-            QTextCursor tc = txtOutput->cursorForPosition(vpPos);
+            QTextCursor tc = txtOutput->cursorForPosition(me->pos());
             if (AlgBlockData *data = dynamic_cast<AlgBlockData *>(tc.block().userData()))
-                showAlgContextMenu(ce->globalPos(), data->rawLine);
-            return true; // always suppress default context menu on terminal
+                showAlgContextMenu(me->globalPos(), data->rawLine);
+            return true;
         }
     }
 
-    // ── Left or right click on table rows — alg context menu ─────────────────
     if (event->type() == QEvent::MouseButtonPress && m_solutionTable)
     {
         QMouseEvent *me = static_cast<QMouseEvent *>(event);

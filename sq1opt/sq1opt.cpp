@@ -1373,11 +1373,9 @@ class PositionSolver {
 		int angle=0;
 
 		if( generator ){
-			bool isFirstOutputSlice = true;
 			for( int i=moveLen-1; i>=0; i--){
 				if( moveList[i]==0 ) {
 					out += printmove(mu, md);
-					isFirstOutputSlice = false;
 					mu = md = 0;
 					out += "/";
 					tu++; tw++; angle++;
@@ -1392,11 +1390,9 @@ class PositionSolver {
 				}
 			}
 		}else{
-			bool isFirstOutputSlice = true;
 			for( int i=0; i<moveLen; i++){
 				if( moveList[i]==0 ) {
 					out += printmove(mu, md);
-					isFirstOutputSlice = false;
 					mu = md = 0;
 					out += "/";
 					tu++; tw++; angle++;

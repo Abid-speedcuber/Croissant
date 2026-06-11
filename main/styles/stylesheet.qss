@@ -853,7 +853,4 @@ QToolTip {
     opacity: 230;
 }
 
-/* ========== Cursor ========== */
-QPushButton, QCheckBox, QAbstractItemView::item {
-    cursor: pointer;
-}
+/* Qt5 does not support cursor: in QSS; cursors are set programmatically via setCursor(). */

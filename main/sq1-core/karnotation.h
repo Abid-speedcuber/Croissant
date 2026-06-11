@@ -991,7 +991,6 @@ inline std::string karnifycs(
     cur.inCS = kcInCubeshape(slotState);
     cur.joined = "";
     bool first = true;
-    bool prevWasSlice = leadingSlash;
 
     for (const auto &part : parts)
     {
