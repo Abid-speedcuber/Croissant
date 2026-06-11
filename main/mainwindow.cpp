@@ -4917,12 +4917,24 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             if (btn && !btn->toolTip().isEmpty())
             {
                 // Re-arm via button geometry so position stays fixed and dismiss is cancelled.
-                QPoint tl = btn->mapTo(m_zoomProxy->widget(), QPoint(0, 0));
-                QPoint br = btn->mapTo(m_zoomProxy->widget(), QPoint(btn->width(), btn->height()));
-                QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
-                QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
-                QRect globalRect(m_zoomView->viewport()->mapToGlobal(viewTL),
-                                  m_zoomView->viewport()->mapToGlobal(viewBR));
+                // Only use the proxy transform when the button is actually inside the proxy
+                // widget tree; overlays (e.g. favorites modal) are not, and mapTo would crash.
+                QWidget *proxyRoot = m_zoomProxy ? m_zoomProxy->widget() : nullptr;
+                bool inProxy = false;
+                for (QWidget *p = btn; p && !inProxy; p = p->parentWidget())
+                    inProxy = (p == proxyRoot);
+                QRect globalRect;
+                if (inProxy && proxyRoot) {
+                    QPoint tl = btn->mapTo(proxyRoot, QPoint(0, 0));
+                    QPoint br = btn->mapTo(proxyRoot, QPoint(btn->width(), btn->height()));
+                    QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
+                    QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
+                    globalRect = QRect(m_zoomView->viewport()->mapToGlobal(viewTL),
+                                       m_zoomView->viewport()->mapToGlobal(viewBR));
+                } else {
+                    globalRect = QRect(btn->mapToGlobal(QPoint(0, 0)),
+                                       btn->mapToGlobal(QPoint(btn->width(), btn->height())));
+                }
                 FadingTooltip::armButton(btn->toolTip(), globalRect, m_zoomView);
             }
             else
@@ -4968,12 +4980,24 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             {
                 // Compute the button's true screen rect through the zoom transform:
                 // widget → proxy-root → scene → viewport → global.
-                QPoint tl = w->mapTo(m_zoomProxy->widget(), QPoint(0, 0));
-                QPoint br = w->mapTo(m_zoomProxy->widget(), QPoint(w->width(), w->height()));
-                QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
-                QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
-                QRect globalRect(m_zoomView->viewport()->mapToGlobal(viewTL),
-                                  m_zoomView->viewport()->mapToGlobal(viewBR));
+                // For widgets outside the proxy (e.g. favorites modal overlay), fall
+                // back to mapToGlobal directly to avoid a null-parent crash in mapTo.
+                QWidget *proxyRoot = m_zoomProxy ? m_zoomProxy->widget() : nullptr;
+                bool inProxy = false;
+                for (QWidget *p = w; p && !inProxy; p = p->parentWidget())
+                    inProxy = (p == proxyRoot);
+                QRect globalRect;
+                if (inProxy && proxyRoot) {
+                    QPoint tl = w->mapTo(proxyRoot, QPoint(0, 0));
+                    QPoint br = w->mapTo(proxyRoot, QPoint(w->width(), w->height()));
+                    QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
+                    QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
+                    globalRect = QRect(m_zoomView->viewport()->mapToGlobal(viewTL),
+                                       m_zoomView->viewport()->mapToGlobal(viewBR));
+                } else {
+                    globalRect = QRect(w->mapToGlobal(QPoint(0, 0)),
+                                       w->mapToGlobal(QPoint(w->width(), w->height())));
+                }
                 FadingTooltip::armButton(w->toolTip(), globalRect, m_zoomView);
             }
             else
