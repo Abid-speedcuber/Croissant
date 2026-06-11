@@ -2678,11 +2678,6 @@ void MainWindow::onSolverLine(QString line)
     if (isSolution)
     {
         QString normalized = applyNormalizeAbf(displayLine);
-        if (m_debugOutput && m_normalizeAbfMode != 3 && normalized != displayLine)
-            debugLine(QString("normalizeAbf mode=%1: [%2] -> [%3]")
-                          .arg(m_normalizeAbfMode)
-                          .arg(displayLine)
-                          .arg(normalized));
         displayLine = normalized;
 
         // Dedup: two raw solutions may normalise to the same display string
@@ -4358,8 +4353,7 @@ void MainWindow::showSettingsModal()
     QCheckBox *chkDebug = new QCheckBox("Debug output");
     chkDebug->setEnabled(!solverRunning);
     chkDebug->setToolTip("Show [DEBUG] lines in the terminal showing internal states:\n"
-                         "solver arguments, injected position, table view variables,\n"
-                         "and normalizeAbf transforms.");
+                         "solver arguments, injected position, and table view variables");
     chkDebug->setChecked(m_debugOutput);
     chkDebug->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     connect(chkDebug, &QCheckBox::toggled, this, [this](bool checked)
