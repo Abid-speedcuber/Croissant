@@ -1532,6 +1532,13 @@ void MainWindow::buildUI()
     btnCopyTerminal->installEventFilter(this);
     { auto *e = new QGraphicsOpacityEffect(btnCopyTerminal); e->setOpacity(1.0); btnCopyTerminal->setGraphicsEffect(e); }
 
+    btnFavorites = new QPushButton("♥", outputWrapper);
+    btnFavorites->setObjectName("btnFavorites");
+    btnFavorites->setFixedSize(22, 22);
+    btnFavorites->setToolTip("Favorites bin");
+    btnFavorites->installEventFilter(this);
+    { auto *e = new QGraphicsOpacityEffect(btnFavorites); e->setOpacity(1.0); btnFavorites->setGraphicsEffect(e); }
+
     btnTableMode = new QPushButton("⊞", outputWrapper);
     btnTableMode->setObjectName("btnTableMode");
     btnTableMode->setFixedSize(22, 22);
@@ -1548,6 +1555,7 @@ void MainWindow::buildUI()
 
     btnExpand->setVisible(false);
     btnCopyTerminal->setVisible(false);
+    btnFavorites->setVisible(false);
     btnTableMode->setVisible(false);
 
     // Idle-fade timer — fires 1.5 s after the last mouse move inside the output area.
@@ -1739,8 +1747,9 @@ void MainWindow::buildUI()
                            int margin = 6; int bw = 22;
                            btnExpand->move(w - margin - bw, margin);
                            btnTableMode->move(w - margin - bw*2 - 4, margin);
-                           btnCopyTerminal->move(w - margin - bw*3 - 8, margin);
-                           btnExpand->raise(); btnTableMode->raise(); btnCopyTerminal->raise(); });
+                           btnFavorites->move(w - margin - bw*3 - 8, margin);
+                           btnCopyTerminal->move(w - margin - bw*4 - 12, margin);
+                           btnExpand->raise(); btnTableMode->raise(); btnFavorites->raise(); btnCopyTerminal->raise(); });
 
     const auto allBtns = findChildren<QPushButton *>();
     for (auto *b : allBtns)
@@ -2201,7 +2210,7 @@ void MainWindow::stopSolver()
 void MainWindow::setOutputBtnsOpacity(qreal target, int durationMs)
 {
     m_outputBtnsFullOpacity = (target >= 1.0 - 0.01);
-    QPushButton *btns[3] = {btnCopyTerminal, btnTableMode, btnExpand};
+    QPushButton *btns[4] = {btnCopyTerminal, btnFavorites, btnTableMode, btnExpand};
 
     for (auto *btn : btns) {
         if (!btn) continue;
@@ -2250,7 +2259,7 @@ void MainWindow::onOutputMouseActive()
     // Don't restart the idle timer while a button is hovered — MouseMove on a
     // button child still reaches this path, but the Enter handler owns the timer
     // in that state.
-    bool anyBtnHovered = btnCopyTerminal->underMouse() || btnTableMode->underMouse() || btnExpand->underMouse();
+    bool anyBtnHovered = btnCopyTerminal->underMouse() || btnFavorites->underMouse() || btnTableMode->underMouse() || btnExpand->underMouse();
     if (!anyBtnHovered && m_outputIdleTimer)
         m_outputIdleTimer->start(1500);
     if (!m_outputBtnsFullOpacity)
@@ -2527,6 +2536,7 @@ void MainWindow::onSolverLine(QString line)
         }
         btnExpand->setVisible(true);
         btnCopyTerminal->setVisible(true);
+        btnFavorites->setVisible(true);
         btnTableMode->setVisible(true);
         // Start idle-fade timer on first reveal; restores to full if a prior solve
         // had left the buttons faded.
@@ -4422,10 +4432,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // Qt delivers Enter to the newly-entered widget BEFORE Leave to the old one,
     // so underMouse() is already accurate when any Leave handler runs.
     auto anyBtnHovered = [this]() {
-        return btnCopyTerminal->underMouse() || btnTableMode->underMouse() || btnExpand->underMouse();
+        return btnCopyTerminal->underMouse() || btnFavorites->underMouse() || btnTableMode->underMouse() || btnExpand->underMouse();
     };
     if (event->type() == QEvent::Enter) {
-        if (watched == btnCopyTerminal || watched == btnTableMode || watched == btnExpand) {
+        if (watched == btnCopyTerminal || watched == btnFavorites || watched == btnTableMode || watched == btnExpand) {
             if (m_outputIdleTimer) m_outputIdleTimer->stop();
             if (!m_outputBtnsFullOpacity)
                 setOutputBtnsOpacity(1.0, 0);
@@ -4433,7 +4443,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     if (event->type() == QEvent::Leave) {
-        if (watched == btnCopyTerminal || watched == btnTableMode || watched == btnExpand) {
+        if (watched == btnCopyTerminal || watched == btnFavorites || watched == btnTableMode || watched == btnExpand) {
             if (anyBtnHovered()) return false; // moved to another button
             // All buttons left — resume idle timer if still in the output area,
             // or start fading now if the cursor left the area entirely.
@@ -4471,7 +4481,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         int bw = 22;
         btnExpand->move(w - margin - bw, margin);
         btnTableMode->move(w - margin - bw * 2 - 4, margin);
-        btnCopyTerminal->move(w - margin - bw * 3 - 8, margin);
+        btnFavorites->move(w - margin - bw * 3 - 8, margin);
+        btnCopyTerminal->move(w - margin - bw * 4 - 12, margin);
         btnScrollToBottom->move(w - margin - 28 - 16, h - margin - 32 - margin);
         return false;
     }

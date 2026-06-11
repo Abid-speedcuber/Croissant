@@ -107,6 +107,7 @@ private:
     QWidget*      m_allOptRow{nullptr};    // the whole "all optimal + suboptimal" row
     QPushButton*  btnExpand;        // ⤢ / ⤡ expand-shrink toggle
     QPushButton*  btnCopyTerminal;  // copy terminal contents
+    QPushButton*  btnFavorites{nullptr};  // open favorites bin modal
     QTimer*   m_outputIdleTimer{nullptr};
     bool      m_outputBtnsFullOpacity{true};
     void      setOutputBtnsOpacity(qreal target, int durationMs = 200);

@@ -609,7 +609,7 @@ QLineEdit#txtMainInput[hasError="true"] {
     border-color: --text-error;
 }
 
-QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
+QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnFavorites, QPushButton#btnTableMode {
     background: --button-util-bg;
     border: 1px solid --button-util-border;
     border-radius: 4px;
@@ -618,13 +618,13 @@ QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnTableMode {
     padding: 0;
 }
 
-QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover, QPushButton#btnTableMode:hover {
+QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover, QPushButton#btnFavorites:hover, QPushButton#btnTableMode:hover {
     background: --button-util-hover-bg;
     border-color: --button-util-hover-border;
     color: --button-util-hover-text;
 }
 
-QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#btnTableMode:pressed {
+QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#btnFavorites:pressed, QPushButton#btnTableMode:pressed {
     background: --pressed-bg;
 }
 
