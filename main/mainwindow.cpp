@@ -183,6 +183,7 @@ private:
             m_effect->setOpacity(0.0);
             hide(); });
 
+
         hide();
     }
 
@@ -215,6 +216,10 @@ private:
     {
         m_pendingText = text;
         m_pendingPos = globalPos;
+
+        // Increment generation so any pending dismiss-retry is cancelled — a new
+        // arm() means the cursor moved to a new tooltip and the old retry is stale.
+        ++m_armGen;
 
         // Flag stray dismisses from QGraphicsView scene/hover processing: they fire
         // immediately after arm() for WA_Hover widgets and would cancel a valid show.
@@ -254,7 +259,20 @@ private:
         // Stray dismiss from QGraphicsView scene/hover processing fires right after
         // arm() for WA_Hover widgets. Ignore it — arm already set up the correct state.
         if (m_armJustFired)
+        {
+            // This dismiss fired in the same event-loop tick as arm() — it's a stray
+            // from QGraphicsView hover processing, not a genuine leave. Schedule a
+            // one-tick retry: by then m_armJustFired is cleared. If the cursor
+            // genuinely left the widget no new arm() will have fired, so the retry
+            // will proceed. If a new arm() did fire (cursor moved to another tooltip),
+            // the generation counter mismatch cancels the retry.
+            int gen = m_armGen;
+            QTimer::singleShot(0, this, [this, gen] {
+                if (m_armGen == gen)
+                    dismissImpl();
+            });
             return;
+        }
         m_closeTimer->stop();
         if (!isVisible())
         {
@@ -266,8 +284,12 @@ private:
         m_hoverTimer->stop();
         stopAnim();
         // Short grace period: if arm() fires within this window the tooltip
-        // updates instantly without flickering through a hidden state
-        m_dismissTimer->start(120);
+        // updates instantly without flickering through a hidden state.
+        // Guard the restart: MouseMove events fire every ~16ms so calling
+        // start() on every event would perpetually reset the countdown and
+        // the tooltip would never hide during continuous mouse movement.
+        if (!m_dismissTimer->isActive())
+            m_dismissTimer->start(750);
     }
 
     void dismissNowImpl()
@@ -382,6 +404,7 @@ private:
     QTimer *m_dismissTimer{nullptr};
     QPropertyAnimation *m_anim{nullptr};
     bool m_armJustFired{false};
+    int m_armGen{0};
     bool m_buttonMode{false};
     QRect m_btnGlobalRect;
     QString m_pendingText;
@@ -4263,7 +4286,7 @@ void MainWindow::showSettingsModal()
     chkSmart->setEnabled(!solverRunning);
     chkSmart->setToolTip("When 'Karnotation output' is on, use cubeshape-aware karnify.\n"
                          "i.e. don't karnify less obvious karns, like \"T\", when out of CS.");
-    chkSmart->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
+    chkSmart->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked)
             {
         m_smartKarn = checked;
@@ -4305,7 +4328,7 @@ void MainWindow::showSettingsModal()
     if (OutputConverter::s_abidFontFamily.isEmpty())
         chkAbid->setToolTip(chkAbid->toolTip() +
                             "\n\n⚠ kompact-font.ttf not found — visual effect unavailable.");
-    chkAbid->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
+    chkAbid->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     connect(chkAbid, &QCheckBox::toggled, this, [this](bool checked)
             {
         m_abidNotation = checked;
@@ -4322,7 +4345,7 @@ void MainWindow::showSettingsModal()
                                "Only useful if you don't anticipate a lot of algs initially.\n"
                                "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)");
     chkIgnoreTrans->setChecked(m_ignoreTrans);
-    chkIgnoreTrans->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
+    chkIgnoreTrans->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     chkIgnoreTransSetting = chkIgnoreTrans;
     connect(chkIgnoreTrans, &QObject::destroyed, this, [this]()
             { chkIgnoreTransSetting = nullptr; });
@@ -4338,7 +4361,7 @@ void MainWindow::showSettingsModal()
                          "solver arguments, injected position, table view variables,\n"
                          "and normalizeAbf transforms.");
     chkDebug->setChecked(m_debugOutput);
-    chkDebug->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
+    chkDebug->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     connect(chkDebug, &QCheckBox::toggled, this, [this](bool checked)
             { m_debugOutput = checked; });
     lay->addWidget(chkDebug);
