@@ -130,6 +130,14 @@ public:
     {
         inst(parent).dismissImpl();
     }
+    static bool active(QWidget *parent)
+    {
+        return inst(parent).isVisible();
+    }
+    static void dismissNow(QWidget *parent)
+    {
+        inst(parent).dismissNowImpl();
+    }
 
 private:
     explicit FadingTooltip(QWidget *parent) : QWidget(parent, Qt::SubWindow)
@@ -192,6 +200,11 @@ private:
         m_pendingText = text;
         m_pendingPos = globalPos;
 
+        // Flag stray dismisses from QGraphicsView scene/hover processing: they fire
+        // immediately after arm() for WA_Hover widgets and would cancel a valid show.
+        m_armJustFired = true;
+        QTimer::singleShot(0, this, [this] { m_armJustFired = false; });
+
         // If a dismiss is pending, cancel it — we're still in tooltip territory
         bool gracePending = m_dismissTimer->isActive();
         if (gracePending)
@@ -222,13 +235,16 @@ private:
 
     void dismissImpl()
     {
+        // Stray dismiss from QGraphicsView scene/hover processing fires right after
+        // arm() for WA_Hover widgets. Ignore it — arm already set up the correct state.
+        if (m_armJustFired)
+            return;
         m_closeTimer->stop();
         if (!isVisible())
         {
-            // Don't stop the hover timer here. A stray dismiss from scene/viewport
-            // hover processing fires immediately after arm() for WA_Hover widgets
-            // (e.g. buttons) and would kill the pending timer. showNow() validates
-            // the cursor position before actually showing anything.
+            // Don't stop the hover timer here for the same reason as m_armJustFired:
+            // a stray dismiss would kill the pending show. showNow() guards with the
+            // manhattan-distance check before actually showing anything.
             return;
         }
         m_hoverTimer->stop();
@@ -236,6 +252,18 @@ private:
         // Short grace period: if arm() fires within this window the tooltip
         // updates instantly without flickering through a hidden state
         m_dismissTimer->start(120);
+    }
+
+    void dismissNowImpl()
+    {
+        m_hoverTimer->stop();
+        m_closeTimer->stop();
+        m_dismissTimer->stop();
+        if (!isVisible()) return;
+        stopAnim();
+        m_currentText.clear();
+        m_effect->setOpacity(0.0);
+        hide();
     }
 
     void applyThemeStyle()
@@ -255,8 +283,10 @@ private:
     {
         // If the cursor moved more than ~40px from where arm() last fired, the
         // user left the tooltip widget before the timer fired — skip showing.
-        if ((QCursor::pos() - m_pendingPos).manhattanLength() > 40)
+        if ((QCursor::pos() - m_pendingPos).manhattanLength() > 80)
             return;
+
+        bool reposition = !isVisible() || m_currentText != m_pendingText;
 
         m_currentText = m_pendingText;
         applyThemeStyle();
@@ -264,24 +294,28 @@ private:
         m_label->adjustSize();
         adjustSize();
 
-        QWidget *win = parentWidget();
-        QPoint cur = win->mapFromGlobal(m_pendingPos);
+        if (reposition)
+        {
+            QWidget *win = parentWidget();
+            QPoint cur = win->mapFromGlobal(m_pendingPos);
 
-        // Prefer below-right; flip above if it would clip the bottom edge
-        int x = cur.x() + 20;
-        int y = (cur.y() + 28 + height() + 8 <= win->height())
-                    ? cur.y() + 28
-                    : cur.y() - height() - 8;
+            // Prefer below-right; flip above if it would clip the bottom edge
+            int x = cur.x() + 20;
+            int y = (cur.y() + 28 + height() + 8 <= win->height())
+                        ? cur.y() + 28
+                        : cur.y() - height() - 8;
 
-        // Flip left if it would clip the right edge
-        if (x + width() + 8 > win->width())
-            x = cur.x() - width() - 4;
+            // Flip left if it would clip the right edge
+            if (x + width() + 8 > win->width())
+                x = cur.x() - width() - 4;
 
-        // Final clamp so it always stays inside the window
-        x = qBound(4, x, win->width() - width() - 4);
-        y = qBound(4, y, win->height() - height() - 4);
+            // Final clamp so it always stays inside the window
+            x = qBound(4, x, win->width() - width() - 4);
+            y = qBound(4, y, win->height() - height() - 4);
 
-        move(x, y);
+            move(x, y);
+        }
+
         raise();
         show();
 
@@ -317,6 +351,7 @@ private:
     QTimer *m_closeTimer{nullptr};
     QTimer *m_dismissTimer{nullptr};
     QPropertyAnimation *m_anim{nullptr};
+    bool m_armJustFired{false};
     QString m_pendingText;
     QPoint m_pendingPos;
     QString m_currentText;
@@ -4841,6 +4876,21 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 FadingTooltip::dismiss(m_zoomView);
             }
         }
+        else if (event->type() == QEvent::HoverMove)
+        {
+            // HoverMove on a non-checkbox widget — arm to keep tooltip alive while
+            // cursor stays within the widget (e.g. a button that uses WA_Hover).
+            QWidget *w = qobject_cast<QWidget *>(watched);
+            QString tip;
+            while (w && tip.isEmpty())
+            {
+                tip = w->toolTip();
+                w = w->parentWidget();
+            }
+            if (!tip.isEmpty())
+                FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
+            // No dismiss on HoverMove — HoverLeave handles leaving the widget.
+        }
         else if (event->type() == QEvent::MouseMove)
         {
             // Walk up the widget hierarchy: if any ancestor has a tooltip, show it.
@@ -4864,17 +4914,26 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // HoverEnter fires exactly once per entry — no double-dispatch race with viewport.
     if (event->type() == QEvent::HoverEnter)
     {
-        if (!qobject_cast<QCheckBox *>(watched))
+        QWidget *w = qobject_cast<QWidget *>(watched);
+        if (w && !qobject_cast<QCheckBox *>(w))
         {
-            QWidget *w = qobject_cast<QWidget *>(watched);
-            QString tip;
-            while (w && tip.isEmpty())
+            if (qobject_cast<QAbstractButton *>(w) && !w->toolTip().isEmpty())
             {
-                tip = w->toolTip();
-                w = w->parentWidget();
+                // Use the cursor's actual screen position at entry — mapToGlobal is
+                // unreliable inside QGraphicsView's zoom transform.
+                FadingTooltip::arm(w->toolTip(), QCursor::pos(), m_zoomView);
             }
-            if (!tip.isEmpty())
-                FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
+            else
+            {
+                QString tip;
+                while (w && tip.isEmpty())
+                {
+                    tip = w->toolTip();
+                    w = w->parentWidget();
+                }
+                if (!tip.isEmpty())
+                    FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
+            }
         }
     }
     if (event->type() == QEvent::HoverLeave)
@@ -5128,6 +5187,14 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // (sendEvent below will re-enter here with watched == cubeWidget.)
     if (watched == cubeWidget)
         return QMainWindow::eventFilter(watched, event);
+
+    // ── Esc — dismiss visible tooltip first; cube reset on the next Esc ─────
+    if (ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier
+        && FadingTooltip::active(m_zoomView))
+    {
+        FadingTooltip::dismissNow(m_zoomView);
+        return true;
+    }
 
     // ── Esc from m_mainInput — reset cube without stealing focus ─────────────
     if ((watched == m_mainInput || QApplication::focusWidget() == m_mainInput) && ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier)
