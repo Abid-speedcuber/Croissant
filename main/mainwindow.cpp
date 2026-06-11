@@ -159,6 +159,14 @@ private:
         m_closeTimer->setSingleShot(true);
         connect(m_closeTimer, &QTimer::timeout, this, &FadingTooltip::dismissImpl);
 
+        m_dismissTimer = new QTimer(this);
+        m_dismissTimer->setSingleShot(true);
+        connect(m_dismissTimer, &QTimer::timeout, this, [this] {
+            m_currentText.clear();
+            m_effect->setOpacity(0.0);
+            hide();
+        });
+
         hide();
     }
 
@@ -183,20 +191,28 @@ private:
     {
         m_pendingText = text;
         m_pendingPos = globalPos;
-        // Same text already visible — nothing to do
-        if (isVisible() && m_currentText == text)
+
+        // If a dismiss is pending, cancel it — we're still in tooltip territory
+        bool gracePending = m_dismissTimer->isActive();
+        if (gracePending)
+            m_dismissTimer->stop();
+
+        // Same text already visible (or grace-pending with same text) — just reposition
+        if ((isVisible() || gracePending) && m_currentText == text)
+        {
+            if (!isVisible()) { m_effect->setOpacity(1.0); show(); }
+            showNow();
             return;
-        // Different text already visible (mouse moved between options):
-        // skip delay, update immediately
-        if (isVisible())
+        }
+        // Different text visible/grace-pending — update immediately without delay
+        if (isVisible() || gracePending)
         {
             stopAnim();
             m_hoverTimer->stop();
             showNow();
             return;
         }
-        // Not yet visible: always restart the timer so the position updates
-        // as the user moves, and we always show from the correct final spot
+        // Not yet visible: start hover delay, updating pos each move
         m_hoverTimer->start(200);
     }
 
@@ -207,17 +223,9 @@ private:
         if (!isVisible())
             return;
         stopAnim();
-        m_currentText.clear();
-        QPropertyAnimation *anim = new QPropertyAnimation(m_effect, "opacity", this);
-        m_anim = anim;
-        anim->setDuration(150);
-        anim->setStartValue(m_effect->opacity());
-        anim->setEndValue(0.0);
-        anim->setEasingCurve(QEasingCurve::InCubic);
-        connect(anim, &QPropertyAnimation::finished, this, [this, anim]
-                {
-            if (m_anim == anim) { hide(); m_anim = nullptr; } });
-        anim->start(QAbstractAnimation::DeleteWhenStopped);
+        // Short grace period: if arm() fires within this window the tooltip
+        // updates instantly without flickering through a hidden state
+        m_dismissTimer->start(120);
     }
 
     void applyThemeStyle()
@@ -292,6 +300,7 @@ private:
     QGraphicsOpacityEffect *m_effect{nullptr};
     QTimer *m_hoverTimer{nullptr};
     QTimer *m_closeTimer{nullptr};
+    QTimer *m_dismissTimer{nullptr};
     QPropertyAnimation *m_anim{nullptr};
     QString m_pendingText;
     QPoint m_pendingPos;
