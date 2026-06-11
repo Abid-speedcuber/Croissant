@@ -242,10 +242,23 @@ private:
         adjustSize();
 
         QWidget *win = parentWidget();
-        QPoint local = win->mapFromGlobal(m_pendingPos) + QPoint(14, 18);
-        local.setX(qMin(local.x(), win->width() - width() - 8));
-        local.setY(qMin(local.y(), win->height() - height() - 8));
-        move(local);
+        QPoint cur = win->mapFromGlobal(m_pendingPos);
+
+        // Prefer below-right; flip above if it would clip the bottom edge
+        int x = cur.x() + 20;
+        int y = (cur.y() + 28 + height() + 8 <= win->height())
+                    ? cur.y() + 28
+                    : cur.y() - height() - 8;
+
+        // Flip left if it would clip the right edge
+        if (x + width() + 8 > win->width())
+            x = cur.x() - width() - 4;
+
+        // Final clamp so it always stays inside the window
+        x = qBound(4, x, win->width()  - width()  - 4);
+        y = qBound(4, y, win->height() - height() - 4);
+
+        move(x, y);
         raise();
         show();
 
