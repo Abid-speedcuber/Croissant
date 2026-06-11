@@ -144,8 +144,14 @@ QString buildStyleSheet() {
     QString finalStyle = styleFile.readAll();
     styleFile.close();
 
-    for (auto it = variables.begin(); it != variables.end(); ++it)
-        finalStyle.replace(it.key(), it.value());
+    // Replace longest keys first so a shorter key (e.g. --input-apply-hover)
+    // can't clobber the start of a longer one (--input-apply-hover-text).
+    QList<QString> keys = variables.keys();
+    std::sort(keys.begin(), keys.end(), [](const QString &a, const QString &b) {
+        return a.length() > b.length();
+    });
+    for (const QString &key : keys)
+        finalStyle.replace(key, variables[key]);
 
     return finalStyle;
 }

@@ -2818,7 +2818,7 @@ void MainWindow::onSolverDone(int code)
                         stepOut->stop(); delete stepO;
                         // Now swap to table icon and fade in
                         btnScrollToBottom->setText("⊞");
-                        btnScrollToBottom->setToolTip("Go to table view");
+                        btnScrollToBottom->setToolTip("Switch to table view");
                         auto *stepIn = new QTimer(btnScrollToBottom);
                         stepIn->setInterval(16);
                         auto *stepI = new int(0);
@@ -4126,8 +4126,7 @@ void MainWindow::showSettingsModal()
     chkSmart->setChecked(m_smartKarn);
     chkSmart->setEnabled(!solverRunning);
     chkSmart->setToolTip("When 'Karnotation output' is on, use cubeshape-aware karnify.\n"
-                         "i.e. apply different karn rules depending on whether the puzzle\n"
-                         "is in cubeshape at each move.");
+                         "i.e. don't karnify less obvious karns, like T, when out of CS.");
     chkSmart->setStyleSheet(QString("background:transparent;font-size:13px;").arg(textPrimary));
     connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked)
             {
@@ -4639,23 +4638,42 @@ void MainWindow::showHowToUseModal()
                       "• <b style='color:%2;'>W</b> = D, but by two pieces &nbsp; <b style='color:%2;'>O</b> = D', but by two pieces<br><br>"
                       "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
                       "Type some moves and hit <b>Apply</b>. Karn will be parsed correctly.<br>"
-                      "Use the mode button (to the left of the alg input) to switch between <b>Scram</b> (applies moves forward) and <b>Alg</b> (inverts before applying).<br><br>"
+                      "Use the mode button (to the left of the input) to switch between three modes: "
+                      "<b>Scram</b> (applies moves forward as a scramble), "
+                      "<b>Alg</b> (inverts before applying, useful for testing algs), and "
+                      "<b>Pos</b> (interprets the input as a raw position string).<br><br>"
+                      "<b style='color:%1;font-size:13px;'>Favorites</b><br>"
+                      "Algs can be saved to bins for later reference. "
+                      "Right-click an alg in the terminal, or click any row in the table, to open a context menu with two options:<br>"
+                      "• <b>⧉ Copy alg</b> — copies the alg text (without the move-count brackets).<br>"
+                      "• <b>♥ Add to Favorites Bin</b> — saves the alg to a bin for the current solve configuration.<br>"
+                      "Bins are keyed by configuration (position + flags), so algs from the same setup always land in the same bin regardless of when they were added. "
+                      "Click the <b>♥</b> button (visible in the terminal area) to open the Favorites modal, where you can:<br>"
+                      "• Click a <b>bin title</b> to re-apply that configuration and clear the terminal.<br>"
+                      "• Use <b>✏</b> to rename a bin, <b>⧉</b> to copy all its algs, or <b>🗑</b> to delete the bin entirely.<br>"
+                      "• Click <b>✕</b> next to any alg to remove just that entry.<br>"
+                      "Favorited algs are stored as displayed (including notation style) and persist between sessions.<br><br>"
                       "<b style='color:%1;font-size:13px;'>Options</b><br>"
-                      "you can read the descriptions for the options by hovering over them, but here's a comprehensive list:<br>"
-                      "• <b>Slice metric</b>: only count slices as moves (instead of also including U and D moves when counting the \"movecount\" of an alg).<br>"
-                      "• <b>All optimal</b>: instead of stopping the solver after finding one of the shortest solutions, find all of them. (\"shortest\" means: the least \"moves\". change what a \"move\" mean with the slice metric option)<br>"
-                      "• <b>+suboptimal</b>: on top of finding all the shortest solutions, also find solutions up to N moves longer than optimal.<br>"
-                      "• <b>Specific depths</b>: search only for solutions that are these moves long (comma-separated). e.g. \"8,9\" will return all solutions that are 8 moves and 9 moves long.<br>"
-                      "• <b>Generator alg</b>: instead of solving the case displayed in the app, output algs will set up the case.<br>"
-                      "• <b>Stay in cubeshape</b>: restrict to algs that stay in cubeshape (CS) throughout.<br>"
+                      "Hover over any option to read its description. Quick reference:<br>"
+                      "• <b>Metric</b>: how move length is counted — <b>Slice</b> (only slices), <b>Move</b> (layer turns too), or <b>Angle</b>.<br>"
+                      "• <b>All optimal</b>: find every shortest solution, not just the first one found.<br>"
+                      "• <b>+suboptimal</b>: also return solutions up to N moves longer than optimal.<br>"
+                      "• <b>Specific depths</b>: search only the listed move counts (comma-separated, e.g. \"8,9\").<br>"
+                      "• <b>Generator alg</b>: output algs set up the case from solved instead of solving it.<br>"
+                      "• <b>2 Gen / Pseudo 2 Gen</b>: restrict moves to top-layer turns and slices (or a pseudo variant).<br>"
+                      "• <b>Stay in cubeshape</b>: restrict to algs that keep the puzzle in cubeshape throughout.<br>"
                       "• <b>Karnotation output</b>: display solutions in karn instead of WCA notation.<br>"
-                      "• <b>Max top / bottom / total turns</b>: limit how big the layer turns can be. Hover over the options to see details.<br><br>"
+                      "• <b>Lock layer angle on pre-ABF</b>: constrain the pre-AUF move to ±1 or 0.<br>"
+                      "• <b>Normalize ABF</b>: simplify AUF moves in the output (e.g. 3,-1 → 0,-1).<br>"
+                      "• <b>Max top / bottom / total turns</b>: cap how large layer turns can be.<br><br>"
                       "<b style='color:%1;font-size:13px;'>Output</b><br>"
-                      "Solutions will appear in the terminal. After you generated some algs, these buttons will appear:<br>"
-                      "• the <b>⊞</b> button: switch between terminal view and table view.<br>"
-                      "• the <b>⤢</b> button: expand the terminal to full screen.<br>"
-                      "Right-click a row in the table view to copy the alg, or to copy the whole row.<br>"
-                      "If <b>Stay in cubeshape</b> was active, you can click on <b>Roughly rank algs based on relative ergonomics</b> (located below the terminal area), which will sort the output algs by an estimate of their actual speed.<br>")
+                      "Solutions appear in the terminal as they are found. Once algs are present, several buttons appear in the corner of the terminal area:<br>"
+                      "• <b>⧉</b> — copy all algs in the terminal to the clipboard.<br>"
+                      "• <b>⊞</b> — switch between terminal view and table view.<br>"
+                      "• <b>⤢</b> — expand the terminal to full screen.<br>"
+                      "In table view, clicking any row opens the context menu (copy alg or add to favorites). "
+                      "In terminal view, right-click an alg line for the same menu.<br>"
+                      "If <b>Stay in cubeshape</b> was active, a <b>Roughly rank algs by ergonomics</b> button appears below the terminal — click it to sort algs by an estimated speed score.<br>")
                       .arg(textPrimary, textCyan));
 
     sa->setWidget(body);
@@ -4739,7 +4757,18 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
         else if (event->type() == QEvent::MouseMove)
         {
-            FadingTooltip::dismiss(m_zoomView);
+            // Walk up the widget hierarchy: if any ancestor has a tooltip, show it.
+            // This makes radio-row containers and spinboxes work without special-casing.
+            QWidget *w = qobject_cast<QWidget *>(watched);
+            QString tip;
+            while (w && tip.isEmpty()) {
+                tip = w->toolTip();
+                w = w->parentWidget();
+            }
+            if (!tip.isEmpty())
+                FadingTooltip::arm(tip, QCursor::pos(), m_zoomView);
+            else
+                FadingTooltip::dismiss(m_zoomView);
         }
     }
 
