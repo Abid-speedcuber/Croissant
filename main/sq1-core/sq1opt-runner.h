@@ -16,4 +16,9 @@ void sq1optSetPosition(const int pos[24], int middle);
 // (twoGen==1) on the given position. Empty => the position can't be 2-genned in
 // that mode. twoGen==0 returns {0}. Single source of truth shared by the solver
 // (FullPosition::findPreadf) and the UI's Solve-button enable check.
-std::vector<int> sq1TwoGenPreadf(const int pos[24], int twoGen);
+std::vector<int> twoGenPreadf(const int pos[24], int twoGen);
+
+// Whether the 8 corners can be solved using only pseudo-2-gen moves (the corner
+// permutation lies in the 2-gen corner group). Single source of truth shared by
+// the solver's keep-cube-shape p2g guard and the UI's Solve-button enable check.
+bool has2GenCorners(const int pos[24]);

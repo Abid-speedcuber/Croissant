@@ -480,7 +480,7 @@ public:
 //
 // Single source of truth shared by FullPosition::findPreadf (solver) and the
 // UI's Solve-button enable check; declared in sq1opt-runner.h.
-std::vector<int> sq1TwoGenPreadf(const int pos[24], int twoGen) {
+std::vector<int> twoGenPreadf(const int pos[24], int twoGen) {
 	std::vector<int> result;
 	if (twoGen == 0) { result.push_back(0); return result; }
 	if (twoGen == 2) {
@@ -523,6 +523,56 @@ std::vector<int> sq1TwoGenPreadf(const int pos[24], int twoGen) {
 		}
 	}
 	return result;
+}
+
+// Whether the 8 corners can be solved using only pseudo-2-gen moves (top turns +
+// slices + D±1), i.e. the corner permutation is reachable in the 2-gen corner
+// group.  Reads the corners from pos[0..17] (top layer + bottom-right).  Used by
+// the solver's keep-cube-shape p2g guard and the UI's Solve-button enable check.
+// Single source of truth; declared in sq1opt-runner.h.
+bool has2GenCorners(const int pos[24]) {
+	// get corners
+	int tmp[6];
+	int j=0;
+	for (int i=0; i<18; i++) {
+		if (pos[i]<8) {
+			if (j%2 == 0) tmp[j/2] = pos[i];
+			j++;
+		}
+	}
+	// place D corners - if we find a D corner on U, AUF and then insert
+	int found_d = -1;
+	for (int i=0; i<4; i++) if(tmp[i]>3) found_d = i;
+	if (found_d > -1) {
+		int tmp2[4];
+		for (int i=0; i<4; i++) tmp2[i] = tmp[i];
+		for (int i=0; i<4; i++) tmp[i] = tmp2[(i + found_d) % 4];
+		int k = tmp[0]; tmp[0] = tmp[4]; tmp[4] = k;
+		k = tmp[2]; tmp[2] = tmp[3]; tmp[3] = k;
+	}
+	found_d = -1;
+	for (int i=0; i<4; i++) if(tmp[i]>3) found_d = i;
+	if (found_d > -1) {
+		int tmp2[4];
+		for (int i=0; i<4; i++) tmp2[i] = tmp[i];
+		for (int i=0; i<4; i++) tmp[i] = tmp2[(i + found_d) % 4];
+		int k = tmp[0]; tmp[0] = tmp[5]; tmp[5] = k;
+		k = tmp[1]; tmp[1] = tmp[2]; tmp[2] = k;
+	}
+	// adjust if D corners are swapped, then AUF
+	if (tmp[4] == 5 && tmp[5] == 4) {
+		tmp[4] = 4; tmp[5] = 5;
+		int k = tmp[0]; tmp[0] = tmp[2]; tmp[2] = k;
+	}
+	int found_u = -1;
+	for (int i=0; i<4; i++) if(tmp[i]==0) found_u = i;
+	if (found_u > -1) {
+		int tmp2[4];
+		for (int i=0; i<4; i++) tmp2[i] = tmp[i];
+		for (int i=0; i<4; i++) tmp[i] = tmp2[(i + found_u) % 4];
+	}
+	if (tmp[0] == 0 && tmp[1] == 1 && tmp[2] == 2 && tmp[3] == 3 && tmp[4] == 4 && tmp[5] == 5) return true;
+	return false;
 }
 
 // Piece numbers below 0 are partially specified corners. Based on the value modulo 3, it's a
@@ -906,52 +956,10 @@ public:
 		return(0);
 	}
 	// assuming we're in a square/square shape, check if the corners are solvable with 2gen
-	bool has2GenCorners(){
-		// get corners
-		int tmp[6];
-		int j=0;
-		for (int i=0; i<18; i++) {
-			if (pos[i]<8) {
-				if (j%2 == 0) tmp[j/2] = pos[i];
-				j++;
-			}
-		}
-		// place D corners - if we find a D corner on U, AUF and then insert
-		int found_d = -1;
-		for (int i=0; i<4; i++) if(tmp[i]>3) found_d = i;
-		if (found_d > -1) {
-			int tmp2[4];
-			for (int i=0; i<4; i++) tmp2[i] = tmp[i];
-			for (int i=0; i<4; i++) tmp[i] = tmp2[(i + found_d) % 4];
-			int k = tmp[0]; tmp[0] = tmp[4]; tmp[4] = k;
-			k = tmp[2]; tmp[2] = tmp[3]; tmp[3] = k;
-		}
-		found_d = -1;
-		for (int i=0; i<4; i++) if(tmp[i]>3) found_d = i;
-		if (found_d > -1) {
-			int tmp2[4];
-			for (int i=0; i<4; i++) tmp2[i] = tmp[i];
-			for (int i=0; i<4; i++) tmp[i] = tmp2[(i + found_d) % 4];
-			int k = tmp[0]; tmp[0] = tmp[5]; tmp[5] = k;
-			k = tmp[1]; tmp[1] = tmp[2]; tmp[2] = k;
-		}
-		// adjust if D corners are swapped, then AUF
-		if (tmp[4] == 5 && tmp[5] == 4) {
-			tmp[4] = 4; tmp[5] = 5;
-			int k = tmp[0]; tmp[0] = tmp[2]; tmp[2] = k;
-		}
-		int found_u = -1;
-		for (int i=0; i<4; i++) if(tmp[i]==0) found_u = i;
-		if (found_u > -1) {
-			int tmp2[4];
-			for (int i=0; i<4; i++) tmp2[i] = tmp[i];
-			for (int i=0; i<4; i++) tmp[i] = tmp2[(i + found_u) % 4];
-		}
-		if (tmp[0] == 0 && tmp[1] == 1 && tmp[2] == 2 && tmp[3] == 3 && tmp[4] == 4 && tmp[5] == 5) return true;
-		return false;
-	}
-	// Valid preadf D rotations for 2-gen / pseudo-2-gen — see sq1TwoGenPreadf().
-	std::vector<int> findPreadf(int twoGen) const { return sq1TwoGenPreadf(pos, twoGen); }
+	// Whether the corners can be solved with pseudo-2-gen moves — see has2GenCorners().
+	bool has2GenCorners(){ return ::has2GenCorners(pos); }
+	// Valid preadf D rotations for 2-gen / pseudo-2-gen — see twoGenPreadf().
+	std::vector<int> findPreadf(int twoGen) const { return twoGenPreadf(pos, twoGen); }
 	bool singleMatch(int posI, int solvedI) {
 		if (posI == solvedI) return true;
 		if (posI>15 && posI%3==0  && solvedI >= 8  && solvedI <= 11) return true; // edge up
@@ -1226,6 +1234,12 @@ class PositionSolver {
 		if (keepCubeShape) {
 			// check that it's in cube shape and of the right parity
 			if (!checkKeepCubeShape()) {
+				return 19;
+			}
+			// keeping cube shape with a 2-gen mode also requires the corner
+			// permutation to be solvable with 2-gen moves (in addition to the
+			// block/preadf check above) — otherwise the search would never finish.
+			if ((twoGen == 1 || twoGen == 2) && !fp.has2GenCorners()) {
 				return 19;
 			}
 		}
