@@ -719,10 +719,11 @@ bool cornersAre2GenSolvable(const int pos[24], int twoGen) {
 		while (m-- > 0) { int c = a[23]; for (int i=23;i>12;i--) a[i]=a[i-1]; a[12]=c; }
 	};
 	for (int k : twoGenPreadf(pos, twoGen)) {
-		int Ck[24]; for (int i=0;i<24;i++) Ck[i]=C[i]; doBotArr(Ck, k);
+		int copy[24]; for (int i=0;i<24;i++) copy[i]=pos[i]; doBotArr(copy, k);
+		int cano = (7 - copy[23]) * 3; // the amount to color shift by
+		int Ck[24]; for (int i=0;i<24;i++) Ck[i]=C[i]; doBotArr(Ck, cano);
 		int sigma[8]; for (int i=0;i<8;i++) sigma[i]=i;
 		for (int i=0;i<24;i++) if (Ck[i] >= 0 && Ck[i] < 8) sigma[Ck[i]] = C[i];
-		int copy[24]; for (int i=0;i<24;i++) copy[i]=pos[i]; doBotArr(copy, k);
 		for (int i=0;i<24;i++) if (copy[i] >= 0 && copy[i] < 8) copy[i] = sigma[copy[i]];
 		if (partialHas2GenCorners(copy)) return true;
 	}
