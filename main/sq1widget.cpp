@@ -4,6 +4,7 @@
 #include <QPolygonF>
 #include <QtMath>
 #include <QDebug>
+#include <vector>
 
 Sq1Widget::Sq1Widget(QWidget *parent) : QWidget(parent)
 {
@@ -145,6 +146,56 @@ bool Sq1Widget::setPositionFromString(const QString &pos)
         int botEdges = (pieceCount[12] > 0) + (pieceCount[13] > 0) + (pieceCount[14] > 0) + (pieceCount[15] > 0) + partialDownEdge;
         if (topCorners > 4 || botCorners > 4 || topEdges > 4 || botEdges > 4)
             return false;
+
+        // Give every partial slot a concrete identity drawn from the pieces not
+        // already present in the state. partiality[] is left untouched, so pieces
+        // still render grey; the concrete value only surfaces when the user
+        // right-clicks the piece to cycle partiality down to 0 (full).
+        //   U/X (top partials)    <- unused top-layer pieces    (corners 0-3, edges 8-11)
+        //   V/Y (bottom partials) <- unused bottom-layer pieces (corners 4-7, edges 12-15)
+        //   W/Z (any partials)    <- whatever is left over, in either layer
+        // The per-layer >4 guard above guarantees enough top/bottom pieces for the
+        // U/V/X/Y slots, so only W/Z ever fall back to the leftover pool.
+        {
+            std::vector<int> freeTopC, freeBotC, freeTopE, freeBotE;
+            for (int c = 0; c < 4; c++)   if (pieceCount[c] == 0) freeTopC.push_back(c);
+            for (int c = 4; c < 8; c++)   if (pieceCount[c] == 0) freeBotC.push_back(c);
+            for (int e = 8; e < 12; e++)  if (pieceCount[e] == 0) freeTopE.push_back(e);
+            for (int e = 12; e < 16; e++) if (pieceCount[e] == 0) freeBotE.push_back(e);
+
+            auto take = [](std::vector<int> &pool) { int v = pool.back(); pool.pop_back(); return v; };
+
+            // Pass 1: U/V/X/Y (partiality 1) draw from their home-layer pools.
+            for (int i = 0; i < 24; i++)
+            {
+                bool isCorner = pi[i] < 8;
+                if (parArr[i] == 1)
+                {
+                    bool top = (pi[i] % 3 == 0); // mirrors getRawState's home-layer test
+                    int val = isCorner
+                                  ? take(top ? freeTopC : freeBotC)
+                                  : take(top ? freeTopE : freeBotE);
+                    pi[i] = val;
+                    if (isCorner && i + 1 < 24) pi[i + 1] = val; // corner twin slot
+                }
+                if (isCorner) i++;
+            }
+
+            // Pass 2: W/Z (partiality 2) draw from whatever is left, either layer.
+            std::vector<int> freeC = freeBotC; freeC.insert(freeC.end(), freeTopC.begin(), freeTopC.end());
+            std::vector<int> freeE = freeBotE; freeE.insert(freeE.end(), freeTopE.begin(), freeTopE.end());
+            for (int i = 0; i < 24; i++)
+            {
+                bool isCorner = pi[i] < 8;
+                if (parArr[i] == 2)
+                {
+                    int val = take(isCorner ? freeC : freeE);
+                    pi[i] = val;
+                    if (isCorner && i + 1 < 24) pi[i + 1] = val;
+                }
+                if (isCorner) i++;
+            }
+        }
 
         // barflip handling
         int mid = 1;
