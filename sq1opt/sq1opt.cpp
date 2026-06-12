@@ -480,47 +480,105 @@ public:
 //
 // Single source of truth shared by FullPosition::findPreadf (solver) and the
 // UI's Solve-button enable check; declared in sq1opt-runner.h.
+// Whether a position value (concrete 0-15, or partially-specified: corner <0,
+// edge >15, with value%3 selecting up/down/any) could represent the concrete
+// piece `target` (0-15).  Mirror of FullPosition::singleMatch as a free function.
+bool couldBe(int posVal, int target) {
+	if (posVal == target) return true;
+	if (posVal>15 && posVal%3==0  && target>=8  && target<=11) return true; // edge up (X)
+	if (posVal>15 && posVal%3==1  && target>=12 && target<=15) return true; // edge down (Y)
+	if (posVal<0  && posVal%3==0  && target>=0  && target<=3)  return true; // corner up (U)
+	if (posVal<0  && posVal%3==-2 && target>=4  && target<=7)  return true; // corner down (V)
+	if (posVal>15 && posVal%3==2  && target>=8  && target<=15) return true; // edge any (Z)
+	if (posVal<0  && posVal%3==-1 && target>=0  && target<=7)  return true; // corner any (W)
+	return false;
+}
+
+// Piece-count validity of a pos[24] array — the same rules enforced by
+// Sq1Widget::setPositionFromString and FullPosition::parseInput: every concrete
+// piece (0-15) appears at most once, and no layer holds more than 4 corners or 4
+// edges of its type (8 total of each).  Side-effect free; corners occupy two
+// adjacent slots.  Assumes a well-formed array (corner halves adjacent), which
+// holds for any real position and for fills that don't split a corner across the
+// 23/12 boundary (such fills produce a duplicate and are rejected here anyway).
+bool validPosition(const int pos[24]) {
+	int pieceCount[16] = {0};
+	int cUp=0, cDown=0, cTot=0, eUp=0, eDown=0, eTot=0;
+	for (int i=0; i<24; i++) {
+		int k = pos[i];
+		if (k>=0 && k<=15) { if (++pieceCount[k] > 1) return false; }
+		if (k<8) { // corner (concrete 0-7 or partial <0)
+			cTot++;
+			if ((k<0 && k%3==0)  || (k>=0 && k<=3)) cUp++;
+			if ((k<0 && k%3==-2) || (k>=4 && k<=7)) cDown++;
+			i++; // corners occupy two slots
+		} else {   // edge (concrete 8-15 or partial >15)
+			eTot++;
+			if ((k>15 && k%3==0) || (k>=8  && k<=11)) eUp++;
+			if ((k>15 && k%3==1) || (k>=12 && k<=15)) eDown++;
+		}
+	}
+	if (cUp>4 || cDown>4 || cTot>8 || eUp>4 || eDown>4 || eTot>8) return false;
+	return true;
+}
+
 std::vector<int> twoGenPreadf(const int pos[24], int twoGen) {
 	std::vector<int> result;
 	if (twoGen == 0) { result.push_back(0); return result; }
-	if (twoGen == 2) {
-		// The 8 contiguous 6-slot windows of the solved D layer.
-		static const int blocks[8][6] = {
-			{14, 6, 6,15, 7, 7}, // O·G·P·H (solved bottom-left)
-			{15, 7, 7,12, 4, 4}, // P·H·M·E
-			{12, 4, 4,13, 5, 5}, // M·E·N·F
-			{13, 5, 5,14, 6, 6}, // N·F·O·G
-			{ 6, 6,15, 7, 7,12}, // G·P·H·M
-			{ 7, 7,12, 4, 4,13}, // H·M·E·N
-			{ 4, 4,13, 5, 5,14}, // E·N·F·O
-			{ 5, 5,14, 6, 6,15}, // F·O·G·P
-		};
-		for (int k = 0; k < 12; k++) {
-			auto b = [&](int i) { return pos[12 + (i - k + 12) % 12]; };
-			for (const auto& blk : blocks) {
-				if (b(6)==blk[0] && b(7)==blk[1] && b(8)==blk[2] &&
-				    b(9)==blk[3] && b(10)==blk[4] && b(11)==blk[5]) {
-					result.push_back(k);
-					break;
+
+	// The 8 contiguous 6-slot windows of the solved D layer (2-gen blocks)...
+	static const int blocks2g[8][6] = {
+		{14, 6, 6,15, 7, 7}, // O·G·P·H (solved bottom-left)
+		{15, 7, 7,12, 4, 4}, // P·H·M·E
+		{12, 4, 4,13, 5, 5}, // M·E·N·F
+		{13, 5, 5,14, 6, 6}, // N·F·O·G
+		{ 6, 6,15, 7, 7,12}, // G·P·H·M
+		{ 7, 7,12, 4, 4,13}, // H·M·E·N
+		{ 4, 4,13, 5, 5,14}, // E·N·F·O
+		{ 5, 5,14, 6, 6,15}, // F·O·G·P
+	};
+	// ...and the 4 solved CEC blocks (pseudo-2-gen).
+	static const int blocksP2g[4][5] = {
+		{4,4,13,5,5}, // E,6,F
+		{5,5,14,6,6}, // F,7,G
+		{6,6,15,7,7}, // G,8,H
+		{7,7,12,4,4}, // H,5,E
+	};
+
+	// For each candidate rotation k, the bottom-left "frozen" region is at offsets
+	// 6..11 (2-gen) — or 7..11 / 6..10 for the shorter p2g CEC block, since D±1 is
+	// allowed.  realIdx(i) is the pos[] index that lands at bottom offset i after
+	// doBot(k).  A candidate is valid if some block W is piece-by-piece compatible
+	// with it (couldBe) AND writing W's concrete pieces there leaves a valid
+	// position (no piece used twice / no layer overfull).  This handles fully
+	// concrete and partially-specified positions uniformly.
+	for (int k = 0; k < 12; k++) {
+		auto realIdx = [&](int i) { return 12 + (i - k + 12) % 12; };
+		bool ok = false;
+
+		if (twoGen == 2) {
+			for (const auto& W : blocks2g) {
+				bool match = true;
+				for (int j=0; j<6; j++) if (!couldBe(pos[realIdx(6+j)], W[j])) { match=false; break; }
+				if (!match) continue;
+				int copy[24]; for (int i=0;i<24;i++) copy[i]=pos[i];
+				for (int j=0; j<6; j++) copy[realIdx(6+j)] = W[j];
+				if (validPosition(copy)) { ok=true; break; }
+			}
+		} else {
+			for (const auto& W : blocksP2g) {
+				for (int base : {7, 6}) {
+					bool match = true;
+					for (int j=0; j<5; j++) if (!couldBe(pos[realIdx(base+j)], W[j])) { match=false; break; }
+					if (!match) continue;
+					int copy[24]; for (int i=0;i<24;i++) copy[i]=pos[i];
+					for (int j=0; j<5; j++) copy[realIdx(base+j)] = W[j];
+					if (validPosition(copy)) { ok=true; break; }
 				}
+				if (ok) break;
 			}
 		}
-	} else {
-		static const int cecPatterns[4][5] = {
-			{4,4,13,5,5}, // E,6,F
-			{5,5,14,6,6}, // F,7,G
-			{6,6,15,7,7}, // G,8,H
-			{7,7,12,4,4}, // H,5,E
-		};
-		for (int k = 0; k < 12; k++) {
-			auto b = [&](int i) { return pos[12 + (i - k + 12) % 12]; };
-			for (const auto& p : cecPatterns) {
-				if ((b(7)==p[0] && b(8)==p[1] && b(9)==p[2] && b(10)==p[3] && b(11)==p[4]) ||
-				    (b(6)==p[0] && b(7)==p[1] && b(8)==p[2] && b(9)==p[3] && b(10)==p[4])) {
-					result.push_back(k); break;
-				}
-			}
-		}
+		if (ok) result.push_back(k);
 	}
 	return result;
 }
@@ -960,16 +1018,7 @@ public:
 	bool has2GenCorners(){ return ::has2GenCorners(pos); }
 	// Valid preadf D rotations for 2-gen / pseudo-2-gen — see twoGenPreadf().
 	std::vector<int> findPreadf(int twoGen) const { return twoGenPreadf(pos, twoGen); }
-	bool singleMatch(int posI, int solvedI) {
-		if (posI == solvedI) return true;
-		if (posI>15 && posI%3==0  && solvedI >= 8  && solvedI <= 11) return true; // edge up
-		if (posI>15 && posI%3==1  && solvedI >= 12 && solvedI <= 15) return true; // edge down
-		if (posI<0  && posI%3==0  && solvedI >= 0  && solvedI <= 3)  return true; // corner up
-		if (posI<0  && posI%3==-2 && solvedI >= 4  && solvedI <= 7)  return true; // corner down
-		if (posI>15 && posI%3==2  && solvedI >= 8  && solvedI <= 15) return true; // edge any
-		if (posI<0  && posI%3==-1 && solvedI >= 0  && solvedI <= 7)  return true; // corner any
-		return false;
-	}
+	bool singleMatch(int posI, int solvedI) { return couldBe(posI, solvedI); }
 	bool matchesSolved() {
 		int solved[24] = {0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7};
 		for (int i=0; i<24; i++) {
@@ -1589,81 +1638,93 @@ public:
 		return r;
 	}
 	int solve(int twoGen, int extraMoves, bool keepCubeShape){
-		// check that the given position is solvable with these constraints
-		if (twoGen == 2) {
-			// check that 7G8H are solved
-			if (!(fp.singleMatch(fp.pos[18], 14) && fp.singleMatch(fp.pos[19], 6) &&
-				fp.singleMatch(fp.pos[20], 6) && fp.singleMatch(fp.pos[21], 15) &&
-				fp.singleMatch(fp.pos[22], 7) && fp.singleMatch(fp.pos[23], 7))) return 19;
-		} else if (twoGen == 1) {
-			// check that G8H are solved or solved-and-ADF
-			if (fp.singleMatch(fp.pos[19], 6) && fp.singleMatch(fp.pos[20], 6) &&
-				fp.singleMatch(fp.pos[21], 15) && fp.singleMatch(fp.pos[22], 7) &&
-				fp.singleMatch(fp.pos[23], 7)) {
-				// ok
-			} else if (fp.singleMatch(fp.pos[18], 6) && fp.singleMatch(fp.pos[19], 6) &&
-				fp.singleMatch(fp.pos[20], 15) && fp.singleMatch(fp.pos[21], 7) &&
-				fp.singleMatch(fp.pos[22], 7)) {
-				// ok
-			} else return 19;
-		}
+		// Partial-aware preadf detection doubles as the 2-gen / p2g solve guard:
+		// twoGenPreadf understands U/V/W/X/Y/Z pieces, so it returns every rotation
+		// that can bring a (possibly partially-specified) solved block to the frozen
+		// bottom-left.  Empty => not 2-genable.  twoGen==0 returns {0}.
+		auto preadfs = fp.findPreadf(twoGen);
+		if ((twoGen == 1 || twoGen == 2) && preadfs.empty()) return 19;
+
 		if (keepCubeShape) {
-			// check that it's in cube shape and of the right parity
+			// check that it's in cube shape and of the right parity.  (The 2-gen
+			// has2GenCorners corner guard is intentionally NOT applied for partial
+			// positions yet — that handling is still being designed.)
 			if (!checkKeepCubeShape()) {
 				return 19;
 			}
 		}
 
-		// run the solve
-		moveLen=0;
+		FullPosition fpOrig = fp;
+
+		// Snapshot the full per-preadf start state.  PartialPositionSolver::doMove
+		// mutates fp and the extra shapes during search, and isSolved() reads fp, so
+		// everything must be restored before each search.  All candidates share the
+		// same middle (doBot doesn't change it), so the depth parity is common.
+		struct PreadfState {
+			FullPosition fp;
+			int e0,e1,e2,c0,c1,c2,shp,shp2,shpx,shpx2,middle,preadf;
+		};
+		std::vector<PreadfState> states;
+		for (int k : preadfs) {
+			fp = fpOrig;
+			if (k != 0) fp.doBot(k);
+			set(fp, findAll, ignoreTrans);
+			states.push_back({fp, e0,e1,e2,c0,c1,c2,shp,shp2,shpx,shpx2,middle,k});
+		}
+		const int sharedMiddle = states[0].middle;
+
+		auto restore = [&](const PreadfState& st){
+			fp=st.fp;
+			e0=st.e0; e1=st.e1; e2=st.e2; c0=st.c0; c1=st.c1; c2=st.c2;
+			shp=st.shp; shp2=st.shp2; shpx=st.shpx; shpx2=st.shpx2;
+			middle=st.middle; m_preadfBot=st.preadf;
+			moveLen=0; for(int i=0;i<6;i++) lastTurns[i]=0;
+		};
+
 		unsigned long nodes=0;
-		// only even lengths if slice metric and middle is square
-		int l=-1;
-		if( metric==SLICE_METRIC && middle==1 ) l=-2;
-		// do ida
 		int optimalMoves = -1;
+
+		// preadf candidates run in parallel, interleaved by depth (see PositionSolver::solve).
 		if (!specificDepths.empty()) {
-			// Save all state that search() may leave corrupted on early exit.
-			// This includes the base-class encoded state as well as PartialPositionSolver's
-			// extra shapes and the FullPosition used by isSolved().
-			int saved_e0=e0, saved_e1=e1, saved_e2=e2;
-			int saved_c0=c0, saved_c1=c1, saved_c2=c2;
-			int saved_shp=shp, saved_shp2=shp2, saved_middle=middle;
-			int saved_shpx=shpx, saved_shpx2=shpx2;
-			FullPosition saved_fp=fp;
 			for (int depth : specificDepths) {
-				if (stopRequested.load()) return -1;
-				// Restore all encoded state before each depth search
-				e0=saved_e0; e1=saved_e1; e2=saved_e2;
-				c0=saved_c0; c1=saved_c1; c2=saved_c2;
-				shp=saved_shp; shp2=saved_shp2; middle=saved_middle;
-				shpx=saved_shpx; shpx2=saved_shpx2;
-				fp=saved_fp;
-				moveLen=0;
-				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
-				for(int i=0;i<6;i++) lastTurns[i]=0;
-				if (metric == SLICE_METRIC && ((depth % 2 == 1 && middle == 1) || (depth % 2 == 0 && middle == -1))) {
+				if (metric == SLICE_METRIC && ((depth % 2 == 1 && sharedMiddle == 1) || (depth % 2 == 0 && sharedMiddle == -1))) {
 					std::cout << "depth "<<depth<<" does not match the barflip state" << std::endl<<std::flush;
 					continue;
 				}
-				int searchResult = search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
-				if (searchResult < 0) return searchResult;
+				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
+				for (const auto& st : states) {
+					if (stopRequested.load()) return -1;
+					restore(st);
+					int searchResult = search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+					if (searchResult < 0) return searchResult;
+					if (searchResult != 0 && !findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+				}
 			}
 		} else {
-		while(true){
-			if (stopRequested.load()) return -1;
-			l++;
-			if( metric==SLICE_METRIC && middle!=0 ) l++;
-			if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
-			for( int i=0; i<6; i++) lastTurns[i]=0;
-			int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
-			if (searchResult < 0) return searchResult;
-			if (searchResult != 0) {
-				if (optimalMoves == -1) optimalMoves = l;
-				if (l >= optimalMoves + extraMoves || (metric==SLICE_METRIC && middle!=0 && l+1 >= optimalMoves + extraMoves)) break;
+			int l=-1;
+			if( metric==SLICE_METRIC && sharedMiddle==1 ) l=-2;
+			while(true){
+				l++;
+				if( metric==SLICE_METRIC && sharedMiddle!=0 ) l++;
+				if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
+				for (const auto& st : states) {
+					if (stopRequested.load()) return -1;
+					restore(st);
+					int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
+					if (searchResult < 0) return searchResult;
+					if (searchResult != 0) {
+						if (optimalMoves == -1) optimalMoves = l;
+						if (!findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+					}
+				}
+				if (optimalMoves != -1 &&
+				    (l >= optimalMoves + extraMoves || (metric==SLICE_METRIC && sharedMiddle!=0 && l+1 >= optimalMoves + extraMoves)))
+					break;
 			}
-		};
 		}
+
+		fp = fpOrig;
+		m_preadfBot = 0;
 		return 0;
 	}
 	inline bool isSolved() {
