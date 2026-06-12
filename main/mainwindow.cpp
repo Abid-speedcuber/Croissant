@@ -1711,10 +1711,12 @@ void MainWindow::buildUI()
     btnScrollToBottom->setVisible(false);
     btnScrollToBottom->setCursor(Qt::PointingHandCursor);
 
-    btnExpand->setVisible(false);
+    // Favorites / table / expand are always available (even on startup);
+    // copy-terminal only appears once there are algs in the terminal.
+    btnExpand->setVisible(true);
     btnCopyTerminal->setVisible(false);
-    btnFavorites->setVisible(false);
-    btnTableMode->setVisible(false);
+    btnFavorites->setVisible(true);
+    btnTableMode->setVisible(true);
 
     // Idle-fade timer — fires 1.5 s after the last mouse move inside the output area.
     // Scrolling (wheel events) does not reset this; only actual mouse movement does.
@@ -2334,6 +2336,12 @@ void MainWindow::onSolve()
     m_cachedRatedOrder.clear();
 
     txtOutput->clear();
+    // Hide copy-terminal until a solution actually arrives (it's re-shown in
+    // onSolverLine on the first solution). Keep the always-on buttons visible.
+    btnCopyTerminal->setVisible(false);
+    btnFavorites->setVisible(true);
+    btnTableMode->setVisible(true);
+    btnExpand->setVisible(true);
     appendStatusLine("Solving…");
 
     // Swap Solve → Stop appearance (muted dark red, not alarming).
@@ -4526,7 +4534,9 @@ void MainWindow::showFavoritesModal()
         }();
         QFont binAlgFont;
         binAlgFont.setFamily(binNeedsAbid ? OutputConverter::s_abidFontFamily : QString("monospace"));
-        binAlgFont.setPixelSize(13); // match global QWidget { font-size: 13px }
+        // ASCII matches the global 13px font; the Kompact glyphs render visually
+        // smaller, so enlarge them — mirroring the terminal's +2pt for Abid.
+        binAlgFont.setPixelSize(binNeedsAbid ? 16 : 13);
         const int binAlgLineH = QFontMetrics(binAlgFont).lineSpacing() + 1;
         const bool hasCustomName = m_favNames.contains(binKey);
 
@@ -4599,6 +4609,7 @@ void MainWindow::showFavoritesModal()
 
             QPlainTextEdit *algsEdit = new QPlainTextEdit(algs.join('\n'));
             algsEdit->setReadOnly(true);
+            algsEdit->setProperty("binAlgs", true); // marks it for ASCII-on-copy handling
             algsEdit->setFont(binAlgFont);
             algsEdit->setFrameShape(QFrame::NoFrame);
             algsEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -4606,11 +4617,15 @@ void MainWindow::showFavoritesModal()
             algsEdit->setContextMenuPolicy(Qt::NoContextMenu);
             algsEdit->setWordWrapMode(QTextOption::NoWrap);
             algsEdit->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+            // font-size must be set in the QSS too: a stylesheet that sets
+            // font-family resets unspecified font props (size) to the app default,
+            // overriding setFont(binAlgFont). Keep it in sync with binAlgFont.
             algsEdit->setStyleSheet(QString(
                                         "QPlainTextEdit { background:transparent; color:%1; border:none; padding:0; "
-                                        "selection-background-color:%2; font-family:%3; }")
+                                        "selection-background-color:%2; font-family:%3; font-size:%4px; }")
                                         .arg(textSol, hoverColor,
-                                             binNeedsAbid ? OutputConverter::s_abidFontFamily : QString("monospace")));
+                                             binNeedsAbid ? OutputConverter::s_abidFontFamily : QString("monospace"))
+                                        .arg(binNeedsAbid ? 16 : 13));
             algsEdit->setFixedHeight(algs.size() * binAlgLineH + 6);
 
             QVBoxLayout *delLay = new QVBoxLayout();
@@ -4646,7 +4661,13 @@ void MainWindow::showFavoritesModal()
 
         // ── Connections ────────────────────────────────────────────────────────
         connect(copyBinBtn, &QPushButton::clicked, this, [algs]()
-                { QApplication::clipboard()->setText(algs.join('\n')); });
+                {
+            QStringList clean;
+            for (const QString &a : algs) {
+                int lb = a.lastIndexOf('[');
+                clean << OutputConverter::deabidify(lb > 0 ? a.left(lb).trimmed() : a.trimmed());
+            }
+            QApplication::clipboard()->setText(clean.join('\n')); });
 
         connect(delBinBtn, &QPushButton::clicked, this, [=, this]()
                 {
@@ -5257,6 +5278,28 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             if (copyTerminalSelection())
                 return true;
         }
+        // Favorites-bin alg list: any selection copies the whole touched alg(s) in
+        // ASCII (deabidified), mirroring the terminal copy behavior.
+        if (QPlainTextEdit *pe = qobject_cast<QPlainTextEdit *>(QApplication::focusWidget()))
+        {
+            if (pe->property("binAlgs").toBool() && pe->textCursor().hasSelection())
+            {
+                QTextCursor c = pe->textCursor();
+                const int selStart = c.selectionStart(), selEnd = c.selectionEnd();
+                QStringList out;
+                for (QTextBlock b = pe->document()->findBlock(selStart);
+                     b.isValid() && b.position() <= selEnd; b = b.next())
+                {
+                    if (b.position() == selEnd && selStart != selEnd)
+                        break;
+                    QString t = b.text();
+                    int lb = t.lastIndexOf('[');
+                    out << OutputConverter::deabidify(lb > 0 ? t.left(lb).trimmed() : t.trimmed());
+                }
+                QApplication::clipboard()->setText(out.join('\n'));
+                return true;
+            }
+        }
         // If Ctrl+C fires on a table-cell item while Abid's notation is on,
         // copy the clean (minus-sign) text instead of the PUA glyphs.
         if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
@@ -5522,7 +5565,17 @@ void MainWindow::showAlgContextMenu(const QPoint &globalPos, const QString &rawL
     }
     else if (chosen == favAct)
     {
-        addToFavoritesBin(rawLine);
+        // With Abid notation on, store the abidified alg (PUA glyphs) so the bin
+        // renders it with the Kompact font. The [count] suffix is left as-is.
+        QString toStore = rawLine;
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
+        {
+            int lb = rawLine.lastIndexOf('[');
+            toStore = lb > 0
+                          ? OutputConverter::abidifyDisplay(rawLine.left(lb)) + rawLine.mid(lb)
+                          : OutputConverter::abidifyDisplay(rawLine);
+        }
+        addToFavoritesBin(toStore);
     }
 }
 

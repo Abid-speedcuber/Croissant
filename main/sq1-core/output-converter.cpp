@@ -111,3 +111,25 @@ QString OutputConverter::abidifyDisplay(const QString& algOnly)
         return result;
     }
 }
+
+QString OutputConverter::deabidify(const QString& display)
+{
+    // PUA layout (see abidifyDisplay): normal digits 0-6 at E000-E006; single-bar
+    // negatives 1-5 at E007-E00B; both-negative pair halves at E00C-E010 (first)
+    // and E011-E015 (second). All barred glyphs decode to "-d".
+    QString out;
+    for (QChar c : display) {
+        ushort u = c.unicode();
+        if (u >= 0xe000 && u <= 0xe006)
+            out += QChar('0' + (u - 0xe000));
+        else if (u >= 0xe007 && u <= 0xe00b)
+            out += '-', out += QChar('0' + (u - 0xe006));
+        else if (u >= 0xe00c && u <= 0xe010)
+            out += '-', out += QChar('0' + (u - 0xe00b));
+        else if (u >= 0xe011 && u <= 0xe015)
+            out += '-', out += QChar('0' + (u - 0xe010));
+        else
+            out += c;
+    }
+    return out;
+}
