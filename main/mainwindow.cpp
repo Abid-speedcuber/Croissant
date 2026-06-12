@@ -606,7 +606,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                 m_sliceCount = 0;
                 m_slicePending.clear(); });
 
-    loadFavorites();
+    loadSettings();
 }
 
 static QString invertScrambleStr(const QString &str)
@@ -3463,6 +3463,13 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     applyZoom();
 }
 
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    // Persist favorites, run config, and display options on exit.
+    saveSettings();
+    QMainWindow::closeEvent(event);
+}
+
 void MainWindow::applyZoom()
 {
     if (!m_zoomProxy || !m_zoomScene || !m_zoomView)
@@ -4624,7 +4631,7 @@ void MainWindow::showFavoritesModal()
                     m_favorites[binKey].removeAll(alg);
                     if (m_favorites[binKey].isEmpty())
                         m_favorites.remove(binKey);
-                    saveFavorites();
+                    saveSettings();
                     overlay->deleteLater();
                     showFavoritesModal(); });
             }
@@ -4645,7 +4652,7 @@ void MainWindow::showFavoritesModal()
                 {
             m_favorites.remove(binKey);
             m_favNames.remove(binKey);
-            saveFavorites();
+            saveSettings();
             overlay->deleteLater();
             showFavoritesModal(); });
 
@@ -4685,7 +4692,7 @@ void MainWindow::showFavoritesModal()
                     m_favNames.remove(binKey);
                 else
                     m_favNames[binKey] = newName;
-                saveFavorites();
+                saveSettings();
                 overlay->deleteLater();
                 showFavoritesModal();
             } });
@@ -5530,16 +5537,20 @@ void MainWindow::addToFavoritesBin(const QString &algLine)
     if (!bin.contains(algLine))
     {
         bin.append(algLine);
-        saveFavorites();
+        saveSettings();
     }
 }
 
 // -------------------------------------------------------
-// saveFavorites / loadFavorites
+// saveSettings / loadSettings — persist the favorites bins, the run config
+// (buildArgList output, applied via applyRunConfig on load), and the display
+// options. The sq1widget (cube) state is intentionally NOT persisted.
 // -------------------------------------------------------
-void MainWindow::saveFavorites()
+void MainWindow::saveSettings()
 {
     QSettings s("Sq1Opt", "sq1opt-ui");
+
+    // ── Favorites bins ────────────────────────────────────────────────────────
     s.beginGroup("favorites");
     s.remove("");
     s.setValue("count", m_favorites.size());
@@ -5552,11 +5563,28 @@ void MainWindow::saveFavorites()
             s.setValue(QString("bin%1_name").arg(i), m_favNames[it.key()]);
     }
     s.endGroup();
+
+    // ── Run config (solver flags) ─────────────────────────────────────────────
+    s.beginGroup("runconfig");
+    s.setValue("flags", buildArgList());
+    s.endGroup();
+
+    // ── Display options (set separately from the run config) ──────────────────
+    s.beginGroup("display");
+    s.setValue("smartKarn", m_smartKarn);
+    s.setValue("abidNotation", m_abidNotation);
+    s.setValue("debugOutput", m_debugOutput);
+    s.setValue("karnotation", chkKarnotation->isChecked());
+    s.setValue("normalizeAbfMode", m_normalizeAbfMode);
+    s.setValue("inputMode", m_inputModeIndex);
+    s.endGroup();
 }
 
-void MainWindow::loadFavorites()
+void MainWindow::loadSettings()
 {
     QSettings s("Sq1Opt", "sq1opt-ui");
+
+    // ── Favorites bins ────────────────────────────────────────────────────────
     s.beginGroup("favorites");
     int count = s.value("count", 0).toInt();
     for (int i = 0; i < count; i++)
@@ -5572,6 +5600,38 @@ void MainWindow::loadFavorites()
         }
     }
     s.endGroup();
+
+    // ── Display options ───────────────────────────────────────────────────────
+    s.beginGroup("display");
+    if (s.contains("smartKarn"))   m_smartKarn = s.value("smartKarn").toBool();
+    if (s.contains("debugOutput")) m_debugOutput = s.value("debugOutput").toBool();
+    // Abid display only meaningful when the font actually loaded.
+    if (s.contains("abidNotation"))
+        m_abidNotation = s.value("abidNotation").toBool() && !OutputConverter::s_abidFontFamily.isEmpty();
+    if (s.contains("karnotation"))
+        chkKarnotation->setChecked(s.value("karnotation").toBool());
+    if (s.contains("normalizeAbfMode"))
+    {
+        m_normalizeAbfMode = s.value("normalizeAbfMode").toInt();
+        if (m_normalizeAbfGroup && m_normalizeAbfGroup->button(m_normalizeAbfMode))
+            m_normalizeAbfGroup->button(m_normalizeAbfMode)->setChecked(true);
+    }
+    if (s.contains("inputMode") && m_inputMode && m_mainInput)
+    {
+        m_inputModeIndex = s.value("inputMode").toInt();
+        if (m_inputModeIndex == 1)      { m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
+        else if (m_inputModeIndex == 2) { m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-"); }
+        else                            { m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
+    }
+    s.endGroup();
+
+    // ── Run config: apply saved flags to the UI via applyRunConfig. Keep the
+    // current (default) cube position — the cube state itself is not persisted. ─
+    s.beginGroup("runconfig");
+    QStringList flags = s.value("flags").toStringList();
+    s.endGroup();
+    if (!flags.isEmpty())
+        applyRunConfig(cubeWidget->getPositionString() + " " + flags.join(" "));
 }
 
 // -------------------------------------------------------

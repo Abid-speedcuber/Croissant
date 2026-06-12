@@ -51,6 +51,7 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override; // global key routing + stop
     void keyPressEvent(QKeyEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void closeEvent(QCloseEvent* event) override; // persist settings on exit
 
 private slots:
     void onSolveButtonClicked();    // dispatches to onSolve() or stopSolver()
@@ -217,8 +218,8 @@ private:
     bool copyTerminalSelection();
     void addToFavoritesBin(const QString &algLine);
     void applyRunConfig(const QString &key);
-    void saveFavorites();
-    void loadFavorites();
+    void saveSettings();
+    void loadSettings();
     QMap<QString, QStringList> m_favorites;
     QMap<QString, QString>     m_favNames;   // config_key -> custom display name
     QString m_lastRunKey;
