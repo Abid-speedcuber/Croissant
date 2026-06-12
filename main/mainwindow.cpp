@@ -2137,10 +2137,10 @@ void MainWindow::updateConstraints()
                 : "Position is not compatible with pseudo-2-gen: no solved corner-edge-corner block found on the bottom layer.";
         }
         // When keeping cube shape with a 2-gen mode, the corner permutation must
-        // also be solvable with 2-gen moves (in addition to the block check above).
-        // partialHas2GenCorners handles both concrete and partial positions.
+        // also be solvable with 2-gen moves (in addition to the block check above),
+        // checked once per valid preadf candidate. Handles concrete and partial.
         else if (is2gen && chkCubeshape->isChecked() && cubeWidget->inCubeshape()
-                 && !partialHas2GenCorners(rs.pos))
+                 && !cornersAre2GenSolvable(rs.pos, (tgId == 0 ? 2 : 1)))
         {
             blocked = true;
             msg = "Position is not compatible with 2-gen while keeping cube shape: "

@@ -26,9 +26,13 @@ std::vector<int> twoGenPreadf(const int pos[24], int twoGen, bool firstMatchOnly
 bool has2GenCorners(const int pos[24]);
 
 // Partial-aware version of has2GenCorners: resolves partially-specified corners
-// (U/V/W) by elimination, then defers to has2GenCorners. For fully-concrete
-// positions it returns exactly has2GenCorners(pos).
-// NOTE: like has2GenCorners it currently assumes the bottom-left corners are the
-// solved G,H pair and is evaluated on the position as-is (not per preadf
-// candidate) — see the logged refinement.
+// (U/V/W) by elimination (respecting each partial's layer), then defers to
+// has2GenCorners. For fully-concrete positions it returns has2GenCorners(pos).
 bool partialHas2GenCorners(const int pos[24]);
+
+// Whether the corners are 2-gen-solvable, checked once per valid preadf candidate
+// (twoGen: 2 = 2-gen, 1 = pseudo-2-gen, 0 = no restriction -> always true). For
+// each preadf it rotates the candidate block to bottom-left and runs the
+// (partial-aware) corner check in the canonical frame. This is the entry point the
+// solver guards and the Solve-button gate should use.
+bool cornersAre2GenSolvable(const int pos[24], int twoGen);

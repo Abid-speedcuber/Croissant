@@ -700,6 +700,35 @@ bool partialHas2GenCorners(const int pos[24]) {
 	return tryAssign(avail[0], avail[1]) || tryAssign(avail[1], avail[0]);
 }
 
+// Are the corners 2-gen-solvable for this position, evaluated once per valid preadf
+// candidate?  For each preadf rotation k, doBot(k) brings a solved block to the
+// frozen bottom-left.  has2GenCorners / partialHas2GenCorners assume the bottom-left
+// pair is the canonical G,H with a canonical solved target, so we first relabel the
+// corners by sigma — the map that sends doBot(k)*canonical back to canonical
+// (identity on the top corners, a cyclic shift on the D-layer corners).  Because a
+// value relabel commutes with the position permutations a 2-gen solve applies,
+// checking the relabelled, rotated position against the canonical frame is exactly
+// checking the original against doBot(k)*canonical.  Partial pieces carry only a
+// layer constraint, which the shift preserves, so they pass through untouched.
+// The position is corner-2-gen-solvable iff ANY candidate passes.  twoGen==0 -> true.
+bool cornersAre2GenSolvable(const int pos[24], int twoGen) {
+	if (twoGen == 0) return true;
+	static const int C[24] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
+	auto doBotArr = [](int a[24], int m){
+		m = ((m % 12) + 12) % 12;
+		while (m-- > 0) { int c = a[23]; for (int i=23;i>12;i--) a[i]=a[i-1]; a[12]=c; }
+	};
+	for (int k : twoGenPreadf(pos, twoGen)) {
+		int Ck[24]; for (int i=0;i<24;i++) Ck[i]=C[i]; doBotArr(Ck, k);
+		int sigma[8]; for (int i=0;i<8;i++) sigma[i]=i;
+		for (int i=0;i<24;i++) if (Ck[i] >= 0 && Ck[i] < 8) sigma[Ck[i]] = C[i];
+		int copy[24]; for (int i=0;i<24;i++) copy[i]=pos[i]; doBotArr(copy, k);
+		for (int i=0;i<24;i++) if (copy[i] >= 0 && copy[i] < 8) copy[i] = sigma[copy[i]];
+		if (partialHas2GenCorners(copy)) return true;
+	}
+	return false;
+}
+
 // Piece numbers below 0 are partially specified corners. Based on the value modulo 3, it's a
 //  top corner (0), bottom corner (-2), or any corner (-1).
 // Piece numbers above 15 are partially specified edges. Based on the value modulo 3, it's
@@ -1083,8 +1112,6 @@ public:
 	// assuming we're in a square/square shape, check if the corners are solvable with 2gen
 	// Whether the corners can be solved with pseudo-2-gen moves — see has2GenCorners().
 	bool has2GenCorners(){ return ::has2GenCorners(pos); }
-	// Partial-aware variant — see partialHas2GenCorners().
-	bool partialHas2GenCorners(){ return ::partialHas2GenCorners(pos); }
 	// Valid preadf D rotations for 2-gen / pseudo-2-gen — see twoGenPreadf().
 	std::vector<int> findPreadf(int twoGen) const { return twoGenPreadf(pos, twoGen); }
 	bool singleMatch(int posI, int solvedI) { return couldBe(posI, solvedI); }
@@ -1357,7 +1384,8 @@ class PositionSolver {
 			// keeping cube shape with a 2-gen mode also requires the corner
 			// permutation to be solvable with 2-gen moves (in addition to the
 			// block/preadf check above) — otherwise the search would never finish.
-			if ((twoGen == 1 || twoGen == 2) && !fp.has2GenCorners()) {
+			// Checked once per valid preadf candidate.
+			if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(fp.pos, twoGen)) {
 				return 19;
 			}
 		}
@@ -1716,11 +1744,11 @@ public:
 
 		if (keepCubeShape) {
 			// check that it's in cube shape and of the right parity, and that the
-			// corner permutation is 2-gen-solvable (partial-aware).
+			// corner permutation is 2-gen-solvable (partial-aware, once per preadf).
 			if (!checkKeepCubeShape()) {
 				return 19;
 			}
-			if ((twoGen == 1 || twoGen == 2) && !fp.partialHas2GenCorners()) {
+			if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(fp.pos, twoGen)) {
 				return 19;
 			}
 		}
