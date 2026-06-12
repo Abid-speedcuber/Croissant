@@ -156,8 +156,7 @@ private:
         setAutoFillBackground(false);
 
         m_label = new QLabel(this);
-        m_label->setWordWrap(true);
-        m_label->setMaximumWidth(320);
+        m_label->setWordWrap(false);
         m_label->setContentsMargins(8, 5, 8, 5);
 
         QVBoxLayout *l = new QVBoxLayout(this);
@@ -2133,8 +2132,10 @@ void MainWindow::updateConstraints()
         if (blocked)
         {
             msg = (tgId == 0)
-                ? "Position is not compatible with 2-gen: no solved corner-edge-corner-edge block found on the bottom layer."
-                : "Position is not compatible with pseudo-2-gen: no solved corner-edge-corner block found on the bottom layer.";
+                ? "Position is not compatible with 2-gen:\n"
+                "no solved corner-edge-corner-edge block found on the bottom layer."
+                : "Position is not compatible with pseudo-2-gen:\n"
+                "no solved corner-edge-corner block found on the bottom layer.";
         }
         // When keeping cube shape with a 2-gen mode, the corner permutation must
         // also be solvable with 2-gen moves (in addition to the block check above),
@@ -2143,7 +2144,7 @@ void MainWindow::updateConstraints()
                  && !cornersAre2GenSolvable(rs.pos, (tgId == 0 ? 2 : 1)))
         {
             blocked = true;
-            msg = "Position is not compatible with 2-gen while keeping cube shape: "
+            msg = "Position is not compatible with 2-gen while keeping cube shape:\n"
                   "the corner permutation cannot be solved with 2-gen moves.";
         }
         btnSolve->setEnabled(!blocked);
@@ -4343,7 +4344,8 @@ void MainWindow::showSettingsModal()
     QCheckBox *chkAbid = new QCheckBox("Abid's notation");
     chkAbid->setChecked(m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty());
     chkAbid->setEnabled(!OutputConverter::s_abidFontFamily.isEmpty() && !solverRunning);
-    chkAbid->setToolTip("Display negative numbers as barred digits using the Kompact font for display.");
+    chkAbid->setToolTip("Display negative numbers as barred digits\n"
+        "using the Kompact font for display.");
     if (OutputConverter::s_abidFontFamily.isEmpty())
         chkAbid->setToolTip(chkAbid->toolTip() +
                             "\n\n⚠ kompact-font.ttf not found — visual effect unavailable.");
@@ -4360,9 +4362,11 @@ void MainWindow::showSettingsModal()
 
     QCheckBox *chkIgnoreTrans = new QCheckBox("Ignore move equivalences");
     chkIgnoreTrans->setEnabled(!solverRunning);
-    chkIgnoreTrans->setToolTip("REALLY generate all possible algs - with all the y2 possibilities and things.\n"
-                               "Only useful if you don't anticipate a lot of algs initially.\n"
-                               "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)");
+    chkIgnoreTrans->setToolTip("REALLY generate all possible algs -\n"
+        "with all the y2 possibilities and things.\n"
+        "Only useful if you don't anticipate a lot of algs initially.\n"
+         "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)"
+    );
     chkIgnoreTrans->setChecked(m_ignoreTrans);
     chkIgnoreTrans->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     chkIgnoreTransSetting = chkIgnoreTrans;
