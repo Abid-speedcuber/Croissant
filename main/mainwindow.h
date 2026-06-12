@@ -212,6 +212,9 @@ private:
     void openSidebar();
     void closeSidebar();
     void showAlgContextMenu(const QPoint &globalPos, const QString &rawLine);
+    // Copy the terminal selection, substituting the clean alg for any solution
+    // line the selection touches. Returns false if there is nothing to copy.
+    bool copyTerminalSelection();
     void addToFavoritesBin(const QString &algLine);
     void applyRunConfig(const QString &key);
     void saveFavorites();

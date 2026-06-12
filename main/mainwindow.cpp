@@ -5241,6 +5241,15 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // ── (1) Ctrl+C — copy only; it must NOT stop the solver (use Ctrl+Enter) ──
     if (ke->key() == Qt::Key_C && (ke->modifiers() & Qt::ControlModifier))
     {
+        // Terminal selection in Abid display: copy the clean alg for any solution
+        // line touched (the displayed glyphs aren't plain text). Without Abid
+        // display the default copy is already correct, so leave it alone.
+        if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty() &&
+            txtOutput && (txtOutput->hasFocus() || txtOutput->viewport()->hasFocus()))
+        {
+            if (copyTerminalSelection())
+                return true;
+        }
         // If Ctrl+C fires on a table-cell item while Abid's notation is on,
         // copy the clean (minus-sign) text instead of the PUA glyphs.
         if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
@@ -5427,6 +5436,53 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true; // consume — letter goes to cube, not to any text field
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+// -------------------------------------------------------
+// copyTerminalSelection — copy the current selection in the terminal, but for
+// any solution line the selection touches, copy the clean alg (no [count]
+// brackets, plain ASCII — same as "Copy alg") instead of the displayed glyphs.
+// Non-solution lines (e.g. "searching depth 10") copy their selected substring.
+// -------------------------------------------------------
+bool MainWindow::copyTerminalSelection()
+{
+    if (!txtOutput)
+        return false;
+    QTextCursor cur = txtOutput->textCursor();
+    if (!cur.hasSelection())
+        return false;
+
+    const int selStart = cur.selectionStart();
+    const int selEnd = cur.selectionEnd();
+
+    QStringList outLines;
+    for (QTextBlock block = txtOutput->document()->findBlock(selStart);
+         block.isValid() && block.position() <= selEnd;
+         block = block.next())
+    {
+        const int bStart = block.position();
+        const int bEnd = bStart + block.text().length();
+        // Skip a zero-length boundary block the selection only abuts.
+        if (bStart == selEnd && selStart != selEnd)
+            break;
+
+        if (AlgBlockData *data = dynamic_cast<AlgBlockData *>(block.userData()))
+        {
+            // Any overlap with this solution line → emit the whole clean alg.
+            int lb = data->rawLine.lastIndexOf('[');
+            outLines << (lb > 0 ? data->rawLine.left(lb).trimmed()
+                                : data->rawLine.trimmed());
+        }
+        else
+        {
+            int s = qMax(selStart, bStart);
+            int e = qMin(selEnd, bEnd);
+            outLines << (e > s ? block.text().mid(s - bStart, e - s) : QString());
+        }
+    }
+
+    QApplication::clipboard()->setText(outLines.join('\n'));
+    return true;
 }
 
 // -------------------------------------------------------
