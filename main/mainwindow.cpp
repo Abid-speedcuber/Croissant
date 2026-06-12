@@ -47,6 +47,7 @@
 #include <QDir>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QDebug>
 
 #include <algorithm>
 #include <atomic>
@@ -750,6 +751,7 @@ void MainWindow::buildUI()
     leftCol->setSpacing(4);
     cubeWidget = new Sq1Widget(this);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateCommand);
+    connect(cubeWidget, &Sq1Widget::positionChanged, this, &MainWindow::updateConstraints);
     connect(cubeWidget, &Sq1Widget::userInteracted, this, &MainWindow::pushUndoState);
     connect(cubeWidget, &Sq1Widget::positionChanged, this, [this]()
             {
@@ -2064,6 +2066,21 @@ void MainWindow::rebuildTerminalView()
 }
 
 // -------------------------------------------------------
+// twoGenCompatibility — pure position check, no Qt dependencies.
+// Returns 2 if the position supports 2-gen (full block on bottom),
+//         1 if it supports pseudo-2-gen only (CEC block on bottom),
+//         0 if neither applies.
+// Delegates to the shared sq1TwoGenPreadf() so the block tables live in exactly
+// one place (see sq1opt-runner.h / FullPosition::findPreadf).
+// -------------------------------------------------------
+static int twoGenCompatibility(const Sq1Widget::RawState &s)
+{
+    if (!sq1TwoGenPreadf(s.pos, 2).empty()) return 2;
+    if (!sq1TwoGenPreadf(s.pos, 1).empty()) return 1;
+    return 0;
+}
+
+// -------------------------------------------------------
 // updateConstraints
 // -------------------------------------------------------
 void MainWindow::updateConstraints()
@@ -2073,7 +2090,6 @@ void MainWindow::updateConstraints()
     const bool solverRunning = worker && worker->isRunning();
 
     const int tgId = m_twoGenGroup ? m_twoGenGroup->checkedId() : 2;
-    const bool is2gen = (tgId == 0);
     const bool isAllOpt = chkAllOptimal->isChecked();
     const bool isDepths = chkDepths->isChecked();
 
@@ -2086,29 +2102,8 @@ void MainWindow::updateConstraints()
     }
     const bool isDepthsNow = chkDepths->isChecked(); // re-read after possible uncheck
 
-    auto disableCheck = [](QCheckBox *cb)
-    {
-        cb->setEnabled(false);
-        if (cb->isChecked())
-        {
-            cb->blockSignals(true);
-            cb->setChecked(false);
-            cb->blockSignals(false);
-        }
-    };
-
-    if (is2gen)
-        disableCheck(chkCubeshape);
-    else if (!solverRunning)
+    if (!solverRunning)
         chkCubeshape->setEnabled(cubeWidget->inCubeshape());
-
-    if (chkCubeshape->isChecked() && is2gen)
-    {
-        m_twoGenGroup->blockSignals(true);
-        if (auto *btn = m_twoGenGroup->button(2))
-            btn->setChecked(true);
-        m_twoGenGroup->blockSignals(false);
-    }
 
     spnSuboptimal->setVisible(isAllOpt && !isDepthsNow);
     if (lblSuboptLabel)
@@ -2124,6 +2119,26 @@ void MainWindow::updateConstraints()
         spnMaxX->setEnabled(chkMaxX->isChecked());
         spnMaxY->setEnabled(chkMaxY->isChecked());
         spnMaxTotal->setEnabled(chkMaxTotal->isChecked());
+    }
+
+    // 2-gen / pseudo-2-gen compatibility: if the selected mode requires a solved
+    // CECE/CEC block on the bottom but none exists, disable Solve with a tooltip.
+    if (!solverRunning)
+    {
+        const int compat = twoGenCompatibility(cubeWidget->getRawState());
+        bool blocked = (tgId == 0 && compat < 2) || (tgId == 1 && compat < 1);
+        btnSolve->setEnabled(!blocked);
+        if (blocked)
+        {
+            const char *msg = (tgId == 0)
+                ? "Position is not compatible with 2-gen: no solved corner-edge-corner-edge block found on the bottom layer."
+                : "Position is not compatible with pseudo-2-gen: no solved corner-edge-corner block found on the bottom layer.";
+            btnSolve->setToolTip(msg);
+        }
+        else
+        {
+            btnSolve->setToolTip({});
+        }
     }
 }
 
