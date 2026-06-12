@@ -638,6 +638,68 @@ bool has2GenCorners(const int pos[24]) {
 	return false;
 }
 
+// Partial-aware version of has2GenCorners.  Like has2GenCorners it assumes the two
+// bottom-left corners are solved (G,H = 6,7) and works with the other 6 corners
+// (pos[0..17]); the caller is responsible for placing a valid candidate block at
+// bottom-left first.  Resolves partial corners by elimination *respecting each
+// partial's layer constraint* (U=top corner 0-3, V=bottom corner 4-7, W=any),
+// then defers to the concrete has2GenCorners:
+//   * 0 partials   -> plain has2GenCorners.
+//   * >=3 partials -> always solvable (enough free corners): true.
+//   * 1-2 partials -> the missing corners of {0..5} are the candidates; try every
+//                     assignment of them to the partial slots that is layer-valid
+//                     (so two W's are interchangeable, but a U can't take a bottom
+//                     corner, etc.) and accept if any resulting concrete state
+//                     passes has2GenCorners.
+bool partialHas2GenCorners(const int pos[24]) {
+	int slot[6];          // first slot index of each of the 6 corners
+	int ptype[6];         // partial type: 0=U(top), 1=V(bottom), 2=W(any), -1=concrete
+	bool present[8] = {false}; // which concrete corner values appear among the 6
+	int n = 0;
+	for (int i = 0; i < 18 && n < 6; i++) {
+		if (pos[i] < 8) { // corner (concrete 0-7 or partial <0)
+			int v = pos[i];
+			slot[n] = i;
+			if (v < 0) ptype[n] = (v % 3 == 0) ? 0 : (v % 3 == -2 ? 1 : 2);
+			else { ptype[n] = -1; present[v] = true; }
+			n++;
+			i++; // skip the duplicate corner slot
+		}
+	}
+
+	int p[2], numPartial = 0;
+	for (int t = 0; t < n; t++) if (ptype[t] >= 0) { if (numPartial < 2) p[numPartial] = t; numPartial++; }
+
+	if (numPartial == 0) return has2GenCorners(pos);
+	if (numPartial >= 3) return true;
+
+	// Candidate corners for the partials: {0..5} (bottom-left holds 6,7) minus the
+	// concrete corners already present among the 6.
+	int avail[6], nA = 0;
+	for (int c = 0; c < 6; c++) if (!present[c]) avail[nA++] = c;
+	if (nA != numPartial) return false; // inconsistent input
+
+	// A corner value is compatible with a partial slot iff it lies in the slot's
+	// allowed layer: U -> 0-3, V -> 4-7, W -> anything.
+	auto compat = [](int type, int val) {
+		if (type == 0) return val >= 0 && val <= 3;
+		if (type == 1) return val >= 4 && val <= 7;
+		return true;
+	};
+	auto tryAssign = [&](int v0, int v1) -> bool {
+		if (!compat(ptype[p[0]], v0)) return false;
+		if (numPartial == 2 && !compat(ptype[p[1]], v1)) return false;
+		int copy[24]; for (int i = 0; i < 24; i++) copy[i] = pos[i];
+		copy[slot[p[0]]] = v0; copy[slot[p[0]] + 1] = v0;
+		if (numPartial == 2) { copy[slot[p[1]]] = v1; copy[slot[p[1]] + 1] = v1; }
+		return has2GenCorners(copy);
+	};
+
+	if (numPartial == 1) return tryAssign(avail[0], 0);
+	// numPartial == 2: try both layer-valid assignments of the two candidate corners.
+	return tryAssign(avail[0], avail[1]) || tryAssign(avail[1], avail[0]);
+}
+
 // Piece numbers below 0 are partially specified corners. Based on the value modulo 3, it's a
 //  top corner (0), bottom corner (-2), or any corner (-1).
 // Piece numbers above 15 are partially specified edges. Based on the value modulo 3, it's
@@ -1021,6 +1083,8 @@ public:
 	// assuming we're in a square/square shape, check if the corners are solvable with 2gen
 	// Whether the corners can be solved with pseudo-2-gen moves — see has2GenCorners().
 	bool has2GenCorners(){ return ::has2GenCorners(pos); }
+	// Partial-aware variant — see partialHas2GenCorners().
+	bool partialHas2GenCorners(){ return ::partialHas2GenCorners(pos); }
 	// Valid preadf D rotations for 2-gen / pseudo-2-gen — see twoGenPreadf().
 	std::vector<int> findPreadf(int twoGen) const { return twoGenPreadf(pos, twoGen); }
 	bool singleMatch(int posI, int solvedI) { return couldBe(posI, solvedI); }
@@ -1651,10 +1715,12 @@ public:
 		if ((twoGen == 1 || twoGen == 2) && preadfs.empty()) return 19;
 
 		if (keepCubeShape) {
-			// check that it's in cube shape and of the right parity.  (The 2-gen
-			// has2GenCorners corner guard is intentionally NOT applied for partial
-			// positions yet — that handling is still being designed.)
+			// check that it's in cube shape and of the right parity, and that the
+			// corner permutation is 2-gen-solvable (partial-aware).
 			if (!checkKeepCubeShape()) {
+				return 19;
+			}
+			if ((twoGen == 1 || twoGen == 2) && !fp.partialHas2GenCorners()) {
 				return 19;
 			}
 		}

@@ -24,3 +24,11 @@ std::vector<int> twoGenPreadf(const int pos[24], int twoGen, bool firstMatchOnly
 // permutation lies in the 2-gen corner group). Single source of truth shared by
 // the solver's keep-cube-shape p2g guard and the UI's Solve-button enable check.
 bool has2GenCorners(const int pos[24]);
+
+// Partial-aware version of has2GenCorners: resolves partially-specified corners
+// (U/V/W) by elimination, then defers to has2GenCorners. For fully-concrete
+// positions it returns exactly has2GenCorners(pos).
+// NOTE: like has2GenCorners it currently assumes the bottom-left corners are the
+// solved G,H pair and is evaluated on the position as-is (not per preadf
+// candidate) — see the logged refinement.
+bool partialHas2GenCorners(const int pos[24]);

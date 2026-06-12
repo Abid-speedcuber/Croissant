@@ -2130,11 +2130,6 @@ void MainWindow::updateConstraints()
         const bool is2gen = (tgId == 0 || tgId == 1);
         bool blocked = (tgId == 0 && compat < 2) || (tgId == 1 && compat < 1);
         const char *msg = nullptr;
-        // Fully-concrete positions only carry pieces 0..15; any value outside that
-        // range is a partially-specified piece (U/V/W/X/Y/Z).
-        bool fullyConcrete = true;
-        for (int i = 0; i < 24; i++)
-            if (rs.pos[i] < 0 || rs.pos[i] > 15) { fullyConcrete = false; break; }
         if (blocked)
         {
             msg = (tgId == 0)
@@ -2143,10 +2138,9 @@ void MainWindow::updateConstraints()
         }
         // When keeping cube shape with a 2-gen mode, the corner permutation must
         // also be solvable with 2-gen moves (in addition to the block check above).
-        // has2GenCorners isn't defined for partial positions yet, so this extra
-        // gate is applied to fully-concrete positions only.
-        else if (is2gen && fullyConcrete && chkCubeshape->isChecked() && cubeWidget->inCubeshape()
-                 && !has2GenCorners(rs.pos))
+        // partialHas2GenCorners handles both concrete and partial positions.
+        else if (is2gen && chkCubeshape->isChecked() && cubeWidget->inCubeshape()
+                 && !partialHas2GenCorners(rs.pos))
         {
             blocked = true;
             msg = "Position is not compatible with 2-gen while keeping cube shape: "
