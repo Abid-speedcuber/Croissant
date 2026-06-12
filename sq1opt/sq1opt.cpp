@@ -1326,6 +1326,45 @@ class PositionSolver {
 	// whole solution including pre/post-abf comes from the search.
 	int m_preadfBot{0};
 
+	// U2/D2 ((6,0)/(0,6)) handling for the slice metric.  A U2/D2 is allowed freely
+	// before the first slice (preabf) and after the last slice (postabf).  A U2/D2
+	// strictly between the first and last slice ("internal") is allowed only when
+	// necessary, decided per depth:
+	//   * A "clean" solution (no internal U2/D2) is emitted immediately.  The first
+	//     clean solution found at a depth proves internal U2/D2 is unnecessary, so
+	//     m_banInternal is turned on (killing all remaining internal-U2/D2 branches)
+	//     and any dirty solutions buffered so far are discarded.
+	//   * A "dirty" solution (has internal U2/D2) is buffered, not emitted.  If the
+	//     depth finishes with no clean solution, the buffer is emitted (U2/D2 was
+	//     necessary).
+	//   * At depth >= 6 slices a clean solution is always known to exist, so
+	//     m_banInternal starts on and dirty branches are pruned from the outset.
+	//   m_slicesDone   – slices performed so far on the current search path
+	//   m_internalBad  – (6,0)/(0,6) segments strictly between first & last slice on
+	//                    the current path (>0 => the current solution is "dirty")
+	//   m_banInternal  – kill internal-U2/D2 branches at slice points
+	//   m_cleanFound   – a clean solution was emitted at the current depth
+	//   m_dirtyBuf     – dirty solutions held back at the current depth
+	int m_slicesDone{0};
+	int m_internalBad{0};
+	bool m_banInternal{false};
+	bool m_cleanFound{false};
+	std::vector<std::string> m_dirtyBuf;
+
+	// Emit the held-back dirty solutions for a depth that produced no clean
+	// solution (internal U2/D2 was necessary).  Honors single-solution mode.
+	// Returns whether at least one solution was emitted.
+	bool emitDirtyBuffer() {
+		bool emitted = false;
+		for (const auto& s : m_dirtyBuf) {
+			std::cout << s << std::flush;
+			emitted = true;
+			if (!findAll) break;
+		}
+		m_dirtyBuf.clear();
+		return emitted;
+	}
+
 	PositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable& pr10, PrunTable& pr20 )
 		: stt(stt0), scte(scte0), sctc(sctc0), pr1(pr10), pr2(pr20) {};
 	virtual bool checkKeepCubeShape() {
@@ -1415,10 +1454,12 @@ class PositionSolver {
 			e0=st.e0; e1=st.e1; e2=st.e2; c0=st.c0; c1=st.c1; c2=st.c2;
 			shp=st.shp; shp2=st.shp2; middle=st.middle; m_preadfBot=st.preadf;
 			moveLen=0; for(int i=0;i<6;i++) lastTurns[i]=0;
+			m_slicesDone=0; m_internalBad=0;
 		};
 
 		unsigned long nodes=0;
 		int optimalMoves = -1;
+		m_dirtyBuf.clear();
 
 		// The preadf candidates run in PARALLEL, interleaved by depth: at each depth
 		// every candidate is searched before moving deeper, so the first solution
@@ -1430,13 +1471,19 @@ class PositionSolver {
 					continue;
 				}
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
+				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
+				m_cleanFound = false; m_dirtyBuf.clear();
+				m_banInternal = (metric == SLICE_METRIC) && (depth >= 6);
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
 					restore(st);
 					int searchResult = search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 					if (searchResult < 0) return searchResult;
-					if (searchResult != 0 && !findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+					// Slice metric stops only on a clean solution; a dirty one is buffered
+					// in case no clean turns up at this depth.
+					if (searchResult != 0 && !findAll && (metric != SLICE_METRIC || m_cleanFound)) { fp = fpOrig; m_preadfBot = 0; return 0; }
 				}
+				if (metric == SLICE_METRIC && !m_cleanFound && emitDirtyBuffer() && !findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
 			}
 		} else {
 			// only even lengths if slice metric and middle is square
@@ -1446,16 +1493,26 @@ class PositionSolver {
 				l++;
 				if (metric == SLICE_METRIC && sharedMiddle!=0) l++;
 				if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
+				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
+				m_cleanFound = false; m_dirtyBuf.clear();
+				m_banInternal = (metric == SLICE_METRIC) && (l >= 6);
+				bool anySol = false;
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
 					restore(st);
 					int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 					if (searchResult < 0) return searchResult;
 					if (searchResult != 0) {
-						if (optimalMoves == -1) optimalMoves = l;
-						if (!findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+						anySol = true;
+						// Slice metric stops only on a clean solution; a dirty one is
+						// buffered in case no clean turns up at this depth.
+						if (!findAll && (metric != SLICE_METRIC || m_cleanFound)) { fp = fpOrig; m_preadfBot = 0; return 0; }
 					}
 				}
+				if (metric == SLICE_METRIC && !m_cleanFound) {
+					if (emitDirtyBuffer() && !findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+				}
+				if (anySol && optimalMoves == -1) optimalMoves = l;
 				if (optimalMoves != -1 &&
 				    (l >= optimalMoves + extraMoves || (metric == SLICE_METRIC && sharedMiddle!=0 && l+1 >= optimalMoves + extraMoves)))
 					break;
@@ -1509,8 +1566,9 @@ class PositionSolver {
 
 		// check if it is now solved
 		if( l==0 ){
-			// Block pure (6,0) or (0,6): U2 or D2 alone with no matching layer turn
-			if ((lastTurns[4]==6 && lastTurns[5]==0) || (lastTurns[4]==0 && lastTurns[5]==6)) return 0;
+			// The final segment is the postabf (after the last slice), so any U2/D2
+			// here is unrestricted — no ban.  printsol() tags the solution dirty iff
+			// m_internalBad>0; the per-depth flush decides whether to keep it.
 			if(isSolved()){
 				printsol();
 				if(verbosity>=6) std::cout<<"Nodes="<<*nodes<<std::endl<<std::flush;
@@ -1534,7 +1592,7 @@ class PositionSolver {
 					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absTopMove:l, 0, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
 					moveLen--;
 					if(r<0) return r;
-					if(r!=0 && !findAll) return(r);
+					if(r!=0 && !findAll && (metric!=SLICE_METRIC || m_cleanFound)) return(r);
 				}
 				i+=doMove(0);
 			}while( i<12);
@@ -1560,7 +1618,7 @@ class PositionSolver {
 					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
 					moveLen--;
 					if(r<0) return r;
-					if(r!=0 && !findAll) return(r);
+					if(r!=0 && !findAll && (metric!=SLICE_METRIC || m_cleanFound)) return(r);
 				}
 				i+=doMove(1);
 			}while( i<12);
@@ -1568,8 +1626,15 @@ class PositionSolver {
 		}
 		// try slice move
 		if( lm!=2 && l>0){
-			// Block pure (6,0) or (0,6) pairs before this slice
-			bool block60 = (lastTurns[4]==6 && lastTurns[5]==0) || (lastTurns[4]==0 && lastTurns[5]==6);
+			// The segment this slice closes is (lastTurns[4],lastTurns[5]).  A (6,0)/
+			// (0,6) segment is "internal" only if a slice already preceded it
+			// (m_slicesDone>=1) — the slice we're about to do supplies the following
+			// slice.  Internal U2/D2 is tagged (m_internalBad) so a finished solution
+			// can be classified dirty/clean; it is pruned here only once m_banInternal
+			// is on (a clean solution already exists, or depth >= 6 slices).
+			bool badSeg = (lastTurns[4]==6 && lastTurns[5]==0) || (lastTurns[4]==0 && lastTurns[5]==6);
+			bool internalBadSeg = (metric == SLICE_METRIC) && badSeg && (m_slicesDone >= 1);
+			bool block60 = internalBadSeg && m_banInternal;
 			// 2-gen / pseudo-2-gen D-layer restriction.  A slice marks the end of a
 			// between-slice region: the D move just performed (lastTurns[5]) must obey
 			// the mode's rule (2-gen: no D; pseudo-2-gen: only D±1).  A disallowed D is
@@ -1595,12 +1660,18 @@ class PositionSolver {
 			lastTurns[5]=0;
 			doMove(2);
 			if (!keepCubeShape || checkKeepCubeShape()) {
+				// This slice closes the current segment: a slice now precedes it, so
+				// if it was a (6,0)/(0,6) and one already came before, it is internal.
+				m_slicesDone++;
+				if (internalBadSeg) m_internalBad++;
 				moveList[moveLen++]=0;
 				// note that if angle metric is defined to count slices as 0, it will sometimes miss the optimal solution because the current pruning tables count how many slices a position is away from solved
 				r+=search(l-1, 2, nodes, twoGen, keepCubeShape, false, false);
 				moveLen--;
+				if (internalBadSeg) m_internalBad--;
+				m_slicesDone--;
 				if(r<0) return r;
-				if(r!=0 && !findAll) return(r);
+				if(r!=0 && !findAll && (metric!=SLICE_METRIC || m_cleanFound)) return(r);
 			}
 			doMove(2);
 			lastTurns[5]=lastTurns[3];
@@ -1685,11 +1756,25 @@ class PositionSolver {
 		out += printmove(mu, md);
 		if (karnotation)
 			out = karnify(out);
-		std::cout << out;
-		std::cout <<"  ["<<tw;
-		if (metric != SLICE_METRIC) std::cout <<"|"<<tu; // move
-		if (metric == ANGLE_METRIC) std::cout<<"|"<<angle;
-		std::cout<<"] "<<std::endl;
+		std::string line = out + "  [" + std::to_string(tw);
+		if (metric != SLICE_METRIC) line += "|" + std::to_string(tu); // move
+		if (metric == ANGLE_METRIC) line += "|" + std::to_string(angle);
+		line += "] \n";
+		if (metric != SLICE_METRIC) { std::cout << line << std::flush; return; }
+		if (m_internalBad > 0) {
+			// Dirty: hold it back. In single-solution mode one buffered dirty is
+			// enough (we only need a fallback if no clean solution turns up).
+			if (findAll || m_dirtyBuf.empty()) m_dirtyBuf.push_back(line);
+		} else {
+			// Clean: emit now. The first clean of this depth makes internal U2/D2
+			// provably unnecessary, so ban it from here on and drop the dirty buffer.
+			if (!m_cleanFound) {
+				m_cleanFound = true;
+				m_banInternal = true;
+				m_dirtyBuf.clear();
+			}
+			std::cout << line << std::flush;
+		}
 	}
 };
 
@@ -1781,10 +1866,12 @@ public:
 			shp=st.shp; shp2=st.shp2; shpx=st.shpx; shpx2=st.shpx2;
 			middle=st.middle; m_preadfBot=st.preadf;
 			moveLen=0; for(int i=0;i<6;i++) lastTurns[i]=0;
+			m_slicesDone=0; m_internalBad=0;
 		};
 
 		unsigned long nodes=0;
 		int optimalMoves = -1;
+		m_dirtyBuf.clear();
 
 		// preadf candidates run in parallel, interleaved by depth (see PositionSolver::solve).
 		if (!specificDepths.empty()) {
@@ -1794,13 +1881,19 @@ public:
 					continue;
 				}
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
+				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
+				m_cleanFound = false; m_dirtyBuf.clear();
+				m_banInternal = (metric == SLICE_METRIC) && (depth >= 6);
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
 					restore(st);
 					int searchResult = search(depth, 3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 					if (searchResult < 0) return searchResult;
-					if (searchResult != 0 && !findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+					// Slice metric stops only on a clean solution; a dirty one is buffered
+					// in case no clean turns up at this depth.
+					if (searchResult != 0 && !findAll && (metric != SLICE_METRIC || m_cleanFound)) { fp = fpOrig; m_preadfBot = 0; return 0; }
 				}
+				if (metric == SLICE_METRIC && !m_cleanFound && emitDirtyBuffer() && !findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
 			}
 		} else {
 			int l=-1;
@@ -1809,16 +1902,26 @@ public:
 				l++;
 				if( metric==SLICE_METRIC && sharedMiddle!=0 ) l++;
 				if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
+				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
+				m_cleanFound = false; m_dirtyBuf.clear();
+				m_banInternal = (metric == SLICE_METRIC) && (l >= 6);
+				bool anySol = false;
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
 					restore(st);
 					int searchResult = search(l,3, &nodes, twoGen, keepCubeShape, specificAngleTop, specificAngleBot);
 					if (searchResult < 0) return searchResult;
 					if (searchResult != 0) {
-						if (optimalMoves == -1) optimalMoves = l;
-						if (!findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+						anySol = true;
+						// Slice metric stops only on a clean solution; a dirty one is
+						// buffered in case no clean turns up at this depth.
+						if (!findAll && (metric != SLICE_METRIC || m_cleanFound)) { fp = fpOrig; m_preadfBot = 0; return 0; }
 					}
 				}
+				if (metric == SLICE_METRIC && !m_cleanFound) {
+					if (emitDirtyBuffer() && !findAll) { fp = fpOrig; m_preadfBot = 0; return 0; }
+				}
+				if (anySol && optimalMoves == -1) optimalMoves = l;
 				if (optimalMoves != -1 &&
 				    (l >= optimalMoves + extraMoves || (metric==SLICE_METRIC && sharedMiddle!=0 && l+1 >= optimalMoves + extraMoves)))
 					break;
