@@ -3641,7 +3641,7 @@ void MainWindow::onRankErgoToggled(bool checked)
 // eventFilter — installed on qApp so it intercepts key events
 // from every widget (spinboxes, txtDepths, etc.) before they
 // are delivered.  Three responsibilities:
-//   1. Ctrl+C  → stop solver if running.
+//   1. Ctrl+C  → copy (Abid-notation aware); never stops the solver.
 //   2. Cube letter shortcuts → route to cubeWidget from any focus.
 //   3. txtDepths digit → auto-enable "Specific depths" checkbox.
 // -------------------------------------------------------
@@ -5238,14 +5238,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
     QKeyEvent *ke = static_cast<QKeyEvent *>(event);
 
-    // ── (1) Ctrl+C stops the solver ──────────────────────────────────────────
+    // ── (1) Ctrl+C — copy only; it must NOT stop the solver (use Ctrl+Enter) ──
     if (ke->key() == Qt::Key_C && (ke->modifiers() & Qt::ControlModifier))
     {
-        if (worker && worker->isRunning())
-        {
-            stopSolver();
-            return true; // consume — don't copy
-        }
         // If Ctrl+C fires on a table-cell item while Abid's notation is on,
         // copy the clean (minus-sign) text instead of the PUA glyphs.
         if (m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty())
