@@ -720,7 +720,9 @@ bool cornersAre2GenSolvable(const int pos[24], int twoGen) {
 	};
 	for (int k : twoGenPreadf(pos, twoGen)) {
 		int copy[24]; for (int i=0;i<24;i++) copy[i]=pos[i]; doBotArr(copy, k);
-		int cano = (7 - copy[23]) * 3; // the amount to color shift by
+		int cano; // the amount to color shift by
+		if (copy[23] >= 0 && copy[23] < 8) cano = (7 - copy[23]) * 3; // corner
+		else cano = (7 - copy[22]) * 3; // last piece was an edge, take [22] instead
 		int Ck[24]; for (int i=0;i<24;i++) Ck[i]=C[i]; doBotArr(Ck, cano);
 		int sigma[8]; for (int i=0;i<8;i++) sigma[i]=i;
 		for (int i=0;i<24;i++) if (Ck[i] >= 0 && Ck[i] < 8) sigma[Ck[i]] = C[i];
