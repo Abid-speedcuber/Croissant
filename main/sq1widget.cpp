@@ -171,6 +171,7 @@ bool Sq1Widget::setPositionFromString(const QString &pos)
         equator = mid;
         selected = -1;
         update();
+        emit positionChanged(); // keep command + solvability (updateConstraints) in sync
         return true;
     }
     catch (...)
