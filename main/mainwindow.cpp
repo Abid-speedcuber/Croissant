@@ -2250,7 +2250,7 @@ void MainWindow::onSolveButtonClicked()
 {
     if (worker && worker->isRunning())
         stopSolver();
-    else
+    else if (btnSolve->isEnabled()) // honour the disabled state (e.g. via Ctrl+Enter)
         onSolve();
 }
 
