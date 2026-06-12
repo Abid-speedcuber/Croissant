@@ -2075,8 +2075,8 @@ void MainWindow::rebuildTerminalView()
 // -------------------------------------------------------
 static int twoGenCompatibility(const Sq1Widget::RawState &s)
 {
-    if (!twoGenPreadf(s.pos, 2).empty()) return 2;
-    if (!twoGenPreadf(s.pos, 1).empty()) return 1;
+    if (!twoGenPreadf(s.pos, 2, /*firstMatchOnly=*/true).empty()) return 2;
+    if (!twoGenPreadf(s.pos, 1, /*firstMatchOnly=*/true).empty()) return 1;
     return 0;
 }
 

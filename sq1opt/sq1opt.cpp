@@ -522,7 +522,7 @@ bool validPosition(const int pos[24]) {
 	return true;
 }
 
-std::vector<int> twoGenPreadf(const int pos[24], int twoGen) {
+std::vector<int> twoGenPreadf(const int pos[24], int twoGen, bool firstMatchOnly = false) {
 	std::vector<int> result;
 	if (twoGen == 0) { result.push_back(0); return result; }
 
@@ -578,7 +578,12 @@ std::vector<int> twoGenPreadf(const int pos[24], int twoGen) {
 				if (ok) break;
 			}
 		}
-		if (ok) result.push_back(k);
+		if (ok) {
+			result.push_back(k);
+			// The UI only needs to know whether ANY preadf exists; the solver needs
+			// the full set.  firstMatchOnly lets the UI bail out on the first hit.
+			if (firstMatchOnly) return result;
+		}
 	}
 	return result;
 }

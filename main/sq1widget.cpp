@@ -741,46 +741,70 @@ void Sq1Widget::keyPressEvent(QKeyEvent *e)
     }
 }
 
+// Produce the canonical FullPosition-style encoding, honoring partiality[]:
+//   concrete pieces            -> 0..15
+//   partial corner U/V/W       -> negative, value%3 == 0 / -2 / -1
+//   partial edge   X/Y/Z       -> >15,      value%3 ==  0 /  1 /  2
+// Each partial gets a distinct value (so the solver treats two "any" pieces as
+// two independent unknowns rather than the specific pieces they happen to store).
+// Corner/edge is decided by x<8 (covers concrete 0-7 and already-encoded partial
+// corners <0), and the home layer mirrors the draw code's classification.
 Sq1Widget::RawState Sq1Widget::getRawState() const
 {
     RawState s;
+    int nextPartialCorner = -3;
+    int nextPartialEdge = 18;
     for (int i = 0; i < 24; i++)
-        s.pos[i] = position[i];
+    {
+        int x = position[i];
+        int pi = partiality[i];
+        bool isCorner = (x < 8);
+        int val;
+        if (pi == 0)
+        {
+            val = x; // concrete (or an already-encoded partial)
+        }
+        else if (isCorner)
+        {
+            bool top = (x < 0) ? (x % 3 == 0) : (x < 4); // top-home corner?
+            val = nextPartialCorner + (pi == 2 ? 2 : (top ? 0 : 1)); // W / U / V
+            nextPartialCorner -= 3;
+        }
+        else
+        {
+            bool top = (x > 15) ? (x % 3 == 0) : (x < 12); // top-home edge?
+            val = nextPartialEdge + (pi == 2 ? 2 : (top ? 0 : 1)); // Z / X / Y
+            nextPartialEdge += 3;
+        }
+        s.pos[i] = val;
+        if (isCorner)
+        {
+            i++; // corners occupy two slots, stored with the same value
+            if (i < 24)
+                s.pos[i] = val;
+        }
+    }
     s.middle = equator;
     return s;
 }
 
 QString Sq1Widget::getPositionString()
 {
+    RawState s = getRawState();
     QString out;
     for (int i = 0; i < 24; i++)
     {
-        int pi = partiality[i];
-        int x = position[i];
-        if (pi == 0)
-        {
-            if (x >= 0 && x <= 15)
-                out += QString("ABCDEFGH12345678")[x];
-            else if (x < 0)
-                out += (x % 3 == 0 ? 'U' : 'V');
-            else
-                out += (x % 3 == 0 ? 'X' : 'Y');
-        }
-        else if (pi == 1)
-        {
-            if (x < 0)
-                out += (x % 3 == 0 ? 'U' : 'V'); // partial corner: mod3==0→top(U), mod3==-2→bottom(V)
-            else
-                out += (x % 3 == 0 ? 'X' : 'Y'); // partial edge:   mod3==0→top(X), mod3==1→bottom(Y)
-        }
+        int x = s.pos[i];
+        if (x >= 0 && x <= 15)
+            out += QString("ABCDEFGH12345678")[x];
+        else if (x < 0)
+            out += (x % 3 == 0 ? 'U' : (x % 3 == -2 ? 'V' : 'W')); // partial corner
         else
-        {
-            out += (x < 0 ? 'W' : 'Z'); // fully partial: corner→W, edge→Z
-        }
+            out += (x % 3 == 0 ? 'X' : (x % 3 == 1 ? 'Y' : 'Z'));  // partial edge
         if (x < 8)
             i++; // skip duplicate corner slot
     }
-    if (equator != 0)
-        out += (equator == 1 ? '-' : '/');
+    if (s.middle != 0)
+        out += (s.middle == 1 ? '-' : '/');
     return out;
 }
