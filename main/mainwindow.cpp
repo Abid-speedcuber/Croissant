@@ -5264,6 +5264,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (event->type() != QEvent::KeyPress)
         return QMainWindow::eventFilter(watched, event);
 
+    // ── Block all keyboard shortcuts while a modal dialog is open ────────────
+    // This prevents cube movement, undo/redo, zoom, etc. from firing while the
+    // user is focused on e.g. the rename-bin popup's text field.
+    if (QApplication::activeModalWidget())
+        return QMainWindow::eventFilter(watched, event);
+
     QKeyEvent *ke = static_cast<QKeyEvent *>(event);
 
     // ── (1) Ctrl+C — copy only; it must NOT stop the solver (use Ctrl+Enter) ──
