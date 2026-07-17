@@ -183,7 +183,6 @@ private:
             m_effect->setOpacity(0.0);
             hide(); });
 
-
         hide();
     }
 
@@ -224,7 +223,8 @@ private:
         // Flag stray dismisses from QGraphicsView scene/hover processing: they fire
         // immediately after arm() for WA_Hover widgets and would cancel a valid show.
         m_armJustFired = true;
-        QTimer::singleShot(0, this, [this] { m_armJustFired = false; });
+        QTimer::singleShot(0, this, [this]
+                           { m_armJustFired = false; });
 
         // If a dismiss is pending, cancel it — we're still in tooltip territory
         bool gracePending = m_dismissTimer->isActive();
@@ -267,10 +267,10 @@ private:
             // will proceed. If a new arm() did fire (cursor moved to another tooltip),
             // the generation counter mismatch cancels the retry.
             int gen = m_armGen;
-            QTimer::singleShot(0, this, [this, gen] {
+            QTimer::singleShot(0, this, [this, gen]
+                               {
                 if (m_armGen == gen)
-                    dismissImpl();
-            });
+                    dismissImpl(); });
             return;
         }
         m_closeTimer->stop();
@@ -297,7 +297,8 @@ private:
         m_hoverTimer->stop();
         m_closeTimer->stop();
         m_dismissTimer->stop();
-        if (!isVisible()) return;
+        if (!isVisible())
+            return;
         stopAnim();
         m_currentText.clear();
         m_effect->setOpacity(0.0);
@@ -354,8 +355,8 @@ private:
                 // Prefer below-right; flip above if it would clip the bottom edge
                 x = cur.x() + 20;
                 y = (cur.y() + 28 + height() + 8 <= win->height())
-                            ? cur.y() + 28
-                            : cur.y() - height() - 8;
+                        ? cur.y() + 28
+                        : cur.y() - height() - 8;
 
                 // Flip left if it would clip the right edge
                 if (x + width() + 8 > win->width())
@@ -2076,8 +2077,10 @@ void MainWindow::rebuildTerminalView()
 // -------------------------------------------------------
 static int twoGenCompatibility(const Sq1Widget::RawState &s)
 {
-    if (!twoGenPreadf(s.pos, 2, /*firstMatchOnly=*/true).empty()) return 2;
-    if (!twoGenPreadf(s.pos, 1, /*firstMatchOnly=*/true).empty()) return 1;
+    if (!twoGenPreadf(s.pos, 2, /*firstMatchOnly=*/true).empty())
+        return 2;
+    if (!twoGenPreadf(s.pos, 1, /*firstMatchOnly=*/true).empty())
+        return 1;
     return 0;
 }
 
@@ -2134,16 +2137,15 @@ void MainWindow::updateConstraints()
         if (blocked)
         {
             msg = (tgId == 0)
-                ? "Position is not compatible with 2-gen:\n"
-                "no solved corner-edge-corner-edge block found on the bottom layer."
-                : "Position is not compatible with pseudo-2-gen:\n"
-                "no solved corner-edge-corner block found on the bottom layer.";
+                      ? "Position is not compatible with 2-gen:\n"
+                        "no solved corner-edge-corner-edge block found on the bottom layer."
+                      : "Position is not compatible with pseudo-2-gen:\n"
+                        "no solved corner-edge-corner block found on the bottom layer.";
         }
         // When keeping cube shape with a 2-gen mode, the corner permutation must
         // also be solvable with 2-gen moves (in addition to the block check above),
         // checked once per valid preadf candidate. Handles concrete and partial.
-        else if (is2gen && chkCubeshape->isChecked() && cubeWidget->inCubeshape()
-                 && !cornersAre2GenSolvable(rs.pos, (tgId == 0 ? 2 : 1)))
+        else if (is2gen && chkCubeshape->isChecked() && cubeWidget->inCubeshape() && !cornersAre2GenSolvable(rs.pos, (tgId == 0 ? 2 : 1)))
         {
             blocked = true;
             msg = "Position is not compatible with 2-gen while keeping cube shape:\n"
@@ -3687,50 +3689,72 @@ void MainWindow::showAboutModal()
     QString textBody = Theme::textSecondary();
     QLabel *title = new QLabel("About Solve-A-Squan");
     title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
-    // Build the about body content with proper string building
-    QLabel *body = new QLabel();
-    body->setWordWrap(true);
-    body->setTextFormat(Qt::RichText);
-    body->setStyleSheet("background:transparent;");
+    QTextBrowser *body = new QTextBrowser();
+    body->setReadOnly(true);
+    body->setFrameShape(QFrame::NoFrame);
+    body->setOpenLinks(false);
+    body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    body->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    body->setStyleSheet(QString(
+                            "QTextBrowser { background:transparent; border:none; color:%1; }")
+                            .arg(textBody));
+    body->document()->setDefaultStyleSheet(
+        QString("body, span, p { font-size:12px; color:%1; line-height:1.7; }"
+                "a { color:%2; }"
+                "li { margin-bottom:2px; }")
+            .arg(textBody, Theme::linkColor()));
     QString lnk = Theme::linkColor();
     QString aboutBody = QString(
                             "<span style='color:%1;font-size:12px;line-height:1.7;'>"
                             "This program stemmed from the optimal Square-1 solver by "
-                            "<a href='https://www.jaapsch.net/puzzles/' style='color:%3;'>Jaap Scherphuis</a>."
+                            "<a href='https://www.jaapsch.net/puzzles/' style='color:%2;'>Jaap Scherphuis</a>."
                             "<br><br>"
                             "v2 was created by Michael Gottlieb "
-                            "(<a href='https://github.com/qqwref' style='color:%3;'>GitHub</a>, "
-                            "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:%3;'>WCA</a>), "
+                            "(<a href='https://github.com/qqwref' style='color:%2;'>GitHub</a>, "
+                            "<a href='https://www.worldcubeassociation.org/persons/2006GOTT01' style='color:%2;'>WCA</a>), "
                             "who rewrote the solver with significant improvements and optimisations."
-                            "<br><br>Read the old documentations <a href='read_old_docs' style='color:%3;'>here</a>. Note that it is largely not applicable within v3."
-                            "<br><br>This is the official <b style='color:%4;'>v3</b>. New in v3:"
-                            "<ul style='margin:4px 0 4px 16px;padding:0;color:%5;'>"
+                            "<br><br>Read the old documentations <a href='read_old_docs' style='color:%2;'>here</a>. Note that it is largely not applicable within v3."
+                            "<br><br>This is the official <b style='color:%3;'>v3</b>. New in v3:"
+                            "<ul style='margin:4px 0 4px 16px;padding:0;color:%4;'>"
                             "<li>Actual graphical UI</li>"
                             "<li>Ability to generate a solution from a specific angle</li>"
                             "<li>Improved karnotation support</li>"
                             "<li>Algorithm ergonomics rater</li>"
                             "</ul>"
                             "v3 is created by "
-                            "<a href='https://www.worldcubeassociation.org/persons/2024ASHR02' style='color:%3;'>Abid Ibn Ashraf</a>"
+                            "<a href='https://www.worldcubeassociation.org/persons/2024ASHR02' style='color:%2;'>Abid Ibn Ashraf</a>"
                             " and "
-                            "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:%3;'>Matt Mao</a>."
+                            "<a href='https://www.worldcubeassociation.org/persons/2023MAOS01' style='color:%2;'>Matt Mao</a>."
                             "</span>")
-                            .arg(textBody, QString(), lnk, textPrimary, Theme::textMuted());
-    body->setText(aboutBody);
+                            .arg(textBody, lnk, textPrimary, Theme::textMuted());
+    body->setHtml(aboutBody);
     // Enable clicking the in-text link to open the ReadDocs popup
-    connect(body, &QLabel::linkActivated, this, [this](const QString &link)
+    connect(body, &QTextBrowser::anchorClicked, this, [this](const QUrl &url)
+            {
+        QString link = url.toString();
             {
                 if (link == "read_old_docs") {
                     showReadDocsPopup();
                 } else {
                     QDesktopServices::openUrl(QUrl(link));
-                } });
+                }
+            }; });
 
     lay->addWidget(title);
     lay->addWidget(body);
 
+    // Measure the rendered document height at the card's content width.
+    // QTextBrowser's own document is accurate here because our default stylesheet
+    // (line-height, font-size, list margins) is applied before we measure —
+    // unlike creating a bare QTextDocument with only setDefaultFont().
+    int cw = qMin(480, central->width() - 40);
+    int contentW = cw - lay->contentsMargins().left() - lay->contentsMargins().right();
+    body->document()->setTextWidth(contentW);
+    int bodyH = static_cast<int>(std::ceil(body->document()->size().height()));
+    int totalH = lay->contentsMargins().top() + title->sizeHint().height() + lay->spacing() + bodyH + lay->contentsMargins().bottom() + 4; // small fudge for descenders / border
+    int ch = qMin(totalH, central->height() - 40);
+    card->setFixedSize(cw, ch);
     card->show();
-    card->adjustSize();
 
     auto centerCard = [overlay, card]()
     {
@@ -4360,7 +4384,7 @@ void MainWindow::showSettingsModal()
     chkAbid->setChecked(m_abidNotation && !OutputConverter::s_abidFontFamily.isEmpty());
     chkAbid->setEnabled(!OutputConverter::s_abidFontFamily.isEmpty() && !solverRunning);
     chkAbid->setToolTip("Display negative numbers as barred digits\n"
-        "using the Kompact font for display.");
+                        "using the Kompact font for display.");
     if (OutputConverter::s_abidFontFamily.isEmpty())
         chkAbid->setToolTip(chkAbid->toolTip() +
                             "\n\n⚠ kompact-font.ttf not found — visual effect unavailable.");
@@ -4378,10 +4402,9 @@ void MainWindow::showSettingsModal()
     QCheckBox *chkIgnoreTrans = new QCheckBox("Ignore move equivalences");
     chkIgnoreTrans->setEnabled(!solverRunning);
     chkIgnoreTrans->setToolTip("REALLY generate all possible algs -\n"
-        "with all the y2 possibilities and things.\n"
-        "Only useful if you don't anticipate a lot of algs initially.\n"
-         "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)"
-    );
+                               "with all the y2 possibilities and things.\n"
+                               "Only useful if you don't anticipate a lot of algs initially.\n"
+                               "(my experience is that 8 slicers are a struggle, 9 slicers are impossible)");
     chkIgnoreTrans->setChecked(m_ignoreTrans);
     chkIgnoreTrans->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     chkIgnoreTransSetting = chkIgnoreTrans;
@@ -4997,14 +5020,17 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 for (QWidget *p = btn; p && !inProxy; p = p->parentWidget())
                     inProxy = (p == proxyRoot);
                 QRect globalRect;
-                if (inProxy && proxyRoot) {
+                if (inProxy && proxyRoot)
+                {
                     QPoint tl = btn->mapTo(proxyRoot, QPoint(0, 0));
                     QPoint br = btn->mapTo(proxyRoot, QPoint(btn->width(), btn->height()));
                     QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
                     QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
                     globalRect = QRect(m_zoomView->viewport()->mapToGlobal(viewTL),
                                        m_zoomView->viewport()->mapToGlobal(viewBR));
-                } else {
+                }
+                else
+                {
                     globalRect = QRect(btn->mapToGlobal(QPoint(0, 0)),
                                        btn->mapToGlobal(QPoint(btn->width(), btn->height())));
                 }
@@ -5060,14 +5086,17 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 for (QWidget *p = w; p && !inProxy; p = p->parentWidget())
                     inProxy = (p == proxyRoot);
                 QRect globalRect;
-                if (inProxy && proxyRoot) {
+                if (inProxy && proxyRoot)
+                {
                     QPoint tl = w->mapTo(proxyRoot, QPoint(0, 0));
                     QPoint br = w->mapTo(proxyRoot, QPoint(w->width(), w->height()));
                     QPoint viewTL = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(tl)));
                     QPoint viewBR = m_zoomView->mapFromScene(m_zoomProxy->mapToScene(QPointF(br)));
                     globalRect = QRect(m_zoomView->viewport()->mapToGlobal(viewTL),
                                        m_zoomView->viewport()->mapToGlobal(viewBR));
-                } else {
+                }
+                else
+                {
                     globalRect = QRect(w->mapToGlobal(QPoint(0, 0)),
                                        w->mapToGlobal(QPoint(w->width(), w->height())));
                 }
@@ -5371,8 +5400,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         return QMainWindow::eventFilter(watched, event);
 
     // ── Esc — dismiss visible tooltip first; cube reset on the next Esc ─────
-    if (ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier
-        && FadingTooltip::active(m_zoomView))
+    if (ke->key() == Qt::Key_Escape && ke->modifiers() == Qt::NoModifier && FadingTooltip::active(m_zoomView))
     {
         FadingTooltip::dismissNow(m_zoomView);
         return true;
@@ -5662,8 +5690,10 @@ void MainWindow::loadSettings()
 
     // ── Display options ───────────────────────────────────────────────────────
     s.beginGroup("display");
-    if (s.contains("smartKarn"))   m_smartKarn = s.value("smartKarn").toBool();
-    if (s.contains("debugOutput")) m_debugOutput = s.value("debugOutput").toBool();
+    if (s.contains("smartKarn"))
+        m_smartKarn = s.value("smartKarn").toBool();
+    if (s.contains("debugOutput"))
+        m_debugOutput = s.value("debugOutput").toBool();
     // Abid display only meaningful when the font actually loaded.
     if (s.contains("abidNotation"))
         m_abidNotation = s.value("abidNotation").toBool() && !OutputConverter::s_abidFontFamily.isEmpty();
@@ -5678,9 +5708,22 @@ void MainWindow::loadSettings()
     if (s.contains("inputMode") && m_inputMode && m_mainInput)
     {
         m_inputModeIndex = s.value("inputMode").toInt();
-        if (m_inputModeIndex == 1)      { m_inputMode->setText("ALG");      m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
-        else if (m_inputModeIndex == 2) { m_inputMode->setText("POSITION"); m_mainInput->setPlaceholderText("ABCDEFGH12345678-"); }
-        else                            { m_inputModeIndex = 0; m_inputMode->setText("SCRAMBLE"); m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)"); }
+        if (m_inputModeIndex == 1)
+        {
+            m_inputMode->setText("ALG");
+            m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
+        }
+        else if (m_inputModeIndex == 2)
+        {
+            m_inputMode->setText("POSITION");
+            m_mainInput->setPlaceholderText("ABCDEFGH12345678-");
+        }
+        else
+        {
+            m_inputModeIndex = 0;
+            m_inputMode->setText("SCRAMBLE");
+            m_mainInput->setPlaceholderText("1,0 / 3,3 / 0,-3 / ...  (supports karn)");
+        }
     }
     s.endGroup();
 
