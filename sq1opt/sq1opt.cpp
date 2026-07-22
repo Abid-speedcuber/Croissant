@@ -99,6 +99,20 @@ void sq1optSetPosition(const int pos[24], int middle)
 	s_hasInjectedPosition = true;
 }
 
+// Stable C ABI entry points used by the browser build.  Keeping these wrappers
+// here means the WASM proof of concept calls the same solver as the desktop app.
+extern "C" {
+void sq1opt_web_set_table_directory(const char* dir)
+{
+	 sq1optSetTableDirectory(dir ? std::string(dir) : std::string());
+}
+
+void sq1opt_web_request_stop()
+{
+	sq1optRequestStop();
+}
+}
+
 static std::string tablePath(const char* fileName)
 {
 	if (tableDirectory == "." || tableDirectory.empty()) return fileName;
