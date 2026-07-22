@@ -1,0 +1,104 @@
+/* Direct browser translation of btnInputMode / btnInputModeArrow / txtMainInput / btnApply. */
+.app {
+  max-width: none;
+  margin: 0;
+}
+
+.inputbar {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  height: 50px;
+  padding: 0 12px;
+  gap: 0;
+}
+
+.mode-control {
+  height: 32px;
+  margin-left: 8px;
+}
+
+.mode-control .mode {
+  width: 82px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9px 0 0 9px;
+  letter-spacing: 0.5px;
+}
+
+.mode-control .arrow {
+  width: 20px;
+  min-width: 20px;
+  height: 32px;
+  padding: 0 6px;
+  margin-right: 10px;
+  border-radius: 0 9px 9px 0;
+}
+
+.mode-menu {
+  top: 32px;
+  left: 82px;
+  width: 116px;
+  padding: 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.mode-menu button {
+  height: 31px !important;
+  padding: 6px 20px !important;
+  border-radius: 4px !important;
+}
+
+.mode-menu button.selected {
+  background: transparent !important;
+  color: #2db570 !important;
+  font-weight: 700;
+}
+
+.mode-menu button.selected:hover {
+  background: #345078 !important;
+}
+
+.mode-menu button.selected::before {
+  content: "✓";
+  display: inline-block;
+  width: 15px;
+  margin-left: -15px;
+  color: #2db570;
+}
+
+.input-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 65px;
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+  padding-right: 8px;
+}
+
+.input-control input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 4px 8px;
+  border-radius: 9px;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.input-control .apply {
+  display: grid;
+  place-items: center;
+  width: 65px;
+  min-width: 65px;
+  max-width: 65px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
