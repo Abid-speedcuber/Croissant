@@ -1099,7 +1099,7 @@ void MainWindow::buildUI()
     chkIgnoreEquator->setObjectName("chkIgnoreEquator");
     chkIgnoreEquator->setToolTip("Ignore equator states. Equivalent to clicking on the bar until it is gray.");
 
-    chkKarnotation = new TightCheckBox("Karnotation output");
+    chkKarnotation = new TightCheckBox("Karn output");
     chkKarnotation->setObjectName("chkKarnotation");
     chkKarnotation->setToolTip("Display solutions in karnotation instead of WCA notation.");
 
@@ -2556,7 +2556,7 @@ void MainWindow::setSolverRunning(bool running)
         chkSmartKarn->setEnabled(!running);
     if (chkIgnoreTransSetting)
         chkIgnoreTransSetting->setEnabled(!running);
-    // Light theme and Abid notation toggles: find them by their checked state
+    // Abid notation toggle: find them by their checked state
     // in the settings card if it's open. Since the modal is rebuilt each open,
     // we reach them through the overlay child hierarchy.
     if (auto *central = this->centralWidget())
@@ -4340,10 +4340,10 @@ void MainWindow::showSettingsModal()
 
     const bool solverRunning = worker && worker->isRunning();
 
-    QCheckBox *chkSmart = new QCheckBox("Use smarter karnotation");
+    QCheckBox *chkSmart = new QCheckBox("Use smarter karn");
     chkSmart->setChecked(m_smartKarn);
     chkSmart->setEnabled(!solverRunning);
-    chkSmart->setToolTip("When 'Karnotation output' is on, use cubeshape-aware karnify.\n"
+    chkSmart->setToolTip("When 'Karn output' is on, use cubeshape-aware karnify.\n"
                          "i.e. don't karnify less obvious karns, like \"T\", when out of CS.");
     chkSmart->setStyleSheet(QString("background:transparent;font-size:13px;color:%1;").arg(textPrimary));
     connect(chkSmart, &QCheckBox::toggled, this, [this](bool checked)
@@ -4877,53 +4877,70 @@ void MainWindow::showHowToUseModal()
     body->setContentsMargins(20, 16, 20, 16);
     body->setStyleSheet(QString("background: transparent; color: %1; font-size: 12px; line-height: 1.7;").arg(textBody));
     body->setText(QString(
-                      "<b style='color:%1;font-size:13px;'>Cube Controls</b><br>"
-                      "<b style='color:%1;'>Keyboard shortcuts:</b><br>"
-                      "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo &nbsp; <b style='color:%2;'>Esc</b> = Reset the cube to solved<br>"
-                      "The below shortcuts are identical to those of the csTimer virtual squan.<br>"
-                      "• <b style='color:%2;'>J</b> = U, but only by one piece &nbsp; <b style='color:%2;'>F</b> = U', but only by one piece <br>"
-                      "• <b style='color:%2;'>S</b> = D, but only by one piece &nbsp; <b style='color:%2;'>L</b> = D', but only by one piece <br>"
-                      "• <b style='color:%2;'>I</b> or <b style='color:%2;'>K</b> = Slice<br>"
-                      "• <b style='color:%2;'>H</b> = U, but by two pieces &nbsp; <b style='color:%2;'>G</b> = U', but by two pieces<br>"
-                      "• <b style='color:%2;'>W</b> = D, but by two pieces &nbsp; <b style='color:%2;'>O</b> = D', but by two pieces<br><br>"
-                      "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
-                      "Type some moves and hit <b>Apply</b>. Karn will be parsed correctly.<br>"
-                      "Use the mode button (to the left of the input) to switch between three modes: "
-                      "<b>Scram</b> (applies moves forward as a scramble), "
-                      "<b>Alg</b> (inverts before applying, useful for testing algs), and "
-                      "<b>Pos</b> (interprets the input as a string of the raw state).<br><br>"
-                      "<b style='color:%1;font-size:13px;'>Favorites</b><br>"
-                      "Algs can be saved to bins for later reference. "
-                      "Right-click a generated alg to:<br>"
-                      "• <b>⧉ Copy alg</b> — copies the alg itself (without the move-count brackets).<br>"
-                      "• <b>♥ Add to Favorites Bin</b> — saves the alg to a bin associated with the current solve configurations.<br>"
-                      "Bins are identified by their configurations, so algs from the same setup always land in the same bin regardless of when they were added. "
-                      "Click the <b>♥</b> button (visible in the terminal area) to open the Favorites Bin, where you can:<br>"
-                      "• Click a <b>bin title</b> to re-apply that configuration and clear the terminal.<br>"
-                      "• Use <b>✏</b> to rename a bin, <b>⧉</b> to copy all its algs, or <b>🗑</b> to delete the bin entirely.<br>"
-                      "• Click <b>✕</b> next to any alg to remove it.<br>"
-                      "Favorited algs persist between sessions, unless you delete them.<br><br>"
-                      "<b style='color:%1;font-size:13px;'>Options</b><br>"
-                      "Hover over any option to read its description. Quick reference:<br>"
-                      "• <b>Metric</b>: how move length is counted — <b>Slice</b> (only slices), <b>Move</b> (layer turns too), or <b>Angle</b>.<br>"
-                      "• <b>All optimal</b>: find every shortest solution, not just the first one found.<br>"
-                      "• <b>+suboptimal</b>: also return solutions up to N moves longer than optimal.<br>"
-                      "• <b>Specific depths</b>: search only the listed move counts (comma-separated, e.g. \"8,9\").<br>"
-                      "• <b>Generator alg</b>: output algs set up the case from solved instead of solving it.<br>"
-                      "• <b>2 Gen / Pseudo 2 Gen</b>: restrict moves to top-layer turns and slices (or a pseudo variant).<br>"
-                      "• <b>Stay in cubeshape</b>: restrict to algs that keep the puzzle in cubeshape throughout.<br>"
-                      "• <b>Karnotation output</b>: display solutions in karn instead of WCA notation.<br>"
-                      "• <b>Lock layer angle on pre-ABF</b>: constrain the pre-ABF move to ±1 or 0 on either/both layers.<br>"
-                      "• <b>Normalize ABF</b>: simplify ABF moves in the output (e.g. 3-1 → 0-1, 43 → 10).<br>"
-                      "• <b>Max top / bottom / total turns</b>: cap how large layer turns can be.<br><br>"
-                      "<b style='color:%1;font-size:13px;'>Output</b><br>"
-                      "Solutions appear in the terminal as they are found. Once algs are present, several buttons appear in the corner of the terminal area:<br>"
-                      "• <b>⧉</b> — copy all algs in the terminal to the clipboard.<br>"
-                      "• <b>♥</b>"
-                      "• <b>⊞</b> — switch between terminal view and table view.<br>"
-                      "• <b>⤢</b> — expand the terminal to full screen.<br>"
-                      "If <b>Stay in cubeshape</b> was active, algs will be roughly sorted by their <b>ergonomics</b>. The numbers are relative and for reference only.<br>")
-                      .arg(textPrimary, textCyan));
+        "<b style='color:%1;font-size:13px;'>Keyboard shortcuts:</b><br>"
+        "• <b style='color:%2;'>Z</b> = Undo &nbsp; <b style='color:%2;'>Y</b> = Redo<br>"
+        "• <b style='color:%2;'>Esc</b> = Reset the cube to solved<br>"
+        "• <b style='color:%2;'>Ctrl + Enter</b> = Start or stop the solver<br>"
+        "• <b style='color:%2;'>Ctrl + Z</b> = Undo state change &nbsp; <b style='color:%2;'>Ctrl + Y</b> = Redo state change<br>"
+        "• <b style='color:%2;'>Ctrl + =</b> = Zoom in &nbsp; <b style='color:%2;'>Ctrl + -</b> = Zoom out<br>"
+        "• <b style='color:%2;'>Ctrl + 0</b> = Reset zoom level<br><br>"
+        "Click on two pieces to <b>swap</b> them. Or use the below shortcuts (identical to cstimer):<br>"
+        "• <b style='color:%2;'>J</b> = U, only by one piece &nbsp; <b style='color:%2;'>F</b> = U', only by one piece <br>"
+        "• <b style='color:%2;'>S</b> = D, only by one piece &nbsp; <b style='color:%2;'>L</b> = D', only by one piece <br>"
+        "• <b style='color:%2;'>I</b> or <b style='color:%2;'>K</b> = Slice<br>"
+        "• <b style='color:%2;'>H</b> = U, by two pieces &nbsp; <b style='color:%2;'>G</b> = U', by two pieces<br>"
+        "• <b style='color:%2;'>W</b> = D, by two pieces &nbsp; <b style='color:%2;'>O</b> = D', by two pieces<br><br>"
+
+        "<b style='color:%1;font-size:13px;'>Scramble / Alg Input</b><br>"
+        "Type some moves and hit <b>Apply</b>. Karn will be parsed correctly.<br>"
+        "Use the mode button (to the left of the input) to switch between three modes:<br>"
+        "• <b>Scram</b>: applies moves forward as a scramble<br>"
+        "• <b>Alg</b>: inverts before applying, useful for testing algs<br>"
+        "• <b>Pos</b>: interprets the input as a string of the raw state (e.g. A1B2C4D38E6F7G5H)<br>"
+        "For the first two modes, use <b style='color:%2;'>Enter</b> to apply the moves from the current state, or <b style='color:%2;'>Shift + Enter</b> to first reset the cube to solved state before applying.<br><br>"
+
+        "<b style='color:%1;font-size:13px;'>Favorites</b><br>"
+        "Algs can be saved to bins for later reference. "
+        "Right-click a generated alg to:<br>"
+        "• <b>⧉ Copy alg</b> — copies the alg itself<br>"
+        "• <b>♥ Add to Favorites Bin</b> — saves the alg to a bin<br><br>"
+        "Bins are identified by the <b>configurations</b> of the solve, so algs from the same setup always land in the same bin regardless of when they were added.<br>"
+        "Click the <b>♥</b> button (visible in the terminal area) to open the Favorites Bin, where you can:<br>"
+        "• Click a <b>bin title</b> to re-apply that configuration and clear the terminal.<br>"
+        "• Use <b>✏</b> to rename a bin<br>"
+        "• <b>⧉</b> to copy all its algs<br>"
+        "• <b>🗑</b> to delete the bin entirely<br>"
+        "• Click <b>✕</b> next to any alg to remove it<br>"
+        "Favorited algs are stored on your device, unless you delete them.<br><br>"
+
+        "<b style='color:%1;font-size:13px;'>Options</b><br>"
+        "Hover over any option to read its description. Quick reference:<br>"
+        "• <b>Metric</b>: how move length is counted — <b>Slice</b> (only slices), <b>Move</b> (layer turns too), or <b>Angle</b>.<br>"
+        "• <b>All optimal</b>: find every shortest solution, not just the first one found.<br>"
+        "• <b>+suboptimal</b>: also return solutions up to N moves longer than optimal.<br>"
+        "• <b>Specific depths</b>: search only the listed move counts (comma-separated, e.g. \"8,9\").<br>"
+        "• <b>Generator alg</b>: output algs will set up the case from solved instead of solving it.<br>"
+        "• <b>2 Gen / Pseudo 2 Gen</b>: restrict moves to top-layer turns and slices (or a pseudo variant).<br>"
+        "• <b>Stay in cubeshape</b>: restrict to algs that keep the puzzle in cubeshape throughout.<br>"
+        "• <b>Karn output</b>: display solutions in karn instead of WCA notation.<br>"
+        "• <b>Lock layer angle on pre-ABF</b>: constrain the pre-ABF move to ±1 or 0 on either/both layers.<br>"
+        "• <b>Normalize ABF</b>: simplify ABF moves in the output (e.g. 3-1 → 0-1, 43 → 10).<br>"
+        "• <b>Max top / bottom / total turns</b>: cap how large layer turns can be.<br><br>"
+
+        "<b style='color:%1;font-size:13px;'>Settings</b><br>"
+        "• <b>Use smarter karn</b>: don't karnify things like T when the alg goes out of CS.<br>"
+        "• <b>Abid's notation</b>: use barred numbers for negatives. This is just a display setting.<br>"
+        "• <b>Ignore move equivalences</b>: generate all possible algs, even with y2 algs.<br>"
+        "• <b>Debug output</b>: outputs internal solver states.<br><br>"
+
+        "<b style='color:%1;font-size:13px;'>Output</b><br>"
+        "Solutions appear in the terminal as they are found. Once algs are present, several buttons appear in the corner of the terminal area:<br>"
+        "• <b>⧉</b> — copy all algs in the terminal to the clipboard.<br>"
+        "• <b>♥</b> — see the Favorites section.<br>"
+        "• <b>⊞</b> — switch between terminal view and table view.<br>"
+        "• <b>⤢</b> — expand the terminal to full screen.<br>"
+        "If <b>Stay in cubeshape</b> was active, algs will be roughly sorted by their <b>ergonomics</b>. The numbers are relative and for reference only.<br>")
+        .arg(textPrimary, textCyan));
 
     sa->setWidget(body);
     lay->addWidget(sa, 1);
