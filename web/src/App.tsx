@@ -648,8 +648,8 @@ export default function App() {
           <button className="solve">▶ Solve [Ctrl+Enter]</button>
         </aside>
         <section className="right-column">
-          <fieldset>
-            <legend>Options</legend>
+          <div className="options-panel">
+            <h2>Options</h2>
             <div className="select-grid">
               <label>
                 Metric
@@ -753,8 +753,7 @@ export default function App() {
                 <input placeholder="e.g. 8,9" />
               </label>
             </div>
-            <button className="solve option-solve">Solve</button>
-          </fieldset>
+          </div>
           <div className="terminal">
             <div className="terminal-head">
               <span>#</span>

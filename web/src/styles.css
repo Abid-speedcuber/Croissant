@@ -7,15 +7,25 @@
 * {
   box-sizing: border-box;
 }
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
 body {
   margin: 0;
   background: #11151c;
 }
 .app {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   max-width: 1180px;
   margin: auto;
   background: #11151c;
+  display: grid;
+  grid-template-rows: 52px 50px minmax(0, 1fr);
+  overflow: hidden;
 }
 .app > header {
   height: 52px;
@@ -143,11 +153,14 @@ body {
   grid-template-columns: 344px minmax(0, 1fr);
   gap: 10px;
   padding: 10px;
-  min-height: calc(100vh - 102px);
+  min-height: 0;
+  overflow: hidden;
 }
 .cube-column {
   border-right: 1px solid #2a3445;
   padding-right: 4px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .cube-holder {
   height: 385px;
@@ -221,19 +234,24 @@ body {
   background: #4a8bcd;
 }
 .right-column {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  gap: 5px;
 }
-.right-column fieldset {
-  min-height: 300px;
+.options-panel {
+  flex: 0 1 373px;
+  min-height: 0;
+  overflow: auto;
   border: 1px solid #354256;
   border-radius: 8px;
   padding: 9px 16px 10px;
-  margin: 0;
   color: #aeb9cd;
   background: #1a202b;
 }
-.right-column legend {
-  padding: 0 4px;
+.options-panel h2 {
+  margin: 0 0 10px;
   font-size: 14px;
   color: #e8ecf4;
   text-transform: uppercase;
@@ -289,18 +307,13 @@ body {
 .limit-grid input {
   width: 100%;
 }
-.option-solve {
-  width: 100%;
-  margin-top: 18px;
-  height: 34px;
-}
 .terminal {
-  margin-top: 5px;
+  flex: 1 1 240px;
+  min-height: 160px;
   background: #0e151f;
   border: 1px solid #354256;
   border-radius: 4px;
-  min-height: 240px;
-  overflow: hidden;
+  overflow: auto;
 }
 .terminal-head,
 .solution {
@@ -414,6 +427,25 @@ body {
   background: transparent;
   color: #aeb9cd;
   font-size: 16px;
+}
+* {
+  scrollbar-color: #40516a #101722;
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #101722;
+}
+::-webkit-scrollbar-thumb {
+  background: #40516a;
+  border: 2px solid #101722;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #58708f;
 }
 @media (max-width: 720px) {
   .inputbar {
