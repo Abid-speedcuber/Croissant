@@ -526,7 +526,7 @@ export default function App() {
     [input, setInput] = useState(""),
     [mode, setMode] = useState("SCRAMBLE"),
     [cubePos, setCubePos] = useState("A1B2C3D45E6F7G8H-"),
-    [metric, setMetric] = useState("Move (default)"),
+    [metric, setMetric] = useState("Slice"),
     [two, setTwo] = useState("None"),
     [angle, setAngle] = useState("None"),
     [normalize, setNormalize] = useState("None"),
@@ -534,7 +534,7 @@ export default function App() {
     [generator, setGenerator] = useState(false),
     [cubeShape, setCubeShape] = useState(false),
     [ignoreMiddle, setIgnoreMiddle] = useState(false),
-    [karn, setKarn] = useState(false),
+    [karn, setKarn] = useState(true),
     [terminal, setTerminal] = useState<string[]>([]);
   const chooseMode = (next: string) => {
     setMode(next);
@@ -649,7 +649,7 @@ export default function App() {
         </aside>
         <section className="right-column">
           <fieldset>
-            <legend>Solver options</legend>
+            <legend>Options</legend>
             <div className="select-grid">
               <label>
                 Metric
@@ -657,21 +657,21 @@ export default function App() {
                   value={metric}
                   onChange={(e) => setMetric(e.target.value)}
                 >
-                  <option>Move (default)</option>
                   <option>Slice</option>
+                  <option>Move</option>
                   <option>Angle</option>
                 </select>
               </label>
               <label>
-                2-gen
+                2 Gen
                 <select value={two} onChange={(e) => setTwo(e.target.value)}>
                   <option>None</option>
-                  <option>Pseudo 2-gen</option>
-                  <option>2-gen</option>
+                  <option>Pseudo 2 Gen</option>
+                  <option>2 Gen</option>
                 </select>
               </label>
               <label>
-                Angle lock
+                Lock layer angle on preabf
                 <select
                   value={angle}
                   onChange={(e) => setAngle(e.target.value)}
@@ -683,15 +683,15 @@ export default function App() {
                 </select>
               </label>
               <label>
-                ABF normalization
+                Normalize ABF
                 <select
                   value={normalize}
                   onChange={(e) => setNormalize(e.target.value)}
                 >
                   <option>None</option>
                   <option>Both</option>
-                  <option>Pre-ABF</option>
-                  <option>Post-ABF</option>
+                  <option>PreABF</option>
+                  <option>PostABF</option>
                 </select>
               </label>
             </div>
@@ -702,7 +702,7 @@ export default function App() {
                   checked={all}
                   onChange={(e) => setAll(e.target.checked)}
                 />{" "}
-                Find all optimal
+                All optimal
               </label>
               <label>
                 <input
@@ -710,7 +710,7 @@ export default function App() {
                   checked={generator}
                   onChange={(e) => setGenerator(e.target.checked)}
                 />{" "}
-                Generate input sequence
+                Generator alg
               </label>
               <label>
                 <input
@@ -718,7 +718,7 @@ export default function App() {
                   checked={cubeShape}
                   onChange={(e) => setCubeShape(e.target.checked)}
                 />{" "}
-                Keep cube shape
+                Stay in cubeshape
               </label>
               <label>
                 <input
@@ -726,7 +726,7 @@ export default function App() {
                   checked={ignoreMiddle}
                   onChange={(e) => setIgnoreMiddle(e.target.checked)}
                 />{" "}
-                Ignore middle layer
+                Ignore equator
               </label>
               <label>
                 <input
@@ -734,23 +734,23 @@ export default function App() {
                   checked={karn}
                   onChange={(e) => setKarn(e.target.checked)}
                 />{" "}
-                Karnotation output
+                Karn output
               </label>
             </div>
             <div className="limit-grid">
               <label>
-                Max X<input defaultValue="6" />
+                Max top turn:<input defaultValue="3" />
               </label>
               <label>
-                Max Y<input defaultValue="6" />
+                Max bottom turn:<input defaultValue="3" />
               </label>
               <label>
-                Max total
-                <input defaultValue="12" />
+                Max total turn:
+                <input defaultValue="6" />
               </label>
               <label>
-                Depths
-                <input placeholder="e.g. 8,9,10" />
+                Specific depths:
+                <input placeholder="e.g. 8,9" />
               </label>
             </div>
             <button className="solve option-solve">Solve</button>
