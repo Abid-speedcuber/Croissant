@@ -132,9 +132,9 @@ fn solve_blocking(app: tauri::AppHandle, state: SolverState, position: String, f
     let _solver_guard = state.0.lock().map_err(|_| "Solver state is unavailable")?;
     let app_table_dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("pruning-tables");
     let bundled_tables = app.path().resource_dir().map_err(|e| e.to_string())?.join("resources/pruning-tables");
-    let legacy_tables = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../legacy/build/Desktop-Debug/pruning-tables");
-    let table_dir = if cfg!(debug_assertions) && legacy_tables.join("sq1p1u.dat").exists() {
-        legacy_tables
+    let source_tables = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/pruning-tables");
+    let table_dir = if cfg!(debug_assertions) && source_tables.join("sq1p1u.dat").exists() {
+        source_tables
     } else if bundled_tables.join("sq1p1u.dat").exists() {
         bundled_tables
     } else {
@@ -218,7 +218,7 @@ mod tests {
         let arguments = ["sq1opt", "-v5", "-es", "A1B2C3D45E6F7G8H-"]
             .map(|value| CString::new(value).unwrap());
         let pointers = arguments.iter().map(|argument| argument.as_ptr()).collect::<Vec<_>>();
-        let tables = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../legacy/build/Desktop-Debug/pruning-tables");
+        let tables = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/pruning-tables");
         let directory = CString::new(tables.to_string_lossy().as_bytes()).unwrap();
         let mut code = -1;
         extern "C" fn ignore_line(_: *const c_char, _: *mut c_void) {}
