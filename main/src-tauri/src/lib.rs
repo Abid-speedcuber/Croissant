@@ -2,7 +2,6 @@ use serde::Serialize;
 use std::{
     fs,
     ffi::{c_char, c_void, CStr, CString},
-    path::PathBuf,
 };
 use tauri::{Manager, State};
 use tauri::ipc::Channel;
@@ -106,21 +105,6 @@ struct SolverResult {
     stderr: String,
 }
 
-fn seed_pruning_tables(target: &PathBuf, source: &PathBuf) -> Result<(), String> {
-    if target.join("sq1p1u.dat").exists() || !source.exists() {
-        return Ok(());
-    }
-    fs::create_dir_all(target).map_err(|e| e.to_string())?;
-    for entry in fs::read_dir(source).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if path.extension().is_some_and(|extension| extension == "dat") {
-            fs::copy(&path, target.join(entry.file_name())).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
-}
-
 extern "C" fn solver_line_callback(line: *const c_char, context: *mut c_void) {
     if line.is_null() || context.is_null() { return; }
     let channel = unsafe { &*(context as *const Channel<String>) };
@@ -130,17 +114,7 @@ extern "C" fn solver_line_callback(line: *const c_char, context: *mut c_void) {
 
 fn solve_blocking(app: tauri::AppHandle, state: SolverState, position: String, flags: Vec<String>, on_line: Channel<String>) -> Result<SolverResult, String> {
     let _solver_guard = state.0.lock().map_err(|_| "Solver state is unavailable")?;
-    let app_table_dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("pruning-tables");
-    let bundled_tables = app.path().resource_dir().map_err(|e| e.to_string())?.join("resources/pruning-tables");
-    let source_tables = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/pruning-tables");
-    let table_dir = if cfg!(debug_assertions) && source_tables.join("sq1p1u.dat").exists() {
-        source_tables
-    } else if bundled_tables.join("sq1p1u.dat").exists() {
-        bundled_tables
-    } else {
-        seed_pruning_tables(&app_table_dir, &bundled_tables)?;
-        app_table_dir
-    };
+    let table_dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("pruning-tables");
     fs::create_dir_all(&table_dir).map_err(|e| e.to_string())?;
     let mut arguments = vec!["sq1opt".to_owned(), "-v5".to_owned()];
     arguments.extend(flags);
@@ -218,7 +192,7 @@ mod tests {
         let arguments = ["sq1opt", "-v5", "-es", "A1B2C3D45E6F7G8H-"]
             .map(|value| CString::new(value).unwrap());
         let pointers = arguments.iter().map(|argument| argument.as_ptr()).collect::<Vec<_>>();
-        let tables = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/pruning-tables");
+        let tables = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/pruning-tables");
         let directory = CString::new(tables.to_string_lossy().as_bytes()).unwrap();
         let mut code = -1;
         extern "C" fn ignore_line(_: *const c_char, _: *mut c_void) {}

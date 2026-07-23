@@ -17,7 +17,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": ["resources/pruning-tables/*"],
     "icon": ["icons/icon.png"]
   }
 }
