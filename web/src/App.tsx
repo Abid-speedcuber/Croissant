@@ -695,7 +695,7 @@ function Modal({
     type === "settings" ? (
       <div className="modal-article">
         <h2>Settings</h2>
-        <div className="settings-grid">
+        <div className="settings-list">
           <label className="modal-check">
             <input type="checkbox" checked={settings?.smartKarn ?? true} disabled={settings?.disabled} onChange={(e) => settings?.setSmartKarn(e.target.checked)} />
             <span>Use smarter karn</span>
@@ -1333,12 +1333,19 @@ export default function App() {
               <label>Normalize ABF<select value={normalize} disabled={running} onChange={(e) => setNormalize(e.target.value)}><option>None</option><option>Both</option><option>PreABF</option><option>PostABF</option></select></label>
             </div>
             <div className="check-grid">
-              <label><input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} /> All optimal</label>
+              <label className="inline-all-optimal">
+                <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
+                <span>Generate All Solutions:</span>
+                <span className="all-optimal-label">{suboptimal ? `Optimal+${suboptimal}` : "Optimal"}</span>
+                <span className="stepper-group">
+                  <button type="button" disabled={running || !all} onClick={() => setSuboptimal((value) => Math.max(0, value - 1))}>−</button>
+                  <button type="button" disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
+                </span>
+              </label>
               <label><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
               <label><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
               <label><input type="checkbox" checked={ignoreMiddle} disabled={running} onChange={(e) => toggleIgnoreMiddle(e.target.checked)} /> Ignore equator</label>
               <label><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
-              {all && !validDepths(depths) && <label>Extra moves:<input className="compact-number" type="number" min="0" value={suboptimal} onChange={(e) => setSuboptimal(Number(e.target.value))} /></label>}
             </div>
             <div className="limit-grid">
               <label>Max top turn:<input type="number" min="0" max="6" value={maxXValue} disabled={running} onChange={(e) => { setMaxXValue(Number(e.target.value)); setMaxX(true); }} /></label>
