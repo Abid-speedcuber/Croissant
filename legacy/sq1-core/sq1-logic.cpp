@@ -168,6 +168,7 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
     return result;
 }
 
+#ifndef SQ1OPT_NO_QT
 std::vector<std::pair<QString, double>>
 rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKarnotation)
 {
@@ -255,3 +256,4 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
     });
     return results;
 }
+#endif

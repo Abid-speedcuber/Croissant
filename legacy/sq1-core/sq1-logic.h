@@ -1,7 +1,9 @@
 #pragma once
 
+#ifndef SQ1OPT_NO_QT
 #include <QString>
 #include <QStringList>
+#endif
 #include <string>
 #include <vector>
 #include <utility>
@@ -38,8 +40,10 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
 
 /// Rates and sorts multiple solutions by ergonomic score (highest first).
 /// solutionLines may contain karn or numeric algs; rating always uses numeric.
+#ifndef SQ1OPT_NO_QT
 std::vector<std::pair<QString, double>>
 rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKarnotation);
+#endif
 
 // ─────────────────────────────────────────────────────────
 // Helper Functions (internal use, but exposed for testing)

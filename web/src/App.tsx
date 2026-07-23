@@ -29,9 +29,28 @@ type CubeState = {
   middlePartial: number;
 };
 type Modal = "settings" | "how" | "about" | null;
+type FavoriteBin = { name: string; algorithms: string[] };
+type Solution = { raw: string; display: string; alg: string; slices: number; moves: number; angle: number; ergoRaw?: number; ergo?: number; sliceStart?: string };
+type RatingResult = { finalScore: number; phase1: number; phase2: number; phase3: number; phase4: number; ergoUp: number; ergoDown: number; sliceCount: number; movement: number; bonus: number; valid: boolean; sliceStart: number };
+type TwoGenStatus = { compatibility: number; cornersTwo: boolean; cornersPseudo: boolean };
 
 function twistable(p: number[]) {
   return p[0] !== p[11] && p[5] !== p[6] && p[12] !== p[23] && p[17] !== p[18];
+}
+function inCubeshape(state: CubeState) {
+  for (let base = 0; base < 24; base += 12) {
+    let layerMatches = false;
+    for (let remainder = 0; remainder < 3; remainder++) {
+      let match = true;
+      for (let i = 0; i < 12; i++) {
+        const expectedEdge = i % 3 === remainder, edge = state.position[base + i] >= 8;
+        if (expectedEdge !== edge) { match = false; break; }
+      }
+      if (match) { layerMatches = true; break; }
+    }
+    if (!layerMatches) return false;
+  }
+  return true;
 }
 function turn(
   p: number[],
@@ -83,12 +102,215 @@ type CubeActions = {
   dp: () => void;
   slice: () => void;
   reset: () => void;
+  set: (state: CubeState) => void;
 };
+
+type TauriGlobal = {
+  core?: { invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T> };
+  event?: { listen: (name: string, handler: (event: { payload: unknown }) => void) => Promise<() => void> };
+  Channel?: new <T>() => { onmessage: (message: T) => void };
+};
+function tauri(): TauriGlobal | undefined {
+  const nativeWindow = window as Window & { __SQ1_NATIVE__?: TauriGlobal; __TAURI__?: TauriGlobal };
+  return nativeWindow.__SQ1_NATIVE__ ?? nativeWindow.__TAURI__;
+}
+function validDepths(value: string) { return /^\d+(?:,\d+)*$/.test(value.replace(/\s/g, "")); }
+function solverFlags(options: {
+  metric: string; all: boolean; suboptimal: number; depths: string; generator: boolean; two: string;
+  cubeshape: boolean; ignoreEquator: boolean; angle: string; maxX: boolean; maxXValue: number;
+  maxY: boolean; maxYValue: number; maxTotal: boolean; maxTotalValue: number;
+}) {
+  const flags: string[] = [];
+  if (options.metric === "Slice") flags.push("-es");
+  if (options.metric === "Angle") flags.push("-ea");
+  if (options.all) flags.push(options.suboptimal && !validDepths(options.depths) ? "-a" + options.suboptimal : "-a");
+  if (validDepths(options.depths)) flags.push("-d" + options.depths.replace(/\s/g, ""));
+  if (options.generator) flags.push("-g");
+  if (options.two === "2 Gen") flags.push("-2");
+  if (options.two === "Pseudo 2 Gen") flags.push("-p");
+  if (options.cubeshape) flags.push("-c");
+  if (options.ignoreEquator) flags.push("-m");
+  if (options.angle === "Both") flags.push("-nb");
+  if (options.angle === "Top") flags.push("-nu");
+  if (options.angle === "Bottom") flags.push("-nd");
+  if (options.maxX) flags.push("-X" + options.maxXValue);
+  if (options.maxY) flags.push("-Y" + options.maxYValue);
+  if (options.maxTotal) flags.push("-Z" + options.maxTotalValue);
+  return flags;
+}
+function positionString(state: CubeState) {
+  let result = "", nextPartialCorner = -3, nextPartialEdge = 18;
+  for (let i = 0; i < 24; i++) {
+    const value = state.position[i], partial = state.partial[i];
+    let encoded = value;
+    if (partial && value < 8) {
+      encoded = nextPartialCorner + (partial === 2 ? 2 : value < 4 ? 0 : 1);
+      nextPartialCorner -= 3;
+    } else if (partial) {
+      encoded = nextPartialEdge + (partial === 2 ? 2 : value < 12 ? 0 : 1);
+      nextPartialEdge += 3;
+    }
+    result += encoded >= 0 && encoded <= 15
+      ? "ABCDEFGH12345678"[encoded]
+      : encoded < 0 ? encoded % 3 === 0 ? "U" : encoded % 3 === -2 ? "V" : "W"
+        : encoded % 3 === 0 ? "X" : encoded % 3 === 1 ? "Y" : "Z";
+    if (value < 8) i++;
+  }
+  return result + (state.middle === 1 ? "-" : state.middle === -1 ? "/" : "");
+}
+function rawPosition(state: CubeState) {
+  const result = Array(24).fill(0);
+  let nextPartialCorner = -3, nextPartialEdge = 18;
+  for (let i = 0; i < 24; i++) {
+    const value = state.position[i], partial = state.partial[i], corner = value < 8;
+    let encoded = value;
+    if (partial && corner) {
+      encoded = nextPartialCorner + (partial === 2 ? 2 : value < 4 ? 0 : 1);
+      nextPartialCorner -= 3;
+    } else if (partial) {
+      encoded = nextPartialEdge + (partial === 2 ? 2 : value < 12 ? 0 : 1);
+      nextPartialEdge += 3;
+    }
+    result[i] = encoded;
+    if (corner && i + 1 < 24) result[++i] = encoded;
+  }
+  return result;
+}
+function parsePosition(text: string): CubeState | undefined {
+  const input = text.trim().toUpperCase();
+  if (input.length < 15 || input.length > 17) return;
+  const encoded: number[] = [], partial: number[] = [], counts = Array(16).fill(0);
+  let nextPartialCorner = -3, nextPartialEdge = 18;
+  let topPartialCorners = 0, bottomPartialCorners = 0, topPartialEdges = 0, bottomPartialEdges = 0;
+  for (let i = 0; i < 16 && encoded.length < 24; i++) {
+    const token = input[i];
+    let value = "ABCDEFGH".indexOf(token), definition = 0;
+    if (value < 0 && token >= "1" && token <= "8") value = Number(token) + 7;
+    else if (value < 0 && token === "U") { topPartialCorners++; value = nextPartialCorner; nextPartialCorner -= 3; definition = 1; }
+    else if (value < 0 && token === "V") { bottomPartialCorners++; value = nextPartialCorner + 1; nextPartialCorner -= 3; definition = 1; }
+    else if (value < 0 && token === "W") { value = nextPartialCorner + 2; nextPartialCorner -= 3; definition = 2; }
+    else if (value < 0 && token === "X") { topPartialEdges++; value = nextPartialEdge; nextPartialEdge += 3; definition = 1; }
+    else if (value < 0 && token === "Y") { bottomPartialEdges++; value = nextPartialEdge + 1; nextPartialEdge += 3; definition = 1; }
+    else if (value < 0 && token === "Z") { value = nextPartialEdge + 2; nextPartialEdge += 3; definition = 2; }
+    else if (value < 0) return;
+    if (value >= 0 && value <= 15 && ++counts[value] > 1) return;
+    const corner = value < 8;
+    encoded.push(value); partial.push(definition);
+    if (corner) { if (encoded.length >= 24) return; encoded.push(value); partial.push(definition); }
+  }
+  if (encoded.length !== 24) return;
+  const sum = (start: number) => counts.slice(start, start + 4).filter(Boolean).length;
+  if (sum(0) + topPartialCorners > 4 || sum(4) + bottomPartialCorners > 4 ||
+      sum(8) + topPartialEdges > 4 || sum(12) + bottomPartialEdges > 4) return;
+  const pools = {
+    topC: [0, 1, 2, 3].filter((x) => !counts[x]), botC: [4, 5, 6, 7].filter((x) => !counts[x]),
+    topE: [8, 9, 10, 11].filter((x) => !counts[x]), botE: [12, 13, 14, 15].filter((x) => !counts[x]),
+  };
+  const take = (pool: number[]) => pool.pop()!;
+  for (let i = 0; i < 24; i++) {
+    const corner = encoded[i] < 8;
+    if (partial[i] === 1) {
+      const top = encoded[i] % 3 === 0;
+      encoded[i] = take(corner ? top ? pools.topC : pools.botC : top ? pools.topE : pools.botE);
+      if (corner) encoded[i + 1] = encoded[i];
+    }
+    if (corner) i++;
+  }
+  const freeC = [...pools.botC, ...pools.topC], freeE = [...pools.botE, ...pools.topE];
+  for (let i = 0; i < 24; i++) {
+    const corner = encoded[i] < 8;
+    if (partial[i] === 2) { encoded[i] = take(corner ? freeC : freeE); if (corner) encoded[i + 1] = encoded[i]; }
+    if (corner) i++;
+  }
+  const middle = input.length === 16 ? 0 : input[16] === "-" ? 1 : input[16] === "+" ? -1 : 0;
+  return { position: encoded, partial, middle, middlePartial: 0 };
+}
+function invertScramble(text: string) {
+  return text.trim().split("/").reverse().map((part) => {
+    const raw = part.trim().replace(/[()]/g, "");
+    const values = raw.split(",").map((x) => Number(x.trim()));
+    if (values.length === 2 && values.every(Number.isFinite)) return `${-values[0]},${-values[1]}`;
+    if (values.length === 1 && raw && Number.isFinite(values[0])) return String(-values[0]);
+    return part;
+  }).join("/");
+}
+function addCommas(text: string) {
+  return text.replace(/[\\/]/g, " ").trim().split(/\s+/).filter(Boolean).map((token) => {
+    const bare = token.replace(/[()]/g, "");
+    if (!bare || bare.includes(",") || !/^-?\d+$/.test(bare)) return token;
+    if (bare.length === 1 || (bare.length === 2 && bare.startsWith("-"))) return `${bare},0`;
+    if (bare.length === 2) return `${bare[0]},${bare[1]}`;
+    if (bare.length === 3) return bare.startsWith("-") ? `${bare.slice(0, 2)},${bare[2]}` : `${bare[0]},${bare.slice(1)}`;
+    if (bare.length === 4) return `${bare.slice(0, 2)},${bare.slice(2)}`;
+    return token;
+  }).join(" ");
+}
+function applyNumericAlgorithm(state: CubeState, text: string): CubeState | undefined {
+  const steps: ({ slice: true } | { slice: false; top: number; bottom: number })[] = [];
+  for (const [index, piece] of text.replace(/\\/g, "/").split("/").entries()) {
+    if (index) steps.push({ slice: true });
+    const value = piece.trim();
+    if (!value) continue;
+    const pair = value.replace(/[()]/g, "").match(/^(-?\d+)(?:\s*,\s*(-?\d+))?$/);
+    if (!pair) return;
+    steps.push({ slice: false, top: Number(pair[1]), bottom: Number(pair[2] ?? 0) });
+  }
+  if (!steps.length) return;
+  let current = state;
+  for (const step of steps) {
+    if (step.slice) {
+      if (!twistable(current.position)) return;
+      current = doMove(current, "slice");
+      continue;
+    }
+    const position = [...current.position], partial = [...current.partial];
+    const rotate = (amount: number, start: number, end: number) => {
+      const normalized = ((amount % 12) + 12) % 12;
+      for (let n = 0; n < normalized; n++) {
+        const p = position[end - 1], q = partial[end - 1];
+        for (let i = end - 1; i > start; i--) { position[i] = position[i - 1]; partial[i] = partial[i - 1]; }
+        position[start] = p; partial[start] = q;
+      }
+    };
+    rotate(step.top, 0, 12); rotate(step.bottom, 12, 24);
+    current = { ...current, position, partial };
+  }
+  return twistable(current.position) ? current : undefined;
+}
+function abidify(text: string) {
+  const normal = (digit: number) => String.fromCodePoint(0xe000 + digit);
+  const single = (digit: number) => String.fromCodePoint(0xe006 + digit);
+  const right = (digit: number) => String.fromCodePoint(0xe00b + digit);
+  const left = (digit: number) => String.fromCodePoint(0xe010 + digit);
+  if (text.includes(",")) return text.replace(/(-?\d+),(-?\d+)/g, (_, first, second) => {
+    const a = Number(first), b = Number(second);
+    const map = (value: number, fn: (n: number) => string) => String(Math.abs(value)).split("").map((x) => fn(Number(x))).join("");
+    if (a < 0 && b < 0) return map(a, right) + map(b, left);
+    return map(a, a < 0 ? single : normal) + map(b, b < 0 ? single : normal);
+  });
+  let result = "";
+  for (let i = 0; i < text.length;) {
+    if (text[i] === "-" && /\d/.test(text[i + 1] || "")) {
+      if (text[i + 2] === "-" && /\d/.test(text[i + 3] || "")) {
+        result += right(Number(text[i + 1])) + left(Number(text[i + 3])); i += 4;
+      } else { result += single(Number(text[i + 1])); i += 2; }
+    } else if (/\d/.test(text[i])) { result += normal(Number(text[i++])); }
+    else result += text[i++];
+  }
+  return result;
+}
+function injectSliceIndicator(line: string, indicator?: string) {
+  if (!indicator) return line;
+  const separator = line.search(/[\/\\|]/);
+  if (separator >= 0) return line.slice(0, separator) + indicator + line.slice(separator + 1);
+  const space = line.indexOf(" ");
+  return space >= 0 ? line.slice(0, space) + indicator + line.slice(space + 1) : line;
+}
 function Cube({
   onChange,
   actionsRef,
 }: {
-  onChange: (s: CubeState) => void;
+  onChange: (s: CubeState, action?: string) => void;
   actionsRef: React.MutableRefObject<CubeActions | undefined>;
 }) {
   const [s, setS] = useState<CubeState>({
@@ -103,9 +325,9 @@ function Cube({
     {},
   );
   const [selected, setSelected] = useState(-1);
-  const update = (n: CubeState) => {
+  const update = (n: CubeState, action = "edit") => {
     setS(n);
-    onChange(n);
+    onChange(n, action);
   };
   const polar = (
     cx: number,
@@ -274,27 +496,24 @@ function Cube({
     draw();
   }, [s, hoverProgress, selected]);
   useEffect(() => {
-    const timer = window.setInterval(
-      () =>
-        setHoverProgress((old) => {
-          const next: { [key: number]: number } = { ...old };
-          for (const key of new Set([
-            ...Object.keys(next).map(Number),
-            hovered,
-          ])) {
-            const target = key === hovered ? 1 : 0;
-            const value = next[key] || 0;
-            next[key] = target
-              ? Math.min(1, value + 0.08)
-              : Math.max(0, value - 0.08);
-          }
-          return next;
-        }),
-      16,
-    );
-    return () => window.clearInterval(timer);
+    let frame = 0, stopped = false, frames = 0;
+    const tick = () => {
+      setHoverProgress((old) => {
+        const next: { [key: number]: number } = { ...old };
+        let changed = false;
+        for (const key of new Set([...Object.keys(next).map(Number), hovered])) {
+          const target = key === hovered ? 1 : 0, value = next[key] || 0;
+          const valueNext = target ? Math.min(1, value + 0.08) : Math.max(0, value - 0.08);
+          if (valueNext !== value) { next[key] = valueNext; changed = true; }
+        }
+        return changed ? next : old;
+      });
+      if (!stopped && ++frames < 16) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => { stopped = true; cancelAnimationFrame(frame); };
   }, [hovered]);
-  const invoke = (key: keyof CubeActions) => {
+  const invoke = (key: keyof CubeActions, actionOverride?: string) => {
     if (key === "reset") {
       setSelected(-1);
       update({
@@ -302,11 +521,11 @@ function Cube({
         partial: Array(24).fill(0),
         middle: 1,
         middlePartial: 0,
-      });
+      }, actionOverride ?? "reset");
       return;
     }
     setSelected(-1);
-    update(doMove(s, key));
+    update(doMove(s, key), key);
   };
   actionsRef.current = {
     u: () => invoke("u"),
@@ -315,9 +534,15 @@ function Cube({
     dp: () => invoke("dp"),
     slice: () => invoke("slice"),
     reset: () => invoke("reset"),
+    set: (next) => {
+      setSelected(-1);
+      update(next, "set");
+    },
   };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.matches("input, textarea, select, [contenteditable=true]")) return;
       const map: Record<string, keyof CubeActions> = {
         i: "slice",
         k: "slice",
@@ -330,7 +555,7 @@ function Cube({
       const action = map[e.key.toLowerCase()];
       if (action) {
         e.preventDefault();
-        invoke(action);
+        invoke(action, action === "reset" ? "escape" : undefined);
       }
     };
     window.addEventListener("keydown", key);
@@ -359,7 +584,7 @@ function Cube({
             : s.middle === -1
               ? 0
               : 1;
-      update({ ...s, middle });
+      update({ ...s, middle }, "edit");
       return;
     }
     if (piece < 0) return;
@@ -368,7 +593,7 @@ function Cube({
       partial[piece] = (partial[piece] + 1) % 3;
       if (piece < 23 && s.position[piece] === s.position[piece + 1])
         partial[piece + 1] = partial[piece];
-      update({ ...s, partial });
+      update({ ...s, partial }, "edit");
       return;
     }
     if (selected < 0) {
@@ -394,7 +619,7 @@ function Cube({
     [p[selected], p[piece]] = [p[piece], p[selected]];
     [q[selected], q[piece]] = [q[piece], q[selected]];
     setSelected(-1);
-    update({ ...s, position: p, partial: q });
+    update({ ...s, position: p, partial: q }, "edit");
   };
   return (
     <div className="cube-holder">
@@ -454,57 +679,165 @@ function Pill({
 function Modal({
   type,
   close,
+  settings,
 }: {
   type: Exclude<Modal, null>;
   close: () => void;
+  settings?: {
+    smartKarn: boolean; setSmartKarn: (value: boolean) => void;
+    abidNotation: boolean; setAbidNotation: (value: boolean) => void;
+    ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
+    debugOutput: boolean; setDebugOutput: (value: boolean) => void;
+    disabled: boolean;
+  };
 }) {
   const content =
     type === "settings" ? (
-      <>
+      <div className="modal-article">
         <h2>Settings</h2>
-        <label className="modal-check">
-          <input type="checkbox" /> Use smarter karn
-        </label>
-        <label className="modal-check">
-          <input type="checkbox" /> Abid's notation
-        </label>
-        <label className="modal-check">
-          <input type="checkbox" /> Ignore move equivalences
-        </label>
-        <label className="modal-check">
-          <input type="checkbox" /> Debug output
-        </label>
-      </>
+        <div className="settings-grid">
+          <label className="modal-check">
+            <input type="checkbox" checked={settings?.smartKarn ?? true} disabled={settings?.disabled} onChange={(e) => settings?.setSmartKarn(e.target.checked)} />
+            <span>Use smarter karn</span>
+          </label>
+          <label className="modal-check">
+            <input type="checkbox" checked={settings?.abidNotation ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setAbidNotation(e.target.checked)} />
+            <span>Abid's notation</span>
+          </label>
+          <label className="modal-check">
+            <input type="checkbox" checked={settings?.ignoreTransforms ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setIgnoreTransforms(e.target.checked)} />
+            <span>Ignore move equivalences</span>
+          </label>
+          <label className="modal-check">
+            <input type="checkbox" checked={settings?.debugOutput ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setDebugOutput(e.target.checked)} />
+            <span>Debug output</span>
+          </label>
+        </div>
+      </div>
     ) : type === "about" ? (
-      <>
+      <div className="modal-article">
         <h2>About Solve-A-Squan</h2>
         <p>
-          This program stemmed from the optimal Square-1 solver by Jaap
-          Scherphuis.
+          This program stemmed from the optimal Square-1 solver by <a href="https://www.jaapsch.net/puzzles/" target="_blank" rel="noreferrer">Jaap Scherphuis</a>.
         </p>
-        <p>v3 is created by Abid Ibn Ashraf and Matt Mao.</p>
         <p>
-          New in v3: graphical UI, improved karnotation support, and algorithm
-          ergonomics tools.
+          v2 was created by Michael Gottlieb (<a href="https://github.com/qqwref" target="_blank" rel="noreferrer">GitHub</a>, <a href="https://www.worldcubeassociation.org/persons/2006GOTT01" target="_blank" rel="noreferrer">WCA</a>), who rewrote the solver with significant improvements and optimisations.
         </p>
-      </>
+        <p>
+          Read the old documentations <a href="https://github.com/abid/solve-a-squan/blob/main/docs/sq1opt_old.txt" target="_blank" rel="noreferrer">here</a>. Note that it is largely not applicable within v3.
+        </p>
+        <p>
+          This is the official <strong>v3</strong>. New in v3:
+        </p>
+        <ul>
+          <li>Actual graphical UI</li>
+          <li>Ability to generate a solution from a specific angle</li>
+          <li>Improved karnotation support</li>
+          <li>Algorithm ergonomics rater</li>
+        </ul>
+        <p>
+          v3 is created by <a href="https://www.worldcubeassociation.org/persons/2024ASHR02" target="_blank" rel="noreferrer">Abid Ibn Ashraf</a> and <a href="https://www.worldcubeassociation.org/persons/2023MAOS01" target="_blank" rel="noreferrer">Matt Mao</a>.
+        </p>
+      </div>
     ) : (
-      <>
+      <div className="modal-article how-to-use">
         <h2>How to Use</h2>
+        <div className="modal-section-title">Keyboard shortcuts:</div>
+        <ul>
+          <li><strong>Z</strong> = Undo &nbsp; <strong>Y</strong> = Redo</li>
+          <li><strong>Esc</strong> = Reset the cube to solved</li>
+          <li><strong>Ctrl + Enter</strong> = Start or stop the solver</li>
+          <li><strong>Ctrl + Z</strong> = Undo state change &nbsp; <strong>Ctrl + Y</strong> = Redo state change</li>
+          <li><strong>Ctrl + =</strong> = Zoom in &nbsp; <strong>Ctrl + -</strong> = Zoom out</li>
+          <li><strong>Ctrl + 0</strong> = Reset zoom level</li>
+        </ul>
         <p>
-          <b>Keyboard shortcuts</b>
+          Click on two pieces to <strong>swap</strong> them. Or use the below shortcuts (identical to cstimer):
         </p>
-        <p>J = U, F = U′, S = D, L = D′, I/K = Slice, Esc = Reset.</p>
+        <ul>
+          <li><strong>J</strong> = U, only by one piece &nbsp; <strong>F</strong> = U′, only by one piece</li>
+          <li><strong>S</strong> = D, only by one piece &nbsp; <strong>L</strong> = D′, only by one piece</li>
+          <li><strong>I</strong> or <strong>K</strong> = Slice</li>
+          <li><strong>H</strong> = U, by two pieces &nbsp; <strong>G</strong> = U′, by two pieces</li>
+          <li><strong>W</strong> = D, by two pieces &nbsp; <strong>O</strong> = D′, by two pieces</li>
+        </ul>
+        <div className="modal-section-title">Scramble / Alg Input</div>
         <p>
-          Click two pieces to swap them. Right-click a piece to cycle its
-          partial definition.
+          Type some moves and hit <strong>Apply</strong>. Karn will be parsed correctly.
         </p>
         <p>
-          Use the input mode to apply a scramble, invert an algorithm, or enter
-          a raw position.
+          Use the mode button (to the left of the input) to switch between three modes:
         </p>
-        <p>Hover over options for their descriptions.</p>
-      </>
+        <ul>
+          <li><strong>Scram</strong>: applies moves forward as a scramble</li>
+          <li><strong>Alg</strong>: inverts before applying, useful for testing algs</li>
+          <li><strong>Pos</strong>: interprets the input as a string of the raw state (e.g. A1B2C4D38E6F7G5H)</li>
+        </ul>
+        <p>
+          For the first two modes, use <strong>Enter</strong> to apply the moves from the current state, or <strong>Shift + Enter</strong> to first reset the cube to solved state before applying.
+        </p>
+        <div className="modal-section-title">Favorites</div>
+        <p>
+          Algs can be saved to bins for later reference. Right-click a generated alg to:
+        </p>
+        <ul>
+          <li><strong>⧉ Copy alg</strong> — copies the alg itself</li>
+          <li><strong>♥ Add to Favorites Bin</strong> — saves the alg to a bin</li>
+        </ul>
+        <p>
+          Bins are identified by the <strong>configurations</strong> of the solve, so algs from the same setup always land in the same bin regardless of when they were added.
+        </p>
+        <p>
+          Click the <strong>♥</strong> button (visible in the terminal area) to open the Favorites Bin, where you can:
+        </p>
+        <ul>
+          <li>Click a <strong>bin title</strong> to re-apply that configuration and clear the terminal.</li>
+          <li>Use <strong>✏</strong> to rename a bin</li>
+          <li><strong>⧉</strong> to copy all its algs</li>
+          <li><strong>🗑</strong> to delete the bin entirely</li>
+          <li>Click <strong>✕</strong> next to any alg to remove it</li>
+        </ul>
+        <p>
+          Favorited algs are stored on your device, unless you delete them.
+        </p>
+        <div className="modal-section-title">Options</div>
+        <p>
+          Hover over any option to read its description. Quick reference:
+        </p>
+        <ul>
+          <li><strong>Metric</strong>: how move length is counted — <strong>Slice</strong> (only slices), <strong>Move</strong> (layer turns too), or <strong>Angle</strong>.</li>
+          <li><strong>All optimal</strong>: find every shortest solution, not just the first one found.</li>
+          <li><strong>+suboptimal</strong>: also return solutions up to N moves longer than optimal.</li>
+          <li><strong>Specific depths</strong>: search only the listed move counts (comma-separated, e.g. "8,9").</li>
+          <li><strong>Generator alg</strong>: output algs will set up the case from solved instead of solving it.</li>
+          <li><strong>2 Gen / Pseudo 2 Gen</strong>: restrict moves to top-layer turns and slices (or a pseudo variant).</li>
+          <li><strong>Stay in cubeshape</strong>: restrict to algs that keep the puzzle in cubeshape throughout.</li>
+          <li><strong>Karn output</strong>: display solutions in karn instead of WCA notation.</li>
+          <li><strong>Lock layer angle on pre-ABF</strong>: constrain the pre-ABF move to ±1 or 0 on either/both layers.</li>
+          <li><strong>Normalize ABF</strong>: simplify ABF moves in the output (e.g. 3-1 → 0-1, 43 → 10).</li>
+          <li><strong>Max top / bottom / total turns</strong>: cap how large layer turns can be.</li>
+        </ul>
+        <div className="modal-section-title">Settings</div>
+        <ul>
+          <li><strong>Use smarter karn</strong>: don't karnify things like T when the alg goes out of CS.</li>
+          <li><strong>Abid's notation</strong>: use barred numbers for negatives. This is just a display setting.</li>
+          <li><strong>Ignore move equivalences</strong>: generate all possible algs, even with y2 algs.</li>
+          <li><strong>Debug output</strong>: outputs internal solver states.</li>
+        </ul>
+        <div className="modal-section-title">Output</div>
+        <p>
+          Solutions appear in the terminal as they are found. Once algs are present, several buttons appear in the corner of the terminal area:
+        </p>
+        <ul>
+          <li><strong>⧉</strong> — copy all algs in the terminal to the clipboard.</li>
+          <li><strong>♥</strong> — see the Favorites section.</li>
+          <li><strong>⊞</strong> — switch between terminal view and table view.</li>
+          <li><strong>⤢</strong> — expand the terminal to full screen.</li>
+        </ul>
+        <p>
+          If <strong>Stay in cubeshape</strong> was active, algs will be roughly sorted by their <strong>ergonomics</strong>. The numbers are relative and for reference only.
+        </p>
+      </div>
     );
   return (
     <div className="modal-shade" onClick={close}>
@@ -520,12 +853,20 @@ function Modal({
 
 export default function App() {
   const cubeActions = useRef<CubeActions | undefined>(undefined);
+  const modeControlRef = useRef<HTMLDivElement | null>(null);
+  const stateRef = useRef<CubeState>({ position: [...solved], partial: Array(24).fill(0), middle: 1, middlePartial: 0 });
+  const ignoreHistory = useRef(false), seenRaw = useRef(new Set<string>()), seenDisplay = useRef(new Set<string>());
+  const lastSolvePosition = useRef("A1B2C3D45E6F7G8H-");
+  const preIgnoreMiddle = useRef(1);
+  const slicePending = useRef<string[]>([]), sliceTimer = useRef<number | undefined>(undefined);
+  const stopped = useRef(false);
+  const settingsReady = useRef(false);
   const [menu, setMenu] = useState(false),
     [modal, setModal] = useState<Modal>(null),
     [modeMenu, setModeMenu] = useState(false),
     [input, setInput] = useState(""),
     [mode, setMode] = useState("SCRAMBLE"),
-    [cubePos, setCubePos] = useState("A1B2C3D45E6F7G8H-"),
+    [cubeState, setCubeState] = useState<CubeState>({ position: [...solved], partial: Array(24).fill(0), middle: 1, middlePartial: 0 }),
     [metric, setMetric] = useState("Slice"),
     [two, setTwo] = useState("None"),
     [angle, setAngle] = useState("None"),
@@ -535,7 +876,120 @@ export default function App() {
     [cubeShape, setCubeShape] = useState(false),
     [ignoreMiddle, setIgnoreMiddle] = useState(false),
     [karn, setKarn] = useState(true),
-    [terminal, setTerminal] = useState<string[]>([]);
+    [terminal, setTerminal] = useState<string[]>([]),
+    [solutions, setSolutions] = useState<Solution[]>([]),
+    [running, setRunning] = useState(false),
+    [suboptimal, setSuboptimal] = useState(0),
+    [depths, setDepths] = useState(""),
+    [maxX, setMaxX] = useState(false),
+    [maxXValue, setMaxXValue] = useState(3),
+    [maxY, setMaxY] = useState(false),
+    [maxYValue, setMaxYValue] = useState(3),
+    [maxTotal, setMaxTotal] = useState(false),
+    [maxTotalValue, setMaxTotalValue] = useState(6),
+    [inputError, setInputError] = useState(""),
+    [undo, setUndo] = useState<string[]>([]), [redo, setRedo] = useState<string[]>([]),
+    [tableView, setTableView] = useState(true), [expanded, setExpanded] = useState(false),
+    [zoom, setZoom] = useState(1),
+    [smartKarn, setSmartKarn] = useState(true), [abidNotation, setAbidNotation] = useState(false),
+    [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false);
+  const [favoritesOpen, setFavoritesOpen] = useState(false),
+    [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({});
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; alg: string } | null>(null);
+  const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 2, cornersTwo: true, cornersPseudo: true });
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!modeControlRef.current?.contains(event.target as Node)) {
+        setModeMenu(false);
+      }
+      if (!contextMenu) return;
+      setContextMenu(null);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [contextMenu]);
+  const finalizeSliceHistory = () => {
+    const pending = slicePending.current;
+    if (!pending.length) return;
+    const saved = pending.length % 2 === 0 && pending.length >= 2
+      ? [pending[0], pending[pending.length - 1]] : [pending[0]];
+    setUndo((old) => [...old, ...saved].slice(-64));
+    setRedo([]);
+    slicePending.current = [];
+    sliceTimer.current = undefined;
+  };
+  const onCubeChange = (next: CubeState, action = "edit") => {
+    const changed = positionString(next) !== positionString(stateRef.current);
+    if (!ignoreHistory.current && changed) {
+      if (action === "slice") {
+        slicePending.current.push(positionString(stateRef.current));
+        if (sliceTimer.current !== undefined) window.clearTimeout(sliceTimer.current);
+        sliceTimer.current = window.setTimeout(finalizeSliceHistory, 600);
+      } else if (action !== "escape") {
+        setUndo((old) => [...old, positionString(stateRef.current)].slice(-64));
+        setRedo([]);
+      }
+    }
+    stateRef.current = next;
+    setCubeState(next);
+    setIgnoreMiddle(next.middle === 0);
+    if (!inCubeshape(next)) setCubeShape(false);
+  };
+  useEffect(() => () => { if (sliceTimer.current !== undefined) window.clearTimeout(sliceTimer.current); }, []);
+  const toggleIgnoreMiddle = (checked: boolean) => {
+    const current = stateRef.current;
+    if (checked && current.middle !== 0) preIgnoreMiddle.current = current.middle;
+    const next = { ...current, middle: checked ? 0 : preIgnoreMiddle.current };
+    ignoreHistory.current = true; cubeActions.current?.set(next); ignoreHistory.current = false;
+    setIgnoreMiddle(checked);
+  };
+  const currentRunKey = () => {
+    const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
+    if (ignoreTransforms) flags.push("-x");
+    return [lastSolvePosition.current || positionString(cubeState), ...flags].join(" ");
+  };
+  const applyRunConfig = (key: string) => {
+    const [position, ...flags] = key.split(/\s+/).filter(Boolean), parsed = parsePosition(position || "");
+    if (parsed) restore(position);
+    setMetric(flags.includes("-es") ? "Slice" : flags.includes("-ea") ? "Angle" : "Move");
+    const allFlag = flags.find((flag) => /^-a\d*$/.test(flag));
+    setAll(Boolean(allFlag)); setSuboptimal(allFlag && allFlag.length > 2 ? Number(allFlag.slice(2)) : 0);
+    const depthFlag = flags.find((flag) => flag.startsWith("-d")); setDepths(depthFlag?.slice(2) || "");
+    setGenerator(flags.includes("-g"));
+    setTwo(flags.includes("-2") ? "2 Gen" : flags.includes("-p") ? "Pseudo 2 Gen" : "None");
+    setCubeShape(flags.includes("-c"));
+    if (flags.includes("-m") !== ignoreMiddle) toggleIgnoreMiddle(flags.includes("-m"));
+    setAngle(flags.includes("-nb") ? "Both" : flags.includes("-nu") ? "Top" : flags.includes("-nd") ? "Bottom" : "None");
+    const setLimit = (prefix: string, setEnabled: (v: boolean) => void, setValue: (v: number) => void) => {
+      const flag = flags.find((value) => value.startsWith(prefix)); setEnabled(Boolean(flag));
+      if (flag) setValue(Number(flag.slice(2)));
+    };
+    setLimit("-X", setMaxX, setMaxXValue); setLimit("-Y", setMaxY, setMaxYValue); setLimit("-Z", setMaxTotal, setMaxTotalValue);
+    setIgnoreTransforms(flags.includes("-x"));
+    setFavoritesOpen(false);
+  };
+  const restore = (position: string) => {
+    const next = parsePosition(position);
+    if (!next) return;
+    ignoreHistory.current = true;
+    cubeActions.current?.set(next);
+    ignoreHistory.current = false;
+  };
+  const doUndo = () => {
+    if (!undo.length || running) return;
+    const previous = undo[undo.length - 1];
+    setRedo((items) => [...items, positionString(stateRef.current)].slice(-64));
+    restore(previous);
+    setUndo(undo.slice(0, -1));
+  };
+  const doRedo = () => {
+    if (!redo.length || running) return;
+    const next = redo[redo.length - 1];
+    setUndo((items) => [...items, positionString(stateRef.current)].slice(-64));
+    restore(next);
+    setRedo(redo.slice(0, -1));
+  };
   const chooseMode = (next: string) => {
     setMode(next);
     setInput("");
@@ -545,12 +999,237 @@ export default function App() {
     chooseMode(
       mode === "SCRAMBLE" ? "ALG" : mode === "ALG" ? "POSITION" : "SCRAMBLE",
     );
-  const apply = () => {
-    if (mode === "POSITION" && input.trim()) setCubePos(input.trim());
-    setInput("");
+  const apply = async (fromSolved = false) => {
+    let next: CubeState | undefined;
+    if (mode === "POSITION") next = parsePosition(input);
+    else {
+      let raw = input.trim() || "0,0";
+      if (mode === "ALG") raw = invertScramble(raw);
+      const leadingSlash = /^[\\/]/.test(raw), trailingSlash = raw.length > 1 && /[\\/]$/.test(raw);
+      const commaInput = addCommas(raw);
+      try {
+        raw = tauri()?.core?.invoke ? await tauri()!.core!.invoke<string>("unkarnify", { input: commaInput }) : commaInput;
+      } catch { raw = commaInput; }
+      if (leadingSlash && !raw.startsWith("/")) raw = "/" + raw;
+      if (trailingSlash && !raw.endsWith("/")) raw += "/";
+      const base = fromSolved
+        ? { position: [...solved], partial: Array(24).fill(0), middle: 1, middlePartial: 0 }
+        : cubeState;
+      next = applyNumericAlgorithm(base, raw);
+    }
+    if (!next) {
+      setInputError(mode === "POSITION" ? "Invalid position string." : "Invalid algorithm or blocked slice.");
+      return;
+    }
+    cubeActions.current?.set(next);
+    setCubeState(next);
+    setInputError("");
   };
+  const normalizeLine = (line: string) => {
+    if (normalize === "None") return line;
+    const lb = line.lastIndexOf("["), alg = (lb > 0 ? line.slice(0, lb) : line).trim(), bracket = lb > 0 ? "  " + line.slice(lb).trim() : "";
+    const norm = (block: string) => block.replace(/(-?\d)(,?)(-?\d)/, (_, a, comma, b) => {
+      const n = (v: string) => { const x = ((Number(v) % 3) + 3) % 3; return x === 2 ? -1 : x; };
+      return `${n(a)}${comma}${n(b)}`;
+    });
+    const separators = [...alg.matchAll(/[\/\\|\s]/g)];
+    if (!separators.length) { const one = norm(alg); return one === "0,0" || one === "00" ? bracket.trimStart() : one + bracket; }
+    const firstAt = separators[0].index!, lastAt = separators[separators.length - 1].index!;
+    let first = alg.slice(0, firstAt), middle = alg.slice(firstAt, lastAt + 1), last = alg.slice(lastAt + 1);
+    if (normalize === "Both" || normalize === "PreABF") first = norm(first);
+    if (normalize === "Both" || normalize === "PostABF") last = norm(last);
+    if (first === "0,0" || first === "00") { first = ""; middle = middle.replace(/^\s/, ""); }
+    if (last === "0,0" || last === "00") { last = ""; middle = middle.replace(/\s$/, ""); }
+    return first + middle + last + bracket;
+  };
+  const receiveSolverLine = async (line: string, startPosition: string, collected?: Solution[]) => {
+    const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
+    if (lb < 0 || rb < 0) {
+      if (!collected && (debugOutput || !seenRaw.current.size)) setTerminal((old) => [...old, line].slice(-500));
+      return;
+    }
+    const rawAlg = line.slice(0, lb).trim();
+    if (seenRaw.current.has(rawAlg)) return;
+    seenRaw.current.add(rawAlg);
+    let display = line, rating: RatingResult | undefined, sliceStart: string | undefined;
+    if (cubeShape && tauri()?.core?.invoke) {
+      try {
+        rating = await tauri()!.core!.invoke<RatingResult>("rate_algorithm", { algorithm: rawAlg, initialTopA: /^[1-8XYZ]/i.test(startPosition) });
+        if (rating.valid && rating.sliceStart) sliceStart = String.fromCharCode(rating.sliceStart);
+      } catch { /* an unrated row remains available */ }
+    }
+    if (karn) {
+      try {
+        const converted = await tauri()?.core?.invoke<string>("karnify", {
+          input: rawAlg,
+          position: smartKarn && !cubeShape ? startPosition : null,
+          generator,
+        });
+        if (converted) display = `${converted}  ${line.slice(lb).trim()}`;
+      } catch { /* retain numeric output */ }
+    }
+    display = normalizeLine(injectSliceIndicator(display, sliceStart));
+    const displayAlg = (display.lastIndexOf("[") > 0 ? display.slice(0, display.lastIndexOf("[")) : display).trim();
+    if (seenDisplay.current.has(displayAlg)) return;
+    seenDisplay.current.add(displayAlg);
+    const counts = line.slice(lb + 1, rb).split("|").map((x) => Number(x.trim()) || 0);
+    if (!debugOutput) setTerminal([]);
+    const row = { raw: line, display, alg: displayAlg, slices: counts[0] || 0, moves: counts[1] || 0, angle: counts[2] || 0, ergoRaw: rating?.valid ? rating.finalScore : undefined, sliceStart };
+    if (collected) collected.push(row);
+    else setSolutions((old) => [...old, row]);
+  };
+  const solve = async () => {
+    const native = tauri();
+    if (!native?.core?.invoke) {
+      setTerminal(["Native solving is available from the Tauri desktop app, not the browser preview."]);
+      return;
+    }
+    if (running) {
+      stopped.current = true;
+      await native.core.invoke("stop_solver");
+      return;
+    }
+    if ((two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
+        (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)))) return;
+    const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
+    if (ignoreTransforms) flags.push("-x");
+    stopped.current = false;
+    setTerminal(["Solving…"]); setSolutions([]); seenRaw.current.clear(); seenDisplay.current.clear();
+    setRunning(true);
+    const start = positionString(cubeState), startedAt = performance.now();
+    lastSolvePosition.current = start;
+    try {
+      if (!native.Channel) throw new Error("The native solver channel is unavailable.");
+      const onLine = new native.Channel<string>();
+      onLine.onmessage = (line) => {
+        if (!(line.includes("[") && line.includes("]")))
+          setTerminal((old) => [...old, line].slice(-500));
+      };
+      const result = await native.core.invoke<{ code: number | null; stdout: string; stderr: string }>("solve", { position: start, flags, onLine });
+      const collected: Solution[] = [];
+      for (const line of `${result.stdout || ""}\n${result.stderr || ""}`.split(/\r?\n/).filter(Boolean))
+        await receiveSolverLine(line, start, collected);
+      let displayRows = collected;
+      if (cubeShape) {
+        const valid = displayRows.map((row) => row.ergoRaw).filter((score): score is number => Number.isFinite(score)).sort((a, b) => a - b);
+        const middle = Math.floor(valid.length / 2), median = !valid.length ? 0 : valid.length % 2 ? valid[middle] : (valid[middle - 1] + valid[middle]) / 2;
+        displayRows = displayRows.map((row) => ({ ...row, ergo: row.ergoRaw === undefined ? undefined : row.ergoRaw - median }))
+          .sort((a, b) => (b.ergo ?? -Infinity) - (a.ergo ?? -Infinity));
+      }
+      setSolutions(displayRows);
+      setTerminal((lines) => [...lines, `${stopped.current ? "Stopped" : result.code === 0 ? "Done" : "Error"} — ${seenRaw.current.size} solution${seenRaw.current.size === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`]);
+    } catch (error) {
+      setTerminal((lines) => [...lines, "ERROR: " + String(error)]);
+    } finally {
+      setRunning(false);
+    }
+  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key === "Enter") {
+        event.preventDefault();
+        void solve();
+      }
+      if (event.ctrlKey && (event.key === "=" || event.key === "+")) { event.preventDefault(); setZoom((value) => Math.min(2, Math.round((value + 0.1) * 10) / 10)); }
+      if (event.ctrlKey && event.key === "-") { event.preventDefault(); setZoom((value) => Math.max(0.5, Math.round((value - 0.1) * 10) / 10)); }
+      if (event.ctrlKey && event.key === "0") { event.preventDefault(); setZoom(1); }
+      if (event.ctrlKey && event.key.toLowerCase() === "z") { event.preventDefault(); doUndo(); }
+      if (event.ctrlKey && event.key.toLowerCase() === "y") { event.preventDefault(); doRedo(); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+  useEffect(() => {
+    const saved = localStorage.getItem("solve-a-squan-settings");
+    try { if (saved) {
+      const value = JSON.parse(saved) as Record<string, unknown>;
+      if (typeof value.smartKarn === "boolean") setSmartKarn(value.smartKarn);
+      if (typeof value.abidNotation === "boolean") setAbidNotation(value.abidNotation);
+      if (typeof value.ignoreTransforms === "boolean") setIgnoreTransforms(value.ignoreTransforms);
+      if (typeof value.debugOutput === "boolean") setDebugOutput(value.debugOutput);
+      if (typeof value.karn === "boolean") setKarn(value.karn);
+      if (typeof value.normalize === "string") setNormalize(value.normalize);
+      if (typeof value.mode === "string") setMode(value.mode);
+      if (typeof value.metric === "string") setMetric(value.metric);
+      if (typeof value.two === "string") setTwo(value.two);
+      if (typeof value.angle === "string") setAngle(value.angle);
+      if (typeof value.all === "boolean") setAll(value.all);
+      if (typeof value.suboptimal === "number") setSuboptimal(value.suboptimal);
+      if (typeof value.depths === "string") setDepths(value.depths);
+      if (typeof value.generator === "boolean") setGenerator(value.generator);
+      if (typeof value.cubeShape === "boolean") setCubeShape(value.cubeShape);
+      if (typeof value.ignoreMiddle === "boolean") {
+        setIgnoreMiddle(value.ignoreMiddle);
+        if (value.ignoreMiddle) queueMicrotask(() => toggleIgnoreMiddle(true));
+      }
+      if (typeof value.maxX === "boolean") setMaxX(value.maxX);
+      if (typeof value.maxXValue === "number") setMaxXValue(value.maxXValue);
+      if (typeof value.maxY === "boolean") setMaxY(value.maxY);
+      if (typeof value.maxYValue === "number") setMaxYValue(value.maxYValue);
+      if (typeof value.maxTotal === "boolean") setMaxTotal(value.maxTotal);
+      if (typeof value.maxTotalValue === "number") setMaxTotalValue(value.maxTotalValue);
+    }} catch { /* ignore corrupt local settings */ }
+    queueMicrotask(() => { settingsReady.current = true; });
+  }, []);
+  useEffect(() => {
+    if (!settingsReady.current) return;
+    localStorage.setItem("solve-a-squan-settings", JSON.stringify({
+      smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
+      metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle,
+      maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue,
+    }));
+  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue]);
+  useEffect(() => {
+    if (!solutions.length || running) return;
+    let cancelled = false;
+    void (async () => {
+      const rebuilt = [] as typeof solutions;
+      const displays = new Set<string>();
+      for (const solution of solutions) {
+        const lb = solution.raw.lastIndexOf("[");
+        const rawAlg = solution.raw.slice(0, lb).trim();
+        let display = solution.raw;
+        if (karn && tauri()?.core?.invoke) {
+          try {
+            const converted = await tauri()!.core!.invoke<string>("karnify", {
+              input: rawAlg,
+              position: smartKarn && !cubeShape ? lastSolvePosition.current : null,
+              generator,
+            });
+            display = `${converted}  ${solution.raw.slice(lb).trim()}`;
+          } catch { /* keep numeric form */ }
+        }
+        display = normalizeLine(injectSliceIndicator(display, solution.sliceStart));
+        const displayLb = display.lastIndexOf("[");
+        const alg = (displayLb > 0 ? display.slice(0, displayLb) : display).trim();
+        if (!displays.has(alg)) { displays.add(alg); rebuilt.push({ ...solution, display, alg }); }
+      }
+      if (!cancelled) setSolutions(rebuilt);
+    })();
+    return () => { cancelled = true; };
+    // Rebuild only when display controls change, not when solution rows arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [karn, normalize, smartKarn, generator, cubeShape]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!tauri()?.core?.invoke) return;
+    void tauri()!.core!.invoke<TwoGenStatus>("two_gen_status", { position: rawPosition(cubeState) })
+      .then((status) => { if (!cancelled) setTwoGenStatus(status); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [cubeState]);
+  useEffect(() => {
+    try { setFavorites(JSON.parse(localStorage.getItem("solve-a-squan-favorites") || "{}")); }
+    catch { setFavorites({}); }
+  }, []);
+  useEffect(() => { localStorage.setItem("solve-a-squan-favorites", JSON.stringify(favorites)); }, [favorites]);
+  const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
+    (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
+  const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
+  if (ignoreTransforms) commandFlags.push("-x");
+  const commandPreview = `sq1opt ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   return (
-    <div className="app">
+    <div className={`app ${expanded ? "output-expanded" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
         <button className="hamburger" onClick={() => setMenu(true)}>
           ☰
@@ -561,7 +1240,7 @@ export default function App() {
         </div>
       </header>
       <div className="inputbar">
-        <div className="mode-control">
+        <div className="mode-control" ref={modeControlRef}>
           <button className="mode" onClick={cycleMode}>
             {mode}
           </button>
@@ -597,37 +1276,34 @@ export default function App() {
         </div>
         <div className="input-control">
           <input
+            className={inputError ? "has-error" : ""}
+            title={inputError}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && apply()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); void apply(e.shiftKey); }
+              if (e.key === "Escape") {
+                e.preventDefault(); setUndo([]); setRedo([]); ignoreHistory.current = true;
+                cubeActions.current?.reset(); ignoreHistory.current = false;
+              }
+            }}
             placeholder={
               mode === "POSITION"
                 ? "ABCDEFGH12345678-"
                 : "1,0 / 3,3 / 0,-3 / ...  (supports karn)"
             }
           />
-          <button className="apply" onClick={apply}>
+          <button className="apply" onClick={() => void apply()}>
             Apply
           </button>
         </div>
+        {inputError && <span className="input-error">{inputError}</span>}
       </div>
       <div className="main-grid">
         <aside className="cube-column">
           <Cube
             actionsRef={cubeActions}
-            onChange={(s) =>
-              setCubePos(
-                s.position
-                  .map((x, i) =>
-                    s.partial[i]
-                      ? /[A-H]/.test("ABCDEFGH"[x])
-                        ? "W"
-                        : "Z"
-                      : "ABCDEFGH12345678"[x],
-                  )
-                  .join("") + (s.middlePartial ? "" : s.middle ? "/" : "-"),
-              )
-            }
+            onChange={onCubeChange}
           />
           <div className="moves">
             <button onClick={() => cubeActions.current?.up()}>U′</button>
@@ -642,135 +1318,42 @@ export default function App() {
             <button onClick={() => cubeActions.current?.dp()}>D′</button>
           </div>
           <div className="undo">
-            <button>Undo (Ctrl+Z)</button>
-            <button disabled>Redo (Ctrl+Y)</button>
+            <button disabled={!undo.length || running} onClick={doUndo}>Undo (Ctrl+Z)</button>
+            <button disabled={!redo.length || running} onClick={doRedo}>Redo (Ctrl+Y)</button>
           </div>
-          <button className="solve">▶ Solve [Ctrl+Enter]</button>
+          <button className="solve" disabled={!running && twoGenBlocked} title={twoGenBlocked ? "This position is not compatible with the selected 2-gen constraints." : commandPreview} onClick={() => void solve()}>{running ? "■ Stop [Ctrl+Enter]" : "▶ Solve [Ctrl+Enter]"}</button>
         </aside>
         <section className="right-column">
           <div className="options-panel">
             <h2>Options</h2>
             <div className="select-grid">
-              <label>
-                Metric
-                <select
-                  value={metric}
-                  onChange={(e) => setMetric(e.target.value)}
-                >
-                  <option>Slice</option>
-                  <option>Move</option>
-                  <option>Angle</option>
-                </select>
-              </label>
-              <label>
-                2 Gen
-                <select value={two} onChange={(e) => setTwo(e.target.value)}>
-                  <option>None</option>
-                  <option>Pseudo 2 Gen</option>
-                  <option>2 Gen</option>
-                </select>
-              </label>
-              <label>
-                Lock layer angle on preabf
-                <select
-                  value={angle}
-                  onChange={(e) => setAngle(e.target.value)}
-                >
-                  <option>None</option>
-                  <option>Both</option>
-                  <option>Top</option>
-                  <option>Bottom</option>
-                </select>
-              </label>
-              <label>
-                Normalize ABF
-                <select
-                  value={normalize}
-                  onChange={(e) => setNormalize(e.target.value)}
-                >
-                  <option>None</option>
-                  <option>Both</option>
-                  <option>PreABF</option>
-                  <option>PostABF</option>
-                </select>
-              </label>
+              <label>Metric<select value={metric} disabled={running} onChange={(e) => setMetric(e.target.value)}><option>Slice</option><option>Move</option><option>Angle</option></select></label>
+              <label>2 Gen<select value={two} disabled={running} onChange={(e) => setTwo(e.target.value)}><option>None</option><option>Pseudo 2 Gen</option><option>2 Gen</option></select></label>
+              <label>Lock layer angle on preabf<select value={angle} disabled={running} onChange={(e) => setAngle(e.target.value)}><option>None</option><option>Both</option><option>Top</option><option>Bottom</option></select></label>
+              <label>Normalize ABF<select value={normalize} disabled={running} onChange={(e) => setNormalize(e.target.value)}><option>None</option><option>Both</option><option>PreABF</option><option>PostABF</option></select></label>
             </div>
             <div className="check-grid">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={all}
-                  onChange={(e) => setAll(e.target.checked)}
-                />{" "}
-                All optimal
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={generator}
-                  onChange={(e) => setGenerator(e.target.checked)}
-                />{" "}
-                Generator alg
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={cubeShape}
-                  onChange={(e) => setCubeShape(e.target.checked)}
-                />{" "}
-                Stay in cubeshape
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={ignoreMiddle}
-                  onChange={(e) => setIgnoreMiddle(e.target.checked)}
-                />{" "}
-                Ignore equator
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={karn}
-                  onChange={(e) => setKarn(e.target.checked)}
-                />{" "}
-                Karn output
-              </label>
+              <label><input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} /> All optimal</label>
+              <label><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
+              <label><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
+              <label><input type="checkbox" checked={ignoreMiddle} disabled={running} onChange={(e) => toggleIgnoreMiddle(e.target.checked)} /> Ignore equator</label>
+              <label><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
+              {all && !validDepths(depths) && <label>Extra moves:<input className="compact-number" type="number" min="0" value={suboptimal} onChange={(e) => setSuboptimal(Number(e.target.value))} /></label>}
             </div>
             <div className="limit-grid">
-              <label>
-                Max top turn:<input defaultValue="3" />
-              </label>
-              <label>
-                Max bottom turn:<input defaultValue="3" />
-              </label>
-              <label>
-                Max total turn:
-                <input defaultValue="6" />
-              </label>
-              <label>
-                Specific depths:
-                <input placeholder="e.g. 8,9" />
-              </label>
+              <label>Max top turn:<input type="number" min="0" max="6" value={maxXValue} disabled={running} onChange={(e) => { setMaxXValue(Number(e.target.value)); setMaxX(true); }} /></label>
+              <label>Max bottom turn:<input type="number" min="0" max="6" value={maxYValue} disabled={running} onChange={(e) => { setMaxYValue(Number(e.target.value)); setMaxY(true); }} /></label>
+              <label>Max total turn:<input type="number" min="1" max="12" value={maxTotalValue} disabled={running} onChange={(e) => { setMaxTotalValue(Number(e.target.value)); setMaxTotal(true); }} /></label>
+              <label>Specific depths:<input value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
             </div>
           </div>
-          <div className="terminal">
-            <div className="terminal-head">
-              <span>#</span>
-              <b>Solution</b>
-              <span>Slices</span>
-            </div>
-            {terminal.length ? (
-              terminal.map((x, i) => (
-                <div className="solution" key={i}>
-                  <span>{i + 1}</span>
-                  <code>{x}</code>
-                  <span>9</span>
-                </div>
-              ))
-            ) : (
-              <div className="empty">Solver output will appear here.</div>
-            )}
+          <div className="terminal-shell">
+            {!!solutions.length && <div className="output-tools"><button onClick={() => void navigator.clipboard.writeText(solutions.map((x) => x.display).join("\n"))}>Copy</button><button title="Favorites" onClick={() => setFavoritesOpen(true)}>★</button><button onClick={() => setTableView((v) => !v)}>{tableView ? "Terminal" : "Table"}</button><button onClick={() => setExpanded((v) => !v)}>{expanded ? "Collapse" : "Expand"}</button></div>}
+            {tableView ? <div className={`terminal metric-${metric.toLowerCase()} ${cubeShape ? "with-ergo" : ""}`}>
+              <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{cubeShape && <span>Ergo</span>}</div>
+              {solutions.map((x, i) => <div className="solution" key={x.raw} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{cubeShape && <span>{x.ergo === undefined ? "⚠" : x.ergo.toFixed(1)}</span>}</div>)}
+              {!solutions.length && <div className="empty">{terminal.length ? terminal.join("\n") : "Solver output will appear here."}</div>}
+            </div> : <pre className={`terminal terminal-text ${abidNotation ? "abid" : ""}`}>{[...terminal, ...solutions.map((x) => abidNotation ? abidify(x.display) : x.display)].join("\n")}</pre>}
           </div>
         </section>
       </div>
@@ -808,7 +1391,41 @@ export default function App() {
           </nav>
         </div>
       )}
-      {modal && <Modal type={modal} close={() => setModal(null)} />}
+      {contextMenu && <div className="solution-context" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
+        <button onClick={() => { void navigator.clipboard.writeText(contextMenu.alg); setContextMenu(null); }}>Copy alg</button>
+        <button onClick={() => {
+          const key = currentRunKey();
+          setFavorites((old) => ({ ...old, [key]: {
+            name: old[key]?.name || `Position ${Object.keys(old).length + 1}`,
+            algorithms: Array.from(new Set([...(old[key]?.algorithms || []), contextMenu.alg])),
+          } }));
+          setContextMenu(null);
+          setFavoritesOpen(true);
+        }}>Add to Favorites Bin</button>
+      </div>}
+      {modal && <Modal type={modal} close={() => setModal(null)} settings={{
+        smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
+        debugOutput, setDebugOutput, disabled: running,
+      }} />}
+      {favoritesOpen && <div className="modal-shade" onClick={() => setFavoritesOpen(false)}>
+        <div className="modal favorites-modal" onClick={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={() => setFavoritesOpen(false)}>✕</button>
+          <h2>Favorites</h2>
+          {!!solutions.length && <button className="favorite-save" onClick={() => {
+            const key = currentRunKey();
+            setFavorites((old) => ({ ...old, [key]: {
+              name: old[key]?.name || `Position ${Object.keys(old).length + 1}`,
+              algorithms: Array.from(new Set([...(old[key]?.algorithms || []), ...solutions.map((solution) => solution.display)])),
+            } }));
+          }}>Save current solutions</button>}
+          {!Object.keys(favorites).length && <p>No saved solution bins yet.</p>}
+          {Object.entries(favorites).map(([key, bin]) => <section className="favorite-bin" key={key}>
+            <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
+            <div className="favorite-actions"><button onClick={() => applyRunConfig(key)}>Apply setup</button><button onClick={() => void navigator.clipboard.writeText(bin.algorithms.join("\n"))}>Copy</button><button onClick={() => setFavorites((old) => { const next = { ...old }; delete next[key]; return next; })}>Delete</button></div>
+            <pre>{bin.algorithms.join("\n")}</pre>
+          </section>)}
+        </div>
+      </div>}
     </div>
   );
 }

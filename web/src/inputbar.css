@@ -102,3 +102,7 @@
   letter-spacing: 0.5px;
   line-height: 1;
 }
+
+.input-control input.has-error {
+  border-color: #ff5555;
+}
