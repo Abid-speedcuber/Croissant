@@ -386,18 +386,6 @@ body {
   width: 100%;
 }
 
-input[type="number"] {
-  appearance: textfield;
-  -moz-appearance: textfield;
-  -webkit-appearance: textfield;
-}
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  appearance: none;
-  margin: 0;
-}
-
 .solution-context {
   position: fixed;
   z-index: 45;

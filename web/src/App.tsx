@@ -1351,7 +1351,7 @@ export default function App() {
               <label>Max top turn:<input type="number" min="0" max="6" value={maxXValue} disabled={running} onChange={(e) => { setMaxXValue(Number(e.target.value)); setMaxX(true); }} /></label>
               <label>Max bottom turn:<input type="number" min="0" max="6" value={maxYValue} disabled={running} onChange={(e) => { setMaxYValue(Number(e.target.value)); setMaxY(true); }} /></label>
               <label>Max total turn:<input type="number" min="1" max="12" value={maxTotalValue} disabled={running} onChange={(e) => { setMaxTotalValue(Number(e.target.value)); setMaxTotal(true); }} /></label>
-              <label>Specific depths:<input value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
+              <label>Specific depths:<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
             </div>
           </div>
           <div className="terminal-shell">
