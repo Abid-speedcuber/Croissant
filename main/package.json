@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:web": "node ../build.mjs",
     "tauri": "tauri",
     "check": "tsc -b"
   },

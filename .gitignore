@@ -76,9 +76,11 @@ build.sh
 main/node_modules/
 main/node_modules.failed-install/
 main/dist/
+main/public/wasm/
 main/*.tsbuildinfo
 main/src-tauri/target/
 main/src-tauri/binaries/sq1opt
 main/src-tauri/binaries/sq1opt.exe
 main/src-tauri/resources/pruning-tables/
 legacy/build
+public/

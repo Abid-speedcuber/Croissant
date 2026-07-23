@@ -6,5 +6,6 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   envPrefix: ["VITE_", "TAURI_"],
+  worker: { format: "es" },
   build: { target: ["es2020", "chrome105", "safari13"] },
 });
