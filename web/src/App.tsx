@@ -897,6 +897,8 @@ export default function App() {
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; alg: string } | null>(null);
   const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 2, cornersTwo: true, cornersPseudo: true });
+  const [followTerminal, setFollowTerminal] = useState(true);
+  const terminalTextRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -937,6 +939,21 @@ export default function App() {
     if (!inCubeshape(next)) setCubeShape(false);
   };
   useEffect(() => () => { if (sliceTimer.current !== undefined) window.clearTimeout(sliceTimer.current); }, []);
+  const scrollTerminalToBottom = () => {
+    const node = terminalTextRef.current;
+    if (!node) return;
+    setFollowTerminal(true);
+    node.scrollTop = node.scrollHeight;
+  };
+  const handleTerminalScroll = () => {
+    const node = terminalTextRef.current;
+    if (!node) return;
+    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
+    setFollowTerminal(nearBottom);
+  };
+  useEffect(() => {
+    if (followTerminal) requestAnimationFrame(scrollTerminalToBottom);
+  }, [terminal, solutions, tableView, running, followTerminal]);
   const toggleIgnoreMiddle = (checked: boolean) => {
     const current = stateRef.current;
     if (checked && current.middle !== 0) preIgnoreMiddle.current = current.middle;
@@ -1042,15 +1059,10 @@ export default function App() {
     if (last === "0,0" || last === "00") { last = ""; middle = middle.replace(/\s$/, ""); }
     return first + middle + last + bracket;
   };
-  const receiveSolverLine = async (line: string, startPosition: string, collected?: Solution[]) => {
+  const formatSolverLine = async (line: string, startPosition: string) => {
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
-    if (lb < 0 || rb < 0) {
-      if (!collected && (debugOutput || !seenRaw.current.size)) setTerminal((old) => [...old, line].slice(-500));
-      return;
-    }
+    if (lb < 0 || rb < 0) return line;
     const rawAlg = line.slice(0, lb).trim();
-    if (seenRaw.current.has(rawAlg)) return;
-    seenRaw.current.add(rawAlg);
     let display = line, rating: RatingResult | undefined, sliceStart: string | undefined;
     if (cubeShape && tauri()?.core?.invoke) {
       try {
@@ -1068,13 +1080,30 @@ export default function App() {
         if (converted) display = `${converted}  ${line.slice(lb).trim()}`;
       } catch { /* retain numeric output */ }
     }
-    display = normalizeLine(injectSliceIndicator(display, sliceStart));
+    return normalizeLine(injectSliceIndicator(display, sliceStart));
+  };
+  const receiveSolverLine = async (line: string, startPosition: string, collected?: Solution[]) => {
+    const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
+    if (lb < 0 || rb < 0) {
+      if (!collected && (debugOutput || !seenRaw.current.size)) setTerminal((old) => [...old, line].slice(-500));
+      return;
+    }
+    const rawAlg = line.slice(0, lb).trim();
+    if (seenRaw.current.has(rawAlg)) return;
+    seenRaw.current.add(rawAlg);
+    let display = await formatSolverLine(line, startPosition), rating: RatingResult | undefined, sliceStart: string | undefined;
+    if (cubeShape && tauri()?.core?.invoke) {
+      try {
+        rating = await tauri()!.core!.invoke<RatingResult>("rate_algorithm", { algorithm: rawAlg, initialTopA: /^[1-8XYZ]/i.test(startPosition) });
+        if (rating.valid && rating.sliceStart) sliceStart = String.fromCharCode(rating.sliceStart);
+      } catch { /* an unrated row remains available */ }
+    }
     const displayAlg = (display.lastIndexOf("[") > 0 ? display.slice(0, display.lastIndexOf("[")) : display).trim();
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
     const counts = line.slice(lb + 1, rb).split("|").map((x) => Number(x.trim()) || 0);
-    if (!debugOutput) setTerminal([]);
     const row = { raw: line, display, alg: displayAlg, slices: counts[0] || 0, moves: counts[1] || 0, angle: counts[2] || 0, ergoRaw: rating?.valid ? rating.finalScore : undefined, sliceStart };
+    if (!debugOutput) setTerminal((old) => [...old, display].slice(-500));
     if (collected) collected.push(row);
     else setSolutions((old) => [...old, row]);
   };
@@ -1094,16 +1123,15 @@ export default function App() {
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     stopped.current = false;
-    setTerminal(["Solving…"]); setSolutions([]); seenRaw.current.clear(); seenDisplay.current.clear();
+    setTerminal(["Solving…"]); setSolutions([]); seenRaw.current.clear(); seenDisplay.current.clear(); setFollowTerminal(true); setTableView(false);
     setRunning(true);
     const start = positionString(cubeState), startedAt = performance.now();
     lastSolvePosition.current = start;
     try {
       if (!native.Channel) throw new Error("The native solver channel is unavailable.");
       const onLine = new native.Channel<string>();
-      onLine.onmessage = (line) => {
-        if (!(line.includes("[") && line.includes("]")))
-          setTerminal((old) => [...old, line].slice(-500));
+      onLine.onmessage = async (line) => {
+        await receiveSolverLine(line, start);
       };
       const result = await native.core.invoke<{ code: number | null; stdout: string; stderr: string }>("solve", { position: start, flags, onLine });
       const collected: Solution[] = [];
@@ -1117,9 +1145,10 @@ export default function App() {
           .sort((a, b) => (b.ergo ?? -Infinity) - (a.ergo ?? -Infinity));
       }
       setSolutions(displayRows);
-      setTerminal((lines) => [...lines, `${stopped.current ? "Stopped" : result.code === 0 ? "Done" : "Error"} — ${seenRaw.current.size} solution${seenRaw.current.size === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`]);
+      setTerminal((lines) => [...lines, `${stopped.current ? "Stopped" : result.code === 0 ? "Done" : "Error"} — ${seenRaw.current.size} solution${seenRaw.current.size === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`].slice(-500));
+      setTableView(!followTerminal);
     } catch (error) {
-      setTerminal((lines) => [...lines, "ERROR: " + String(error)]);
+      setTerminal((lines) => [...lines, "ERROR: " + String(error)].slice(-500));
     } finally {
       setRunning(false);
     }
@@ -1186,25 +1215,26 @@ export default function App() {
       const rebuilt = [] as typeof solutions;
       const displays = new Set<string>();
       for (const solution of solutions) {
-        const lb = solution.raw.lastIndexOf("[");
-        const rawAlg = solution.raw.slice(0, lb).trim();
-        let display = solution.raw;
-        if (karn && tauri()?.core?.invoke) {
-          try {
-            const converted = await tauri()!.core!.invoke<string>("karnify", {
-              input: rawAlg,
-              position: smartKarn && !cubeShape ? lastSolvePosition.current : null,
-              generator,
-            });
-            display = `${converted}  ${solution.raw.slice(lb).trim()}`;
-          } catch { /* keep numeric form */ }
-        }
-        display = normalizeLine(injectSliceIndicator(display, solution.sliceStart));
+        const display = await formatSolverLine(solution.raw, lastSolvePosition.current || positionString(cubeState));
         const displayLb = display.lastIndexOf("[");
         const alg = (displayLb > 0 ? display.slice(0, displayLb) : display).trim();
         if (!displays.has(alg)) { displays.add(alg); rebuilt.push({ ...solution, display, alg }); }
       }
       if (!cancelled) setSolutions(rebuilt);
+    })();
+    return () => { cancelled = true; };
+    // Rebuild only when display controls change, not when solution rows arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [karn, normalize, smartKarn, generator, cubeShape]);
+  useEffect(() => {
+    if (!terminal.length || running) return;
+    let cancelled = false;
+    void (async () => {
+      const rebuilt = await Promise.all(terminal.map(async (line) => {
+        if (!(line.includes("[") && line.includes("]"))) return line;
+        return await formatSolverLine(line, lastSolvePosition.current || positionString(cubeState));
+      }));
+      if (!cancelled) setTerminal(rebuilt);
     })();
     return () => { cancelled = true; };
     // Rebuild only when display controls change, not when solution rows arrive.
@@ -1348,19 +1378,48 @@ export default function App() {
               <label><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
             </div>
             <div className="limit-grid">
-              <label>Max top turn:<input type="number" min="0" max="6" value={maxXValue} disabled={running} onChange={(e) => { setMaxXValue(Number(e.target.value)); setMaxX(true); }} /></label>
-              <label>Max bottom turn:<input type="number" min="0" max="6" value={maxYValue} disabled={running} onChange={(e) => { setMaxYValue(Number(e.target.value)); setMaxY(true); }} /></label>
-              <label>Max total turn:<input type="number" min="1" max="12" value={maxTotalValue} disabled={running} onChange={(e) => { setMaxTotalValue(Number(e.target.value)); setMaxTotal(true); }} /></label>
+              <label>Max top turn:
+                <div className="number-input-wrap">
+                  <input type="number" min="0" max="6" value={maxXValue} disabled={running} onChange={(e) => { setMaxXValue(Number(e.target.value)); setMaxX(true); }} />
+                  <div className="number-stepper">
+                    <button type="button" disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.min(6, value + 1)); }}>▲</button>
+                    <button type="button" disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.max(0, value - 1)); }}>▼</button>
+                  </div>
+                </div>
+              </label>
+              <label>Max bottom turn:
+                <div className="number-input-wrap">
+                  <input type="number" min="0" max="6" value={maxYValue} disabled={running} onChange={(e) => { setMaxYValue(Number(e.target.value)); setMaxY(true); }} />
+                  <div className="number-stepper">
+                    <button type="button" disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.min(6, value + 1)); }}>▲</button>
+                    <button type="button" disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.max(0, value - 1)); }}>▼</button>
+                  </div>
+                </div>
+              </label>
+              <label>Max total turn:
+                <div className="number-input-wrap">
+                  <input type="number" min="1" max="12" value={maxTotalValue} disabled={running} onChange={(e) => { setMaxTotalValue(Number(e.target.value)); setMaxTotal(true); }} />
+                  <div className="number-stepper">
+                    <button type="button" disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.min(12, value + 1)); }}>▲</button>
+                    <button type="button" disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.max(1, value - 1)); }}>▼</button>
+                  </div>
+                </div>
+              </label>
               <label>Specific depths:<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
             </div>
           </div>
           <div className="terminal-shell">
-            {!!solutions.length && <div className="output-tools"><button onClick={() => void navigator.clipboard.writeText(solutions.map((x) => x.display).join("\n"))}>Copy</button><button title="Favorites" onClick={() => setFavoritesOpen(true)}>★</button><button onClick={() => setTableView((v) => !v)}>{tableView ? "Terminal" : "Table"}</button><button onClick={() => setExpanded((v) => !v)}>{expanded ? "Collapse" : "Expand"}</button></div>}
-            {tableView ? <div className={`terminal metric-${metric.toLowerCase()} ${cubeShape ? "with-ergo" : ""}`}>
+            <div className="output-tools">
+              <button title="Copy all algs in terminal" onClick={() => void navigator.clipboard.writeText([...terminal, ...solutions.map((x) => x.display)].join("\n"))}>⧉</button>
+              <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
+              {solutions.length > 0 && <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => setTableView((v) => !v)}>{tableView ? "Terminal" : "Table"}</button>}
+              <button title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "⤡" : "⤢"}</button>
+            </div>
+            {!followTerminal && !tableView && <button className="terminal-follow-button" title="Resume live scroll" onClick={scrollTerminalToBottom}>↓</button>}
+            {tableView && solutions.length > 0 ? <div className={`terminal metric-${metric.toLowerCase()} ${cubeShape ? "with-ergo" : ""}`}>
               <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{cubeShape && <span>Ergo</span>}</div>
               {solutions.map((x, i) => <div className="solution" key={x.raw} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{cubeShape && <span>{x.ergo === undefined ? "⚠" : x.ergo.toFixed(1)}</span>}</div>)}
-              {!solutions.length && <div className="empty">{terminal.length ? terminal.join("\n") : "Solver output will appear here."}</div>}
-            </div> : <pre className={`terminal terminal-text ${abidNotation ? "abid" : ""}`}>{[...terminal, ...solutions.map((x) => abidNotation ? abidify(x.display) : x.display)].join("\n")}</pre>}
+            </div> : <div ref={terminalTextRef} className={`terminal terminal-text ${abidNotation ? "abid" : ""}`} onScroll={handleTerminalScroll}>{terminal.map((line, index) => <span key={`${line}-${index}`} className={`terminal-line ${(index % 2 === 0) ? "terminal-line-a" : "terminal-line-b"}`}>{abidNotation && line.includes("[") ? abidify(line) : line || " "}</span>)}{!terminal.length && !solutions.length && <span className="terminal-line terminal-line-empty">Solver output will appear here.</span>}</div>}
           </div>
         </section>
       </div>
