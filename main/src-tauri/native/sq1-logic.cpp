@@ -103,7 +103,19 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
     for (char ch : a)
         if (std::isalpha(ch)) { isKarnAlg = true; break; }
 
-    std::string numeric = isKarnAlg ? unkarnify(a) : replaceAll(a, " ", "");
+    bool needsUnkarnify = isKarnAlg;
+    if (!needsUnkarnify) {
+        std::string slashNormalized = replaceAll(replaceAll(a, "\\", "/"), "|", "/");
+        auto parts = splitStr(slashNormalized, '/');
+        for (auto &part : parts) {
+            std::string token = trimStr(part);
+            if (!token.empty() && token.find(',') == std::string::npos) {
+                needsUnkarnify = true;
+                break;
+            }
+        }
+    }
+    std::string numeric = needsUnkarnify ? unkarnify(a) : replaceAll(a, " ", "");
     auto rawParts = splitStr(numeric, '/');
     std::vector<std::string> r;
     for (size_t i = 0; i < rawParts.size(); i++) {

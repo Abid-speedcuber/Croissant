@@ -43,7 +43,25 @@ type Solution = {
   sliceStart?: string;
 };
 type OutputLine = { raw: string; karn: string; isSolution: boolean; algRaw?: string };
-type RatingResult = { finalScore: number; phase1: number; phase2: number; phase3: number; phase4: number; ergoUp: number; ergoDown: number; sliceCount: number; movement: number; bonus: number; valid: boolean; sliceStart: number };
+type RatingResult = {
+  finalScore?: number;
+  final_score?: number;
+  phase1?: number;
+  phase2?: number;
+  phase3?: number;
+  phase4?: number;
+  ergoUp?: number;
+  ergo_up?: number;
+  ergoDown?: number;
+  ergo_down?: number;
+  sliceCount?: number;
+  slice_count?: number;
+  movement?: number;
+  bonus?: number;
+  valid?: boolean;
+  sliceStart?: number | string;
+  slice_start?: number | string;
+};
 type TwoGenStatus = { compatibility: number; cornersTwo: boolean; cornersPseudo: boolean };
 type DisplaySolution = Solution & { display: string; alg: string };
 
@@ -330,6 +348,18 @@ function parseSolutionCounts(line: string) {
   const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
   const counts = lb >= 0 && rb > lb ? line.slice(lb + 1, rb).split("|").map((x) => Number(x.trim()) || 0) : [];
   return { slices: counts[0] || 0, moves: counts[1] || 0, angle: counts[2] || 0 };
+}
+function ratingScore(rating?: RatingResult) {
+  const value = rating?.finalScore ?? rating?.final_score;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+function ratingSliceStart(rating?: RatingResult) {
+  const value = rating?.sliceStart ?? rating?.slice_start;
+  if (typeof value === "number") return value ? String.fromCharCode(value) : undefined;
+  return value || undefined;
+}
+function solutionErgo(solution: Solution) {
+  return solution.ergo ?? solution.ergoRaw;
 }
 function medianNormalize(rows: Solution[]) {
   const valid = rows.map((row) => row.ergoRaw).filter((score): score is number => Number.isFinite(score)).sort((a, b) => a - b);
@@ -1203,11 +1233,11 @@ export default function App() {
     if (seenRaw.current.has(rawAlg)) return;
     seenRaw.current.add(rawAlg);
     let rating: RatingResult | undefined, sliceStart: string | undefined;
-    if (!stopped.current && lastSolveCubeShape.current && tauri()?.core?.invoke) {
+    if (lastSolveCubeShape.current && tauri()?.core?.invoke) {
       try {
         rating = await tauri()!.core!.invoke<RatingResult>("rate_algorithm", { algorithm: rawAlg, initialTopA: /^[1-8XYZ]/i.test(startPosition) });
         if (runId !== solveRunId.current) return;
-        if (rating.valid && rating.sliceStart) sliceStart = String.fromCharCode(rating.sliceStart);
+        if (rating.valid) sliceStart = ratingSliceStart(rating);
       } catch { /* an unrated row remains available */ }
     }
     const { rawDisplay, karnDisplay } = stopped.current
@@ -1222,7 +1252,7 @@ export default function App() {
       if (!debugOutput) replaceOutputLines(outputLinesRef.current.filter((entry) => entry.isSolution));
     }
     const counts = parseSolutionCounts(line);
-    const row: Solution = { raw: line, rawDisplay, karnDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? rating.finalScore : undefined, sliceStart };
+    const row: Solution = { raw: line, rawDisplay, karnDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart };
     addSolution(row);
     addOutputLine({ raw: rawDisplay, karn: karnDisplay, isSolution: true, algRaw: rawAlg });
   };
@@ -1410,8 +1440,9 @@ export default function App() {
     return a.moves - b.moves;
   });
   const terminalSolutions = visibleSolutions.map((solution, index) => {
+    const ergo = solutionErgo(solution);
     const suffix = showErgo && !running
-      ? solution.ergo === undefined ? "  (⚠)" : `  (${solution.ergo.toFixed(2)})`
+      ? ergo === undefined ? "  (⚠)" : `  (${ergo.toFixed(2)})`
       : "";
     return { key: `sol-${solution.raw}-${index}`, text: solution.display + suffix, solution };
   });
@@ -1614,7 +1645,7 @@ export default function App() {
           </div>
           <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
             <div className="output-tools">
-              {!!solutions.length && <button title="Copy all algs in terminal" onClick={copyTerminalText}>⧉</button>}
+              <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
               <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
               <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => setTableView((v) => !v)}>{tableView ? "▤" : "⊞"}</button>
               <button title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "⤡" : "⤢"}</button>
@@ -1623,7 +1654,10 @@ export default function App() {
             {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
             {tableView ? <div className={`terminal metric-${metric.toLowerCase()} ${showErgo ? "with-ergo" : ""}`}>
               <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
-              {tableSolutions.map((x, i) => <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{x.ergo === undefined ? "⚠" : x.ergo.toFixed(1)}</span>}</div>)}
+              {tableSolutions.map((x, i) => {
+                const ergo = solutionErgo(x);
+                return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+              })}
             </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
               {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">solution will be displayed here...</span>}
               {terminalNonSolutions.map((line, index) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}

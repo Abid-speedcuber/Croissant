@@ -213,6 +213,13 @@ mod tests {
     }
 
     #[test]
+    fn ergonomic_rating_accepts_compact_karn_solution_lines() {
+        let rating = rate_algorithm("1-3/u d' m F W F' D' -54 56".into(), false).unwrap();
+        assert!(rating.valid);
+        assert_ne!(rating.slice_start, 0);
+    }
+
+    #[test]
     fn shared_two_gen_constraint_check_accepts_solved_position() {
         let solved = vec![0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7];
         let status = two_gen_status(solved).unwrap();
