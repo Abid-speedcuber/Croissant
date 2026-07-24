@@ -902,7 +902,9 @@ export default function App() {
   const firstSolutionAt = useRef(0);
   const lineQueue = useRef<Promise<void>>(Promise.resolve());
   const outputIdleTimer = useRef<number | undefined>(undefined);
+  const renderFrame = useRef<number | undefined>(undefined);
   const runningRef = useRef(false);
+  const solveRunId = useRef(0);
   const preIgnoreMiddle = useRef(1);
   const slicePending = useRef<string[]>([]), sliceTimer = useRef<number | undefined>(undefined);
   const stopped = useRef(false);
@@ -988,7 +990,10 @@ export default function App() {
     setIgnoreMiddle(next.middle === 0);
     if (!inCubeshape(next)) setCubeShape(false);
   };
-  useEffect(() => () => { if (sliceTimer.current !== undefined) window.clearTimeout(sliceTimer.current); }, []);
+  useEffect(() => () => {
+    if (sliceTimer.current !== undefined) window.clearTimeout(sliceTimer.current);
+    if (renderFrame.current !== undefined) cancelAnimationFrame(renderFrame.current);
+  }, []);
   const scrollTerminalToBottom = () => {
     const node = terminalTextRef.current;
     if (!node) return;
@@ -1160,25 +1165,35 @@ export default function App() {
   };
   const addOutputLine = (line: OutputLine) => {
     outputLinesRef.current = [...outputLinesRef.current, line].slice(-1000);
-    setOutputLines(outputLinesRef.current);
+    scheduleSolutionFlush();
   };
   const setRunningState = (value: boolean) => {
     runningRef.current = value;
     setRunning(value);
   };
+  const flushSolutionState = () => {
+    renderFrame.current = undefined;
+    setOutputLines(outputLinesRef.current);
+    setSolutions(solutionsRef.current);
+  };
+  const scheduleSolutionFlush = () => {
+    if (renderFrame.current !== undefined) return;
+    renderFrame.current = requestAnimationFrame(flushSolutionState);
+  };
   const replaceOutputLines = (lines: OutputLine[]) => {
     outputLinesRef.current = lines.slice(-1000);
-    setOutputLines(outputLinesRef.current);
+    scheduleSolutionFlush();
   };
   const addSolution = (row: Solution) => {
     solutionsRef.current = [...solutionsRef.current, row];
-    setSolutions(solutionsRef.current);
+    scheduleSolutionFlush();
   };
   const setSolutionRows = (rows: Solution[]) => {
     solutionsRef.current = rows;
-    setSolutions(rows);
+    scheduleSolutionFlush();
   };
-  const receiveSolverLine = async (line: string, startPosition: string) => {
+  const receiveSolverLine = async (line: string, startPosition: string, runId: number) => {
+    if (runId !== solveRunId.current) return;
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
     if (lb < 0 || rb < 0) {
       if (debugOutput || !seenRaw.current.size) addOutputLine({ raw: line, karn: line, isSolution: false });
@@ -1188,13 +1203,17 @@ export default function App() {
     if (seenRaw.current.has(rawAlg)) return;
     seenRaw.current.add(rawAlg);
     let rating: RatingResult | undefined, sliceStart: string | undefined;
-    if (lastSolveCubeShape.current && tauri()?.core?.invoke) {
+    if (!stopped.current && lastSolveCubeShape.current && tauri()?.core?.invoke) {
       try {
         rating = await tauri()!.core!.invoke<RatingResult>("rate_algorithm", { algorithm: rawAlg, initialTopA: /^[1-8XYZ]/i.test(startPosition) });
+        if (runId !== solveRunId.current) return;
         if (rating.valid && rating.sliceStart) sliceStart = String.fromCharCode(rating.sliceStart);
       } catch { /* an unrated row remains available */ }
     }
-    const { rawDisplay, karnDisplay } = await buildDisplayPair(line, startPosition, sliceStart);
+    const { rawDisplay, karnDisplay } = stopped.current
+      ? { rawDisplay: injectSliceIndicator(line, sliceStart), karnDisplay: injectSliceIndicator(line, sliceStart) }
+      : await buildDisplayPair(line, startPosition, sliceStart);
+    if (runId !== solveRunId.current) return;
     const displayAlg = lineAlg(normalizeLine(karn ? karnDisplay : rawDisplay));
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
@@ -1218,7 +1237,9 @@ export default function App() {
     if (runningRef.current) {
       stopped.current = true;
       addOutputLine({ raw: "Stop requested. The integrated solver will stop when the current solve returns.", karn: "Stop requested. The integrated solver will stop when the current solve returns.", isSolution: false });
-      await native.core.invoke("stop_solver");
+      setStatusLines((lines) => [...lines, "Stop requested. Ready for the next solve."].slice(-8));
+      setRunningState(false);
+      void native.core.invoke("stop_solver").catch(() => undefined);
       return;
     }
     if ((two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
@@ -1243,20 +1264,24 @@ export default function App() {
     setTableView(false);
     setCompletedWhilePaused(false);
     setRunningState(true);
+    const runId = ++solveRunId.current;
     const start = positionString(cubeState), startedAt = performance.now();
     lastSolvePosition.current = start;
     try {
       if (!native.Channel) throw new Error("The native solver channel is unavailable.");
       const onLine = new native.Channel<string>();
       onLine.onmessage = async (line) => {
-        lineQueue.current = lineQueue.current.then(() => receiveSolverLine(line, start));
-        await lineQueue.current;
+        if (runId !== solveRunId.current) return;
+        lineQueue.current = lineQueue.current.then(() => receiveSolverLine(line, start, runId));
       };
       const result = await native.core.invoke<{ code: number | null; stdout: string; stderr: string }>("solve", { position: start, flags, onLine });
-      await lineQueue.current;
-      for (const line of `${result.stdout || ""}\n${result.stderr || ""}`.split(/\r?\n/).filter(Boolean))
-        await receiveSolverLine(line, start);
-      if (lastSolveCubeShape.current) setSolutionRows(medianNormalize(solutionsRef.current));
+      if (runId !== solveRunId.current) return;
+      if (!stopped.current) await lineQueue.current;
+      for (const line of `${result.stderr || ""}`.split(/\r?\n/).filter(Boolean))
+        await receiveSolverLine(line, start, runId);
+      if (runId !== solveRunId.current) return;
+      if (!stopped.current && lastSolveCubeShape.current) setSolutionRows(medianNormalize(solutionsRef.current));
+      flushSolutionState();
       const count = solutionsRef.current.length;
       const status = `${stopped.current ? "Stopped" : result.code === 0 ? "Done" : "Error"} — ${count} solution${count === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`;
       setStatusLines(lastSolveCubeShape.current && count ? [`Ranked ${count} algs by ergonomics.`] : [status]);
@@ -1271,7 +1296,7 @@ export default function App() {
     } catch (error) {
       setStatusLines((lines) => [...lines, "ERROR: " + String(error)].slice(-8));
     } finally {
-      setRunningState(false);
+      if (runId === solveRunId.current) setRunningState(false);
     }
   };
   useEffect(() => {
@@ -1414,10 +1439,31 @@ export default function App() {
     setEnabled(true);
     setValue(Math.min(max, Math.max(min, Math.trunc(parsed))));
   };
+  const tooltips = {
+    menu: "Menu",
+    inputMode: "Switch input mode: Scramble, Alg, or Position.",
+    modeMenu: "Choose input mode.",
+    apply: "Apply the input. Shift+Enter first resets the cube to solved.",
+    reset: "Reset  [Esc]",
+    metric: "Choose how move length is counted: Slice, Move, or Angle metric.",
+    twoGen: "Restrict solving to 2 Gen or Pseudo 2 Gen move sets.",
+    angle: "Lock the pre-ABF angle move to +/-1 or 0.",
+    normalize: "Control which ABF moves are normalized in the output.",
+    all: "Find all optimal solutions, or optimal plus extra depths.",
+    suboptimal: "Extra moves beyond optimal to also find.",
+    generator: "Output algs that set up the case from solved instead of solving it.",
+    cubeshape: "Only generate algs that keep the puzzle in cubeshape throughout.",
+    ignoreEquator: "Ignore equator states. Equivalent to clicking the middle bar until it is gray.",
+    karn: "Display solutions in karnotation instead of WCA notation.",
+    maxX: "Limit the maximum top-layer turn in either direction (0-6).",
+    maxY: "Limit the maximum bottom-layer turn in either direction (0-6).",
+    maxTotal: "Limit the maximum combined |top|+|bottom| turn per move pair (1-12).",
+    depths: "Comma-separated list of depths to search, e.g. 8,9.",
+  };
   return (
     <div className={`app ${expanded ? "output-expanded" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
-        <button className="hamburger" onClick={() => setMenu(true)}>
+        <button className="hamburger" title={tooltips.menu} onClick={() => setMenu(true)}>
           ☰
         </button>
         <div className="brand">
@@ -1427,12 +1473,13 @@ export default function App() {
       </header>
       <div className="inputbar">
         <div className="mode-control" ref={modeControlRef}>
-          <button className="mode" onClick={cycleMode}>
+          <button className="mode" title={tooltips.inputMode} onClick={cycleMode}>
             {mode}
           </button>
           <button
             className="arrow"
             aria-label="Choose input mode"
+            title={tooltips.modeMenu}
             onClick={() => setModeMenu((v) => !v)}
           >
             ▾
@@ -1479,7 +1526,7 @@ export default function App() {
                 : "1,0 / 3,3 / 0,-3 / ...  (supports karn)"
             }
           />
-          <button className="apply" onClick={() => void apply()}>
+          <button className="apply" title={tooltips.apply} onClick={() => void apply()}>
             Apply
           </button>
         </div>
@@ -1492,76 +1539,77 @@ export default function App() {
             onChange={onCubeChange}
           />
           <div className="moves">
-            <button onClick={() => cubeActions.current?.up()}>U′</button>
+            <button title="Turn top layer counterclockwise." onClick={() => cubeActions.current?.up()}>U′</button>
             <button
               className="slice"
+              title="Slice  [I/K]"
               onClick={() => cubeActions.current?.slice()}
             >
               Slice [I/K]
             </button>
-            <button onClick={() => cubeActions.current?.u()}>U</button>
-            <button onClick={() => cubeActions.current?.d()}>D</button>
-            <button onClick={() => cubeActions.current?.dp()}>D′</button>
+            <button title="Turn top layer clockwise." onClick={() => cubeActions.current?.u()}>U</button>
+            <button title="Turn bottom layer clockwise." onClick={() => cubeActions.current?.d()}>D</button>
+            <button title="Turn bottom layer counterclockwise." onClick={() => cubeActions.current?.dp()}>D′</button>
           </div>
           <div className="undo">
-            <button disabled={!undo.length || running} onClick={doUndo}>Undo (Ctrl+Z)</button>
-            <button disabled={!redo.length || running} onClick={doRedo}>Redo (Ctrl+Y)</button>
+            <button title="Undo  [Ctrl+Z]" disabled={!undo.length || running} onClick={doUndo}>Undo (Ctrl+Z)</button>
+            <button title="Redo  [Ctrl+Y]" disabled={!redo.length || running} onClick={doRedo}>Redo (Ctrl+Y)</button>
           </div>
-          <button className="solve" disabled={!running && twoGenBlocked} title={twoGenBlocked ? "This position is not compatible with the selected 2-gen constraints." : commandPreview} onClick={() => void solve()}>{running ? "■ Stop [Ctrl+Enter]" : "▶ Solve [Ctrl+Enter]"}</button>
+          <button className={`solve ${running ? "is-running" : ""}`} disabled={!running && twoGenBlocked} title={running ? "Stop the current solve and make the UI ready for another solve." : twoGenBlocked ? "This position is not compatible with the selected 2-gen constraints." : commandPreview} onClick={() => void solve()}>{running ? "■ Stop [Ctrl+Enter]" : "▶ Solve [Ctrl+Enter]"}</button>
         </aside>
         <section className="right-column">
           <div className="options-panel">
             <h2>Options</h2>
             <div className="select-grid">
-              <label>Metric<select value={metric} disabled={running} onChange={(e) => setMetric(e.target.value)}><option>Slice</option><option>Move</option><option>Angle</option></select></label>
-              <label>2 Gen<select value={two} disabled={running} onChange={(e) => setTwo(e.target.value)}><option>None</option><option>Pseudo 2 Gen</option><option>2 Gen</option></select></label>
-              <label>Lock layer angle on preabf<select value={angle} disabled={running} onChange={(e) => setAngle(e.target.value)}><option>None</option><option>Both</option><option>Top</option><option>Bottom</option></select></label>
-              <label>Normalize ABF<select value={normalize} disabled={running} onChange={(e) => setNormalize(e.target.value)}><option>None</option><option>Both</option><option>PreABF</option><option>PostABF</option></select></label>
+              <label title={tooltips.metric}>Metric<select value={metric} disabled={running} onChange={(e) => setMetric(e.target.value)}><option>Slice</option><option>Move</option><option>Angle</option></select></label>
+              <label title={tooltips.twoGen}>2 Gen<select value={two} disabled={running} onChange={(e) => setTwo(e.target.value)}><option>None</option><option>Pseudo 2 Gen</option><option>2 Gen</option></select></label>
+              <label title={tooltips.angle}>Lock layer angle on preabf<select value={angle} disabled={running} onChange={(e) => setAngle(e.target.value)}><option>None</option><option>Both</option><option>Top</option><option>Bottom</option></select></label>
+              <label title={tooltips.normalize}>Normalize ABF<select value={normalize} disabled={running} onChange={(e) => setNormalize(e.target.value)}><option>None</option><option>Both</option><option>PreABF</option><option>PostABF</option></select></label>
             </div>
             <div className="check-grid">
-              <label className="inline-all-optimal">
+              <label className="inline-all-optimal" title={tooltips.all}>
                 <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
                 <span>Generate All Solutions:</span>
                 <span className="all-optimal-label">{suboptimal ? `Optimal+${suboptimal}` : "Optimal"}</span>
                 <span className="stepper-group">
-                  <button type="button" disabled={running || !all} onClick={() => setSuboptimal((value) => Math.max(0, value - 1))}>−</button>
-                  <button type="button" disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
+                  <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => Math.max(0, value - 1))}>−</button>
+                  <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
                 </span>
               </label>
-              <label><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
-              <label><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
-              <label><input type="checkbox" checked={ignoreMiddle} disabled={running} onChange={(e) => toggleIgnoreMiddle(e.target.checked)} /> Ignore equator</label>
-              <label><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
+              <label title={tooltips.generator}><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
+              <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
+              <label title={tooltips.ignoreEquator}><input type="checkbox" checked={ignoreMiddle} disabled={running} onChange={(e) => toggleIgnoreMiddle(e.target.checked)} /> Ignore equator</label>
+              <label title={tooltips.karn}><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
             </div>
             <div className="limit-grid">
-              <label>Max top turn:
+              <label title={tooltips.maxX}>Max top turn:
                 <div className="number-input-wrap">
                   <input type="number" min="0" max="6" value={maxX ? maxXValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxX, setMaxXValue)} />
                   <div className="number-stepper">
-                    <button type="button" disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.min(6, (maxX ? value : 0) + 1)); }}>▲</button>
-                    <button type="button" disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.max(0, (maxX ? value : 1) - 1)); }}>▼</button>
+                    <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.min(6, (maxX ? value : 0) + 1)); }}>▲</button>
+                    <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.max(0, (maxX ? value : 1) - 1)); }}>▼</button>
                   </div>
                 </div>
               </label>
-              <label>Max bottom turn:
+              <label title={tooltips.maxY}>Max bottom turn:
                 <div className="number-input-wrap">
                   <input type="number" min="0" max="6" value={maxY ? maxYValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxY, setMaxYValue)} />
                   <div className="number-stepper">
-                    <button type="button" disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.min(6, (maxY ? value : 0) + 1)); }}>▲</button>
-                    <button type="button" disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.max(0, (maxY ? value : 1) - 1)); }}>▼</button>
+                    <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.min(6, (maxY ? value : 0) + 1)); }}>▲</button>
+                    <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.max(0, (maxY ? value : 1) - 1)); }}>▼</button>
                   </div>
                 </div>
               </label>
-              <label>Max total turn:
+              <label title={tooltips.maxTotal}>Max total turn:
                 <div className="number-input-wrap">
                   <input type="number" min="1" max="12" value={maxTotal ? maxTotalValue : ""} placeholder="12" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 1, 12, setMaxTotal, setMaxTotalValue)} />
                   <div className="number-stepper">
-                    <button type="button" disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.min(12, (maxTotal ? value : 0) + 1)); }}>▲</button>
-                    <button type="button" disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.max(1, (maxTotal ? value : 2) - 1)); }}>▼</button>
+                    <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.min(12, (maxTotal ? value : 0) + 1)); }}>▲</button>
+                    <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.max(1, (maxTotal ? value : 2) - 1)); }}>▼</button>
                   </div>
                 </div>
               </label>
-              <label>Specific depths:<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
+              <label title={tooltips.depths}>Specific depths:<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
             </div>
           </div>
           <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>

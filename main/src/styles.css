@@ -233,6 +233,14 @@ body {
 .solve:hover {
   background: #4a8bcd;
 }
+.solve.is-running {
+  background: #b67818;
+  border-color: #d89b36;
+  color: #fff7e8;
+}
+.solve.is-running:hover {
+  background: #c98a24;
+}
 .right-column {
   display: flex;
   flex-direction: column;

@@ -13,16 +13,15 @@ type PendingRequest = {
 };
 
 let nextId = 1;
-let worker: Worker | undefined;
+let solveWorker: Worker | undefined;
+let utilityWorker: Worker | undefined;
 const pending = new Map<number, PendingRequest>();
 
 class Channel<T> {
   onmessage: (message: T) => void = () => undefined;
 }
 
-function ensureWorker() {
-  if (worker) return worker;
-  worker = new Worker(new URL("./solverWorker.ts", import.meta.url), { type: "module" });
+function attachWorkerEvents(worker: Worker) {
   worker.onmessage = (event: MessageEvent<WorkerEvent>) => {
     const request = pending.get(event.data.id);
     if (!request) return;
@@ -40,21 +39,37 @@ function ensureWorker() {
       pending.delete(id);
       request.reject(error);
     }
-    worker?.terminate();
-    worker = undefined;
   };
-  return worker;
+}
+
+function ensureSolveWorker() {
+  if (solveWorker) return solveWorker;
+  solveWorker = new Worker(new URL("./solverWorker.ts", import.meta.url), { type: "module" });
+  attachWorkerEvents(solveWorker);
+  return solveWorker;
+}
+
+function ensureUtilityWorker() {
+  if (utilityWorker) return utilityWorker;
+  utilityWorker = new Worker(new URL("./solverWorker.ts", import.meta.url), { type: "module" });
+  attachWorkerEvents(utilityWorker);
+  return utilityWorker;
+}
+
+function rejectMatchingRequests(predicate: (request: PendingRequest) => boolean, error: Error) {
+  for (const [id, request] of pending) {
+    if (!predicate(request)) continue;
+    pending.delete(id);
+    if (request.solve) request.resolve({ code: null, stdout: "", stderr: "" });
+    else request.reject(error);
+  }
 }
 
 function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   if (command === "stop_solver") {
-    worker?.terminate();
-    worker = undefined;
-    for (const [id, request] of pending) {
-      pending.delete(id);
-      if (request.solve) request.resolve({ code: null, stdout: "Stopped.\n", stderr: "" });
-      else request.reject(new Error("The solver worker was stopped."));
-    }
+    solveWorker?.terminate();
+    solveWorker = undefined;
+    rejectMatchingRequests((request) => !!request.solve, new Error("The solver worker was stopped."));
     return Promise.resolve(undefined as T);
   }
 
@@ -72,9 +87,9 @@ function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise
   pending.set(id, request);
 
   if (command === "solve") {
-    ensureWorker().postMessage({ id, type: "solve", position: args.position, flags: args.flags || [] });
+    ensureSolveWorker().postMessage({ id, type: "solve", position: args.position, flags: args.flags || [] });
   } else {
-    ensureWorker().postMessage({ id, type: "invoke", command, args });
+    ensureUtilityWorker().postMessage({ id, type: "invoke", command, args });
   }
   return promise;
 }

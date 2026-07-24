@@ -55,7 +55,6 @@ let modulePromise: Promise<EmscriptenModule> | undefined;
 let moduleInstance: EmscriptenModule | undefined;
 let api: WasmApi | undefined;
 let activeSolveId: number | undefined;
-let activeStdout: string[] = [];
 
 const emit = (event: WorkerEvent) => self.postMessage(event);
 
@@ -68,13 +67,11 @@ async function loadModule(): Promise<EmscriptenModule> {
       noInitialRun: true,
       print: (line: string) => {
         if (activeSolveId !== undefined) {
-          activeStdout.push(line);
           emit({ id: activeSolveId, type: "line", line });
         }
       },
       printErr: (line: string) => {
         if (activeSolveId !== undefined) {
-          activeStdout.push(line);
           emit({ id: activeSolveId, type: "line", line });
         }
       },
@@ -135,13 +132,11 @@ async function invoke(command: InvokeRequest & { type: "invoke" }): Promise<unkn
 async function solve(request: InvokeRequest & { type: "solve" }) {
   const mod = await loadModule();
   activeSolveId = request.id;
-  activeStdout = [];
   try {
     const code = mod.callMain(["-v5", ...request.flags, request.position]);
-    emit({ id: request.id, type: "result", result: { code, stdout: `${activeStdout.join("\n")}\n`, stderr: "" } });
+    emit({ id: request.id, type: "result", result: { code, stdout: "", stderr: "" } });
   } finally {
     activeSolveId = undefined;
-    activeStdout = [];
   }
 }
 
