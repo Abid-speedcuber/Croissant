@@ -2744,7 +2744,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solve-a-squan"
+name = "solve-da-squan"
 version = "3.0.0"
 dependencies = [
  "cc",

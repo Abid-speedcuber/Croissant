@@ -566,7 +566,7 @@ public:
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
-    setWindowTitle("Solve-A-Squan");
+    setWindowTitle("Solve-Da-Squan");
     setMinimumSize(720, 560);
     resize(860, 700);
 
@@ -687,7 +687,7 @@ void MainWindow::buildUI()
     {
         QString primary = Theme::textPrimary();
         QString muted = Theme::textMuted();
-        logoLabel->setText(QString("<span style='font-size:17px;font-weight:bold;color:%1;letter-spacing:1px;'>SOLVE-A-SQUAN</span>"
+        logoLabel->setText(QString("<span style='font-size:17px;font-weight:bold;color:%1;letter-spacing:1px;'>SOLVE-DA-SQUAN</span>"
                                    "<br><span style='font-size:10px;color:%2;'>by Abid and Matt</span>")
                                .arg(primary, muted));
     };
@@ -3687,7 +3687,7 @@ void MainWindow::showAboutModal()
 
     QString textPrimary = Theme::textPrimary();
     QString textBody = Theme::textSecondary();
-    QLabel *title = new QLabel("About Solve-A-Squan");
+    QLabel *title = new QLabel("About Solve-Da-Squan");
     title->setStyleSheet(QString("font-size:16px;font-weight:bold;color:%1;background:transparent;").arg(textPrimary));
     QTextBrowser *body = new QTextBrowser();
     body->setReadOnly(true);

@@ -653,6 +653,9 @@ body {
 .mobile-floating-stop {
   display: none;
 }
+.mobile-output-close {
+  display: none;
+}
 * {
   scrollbar-color: #40516a #101722;
   scrollbar-width: thin;
@@ -822,7 +825,7 @@ body {
   .mobile-output-open .output-tools {
     min-height: 42px;
     justify-content: flex-end;
-    padding: 6px 54px 6px 10px;
+    padding: 6px 10px;
     border-radius: 0;
   }
   .mobile-output-open .output-tools button {
@@ -832,6 +835,9 @@ body {
   }
   .mobile-output-open .output-tools .expand-output {
     display: none;
+  }
+  .mobile-output-open .output-tools .mobile-output-close {
+    display: block;
   }
   .mobile-output-open .terminal-shell > .terminal {
     flex: 1 1 auto;

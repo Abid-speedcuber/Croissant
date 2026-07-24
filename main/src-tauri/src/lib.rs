@@ -152,7 +152,7 @@ pub fn run() {
         .manage(SolverState::default())
         .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, two_gen_status])
         .run(tauri::generate_context!())
-        .expect("error while running Solve-A-Squan");
+        .expect("error while running Solve-Da-Squan");
 }
 
 #[cfg(test)]

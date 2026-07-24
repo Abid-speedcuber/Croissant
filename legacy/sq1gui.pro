@@ -6,7 +6,7 @@ INCLUDEPATH += sq1-core
 win32: RC_ICONS = res/icon.ico
 RESOURCES += res/resources.qrc
 
-TARGET   = solve-a-squan
+TARGET   = solve-da-squan
 TEMPLATE = app
 
 win32: CONFIG += windows

@@ -1,3 +1,3 @@
 fn main() {
-    solve_a_squan_lib::run();
+    solve_da_squan_lib::run();
 }

@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
     QApplication app(argc, argv);
-    app.setApplicationName("Solve-A-Squan");
+    app.setApplicationName("Solve-Da-Squan");
     app.setApplicationVersion("2.1");
     app.setWindowIcon(QIcon(":/icon.ico"));
     MainWindow w;

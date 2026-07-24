@@ -789,7 +789,7 @@ function Modal({
       </div>
     ) : type === "about" ? (
       <div className="modal-article">
-        <h2>About Solve-A-Squan</h2>
+        <h2>About Solve-Da-Squan</h2>
         <p>
           This program stemmed from the optimal Square-1 solver by <a href="https://www.jaapsch.net/puzzles/" target="_blank" rel="noreferrer">Jaap Scherphuis</a>.
         </p>
@@ -797,7 +797,7 @@ function Modal({
           v2 was created by Michael Gottlieb (<a href="https://github.com/qqwref" target="_blank" rel="noreferrer">GitHub</a>, <a href="https://www.worldcubeassociation.org/persons/2006GOTT01" target="_blank" rel="noreferrer">WCA</a>), who rewrote the solver with significant improvements and optimisations.
         </p>
         <p>
-          Read the old documentations <a href="https://github.com/abid/solve-a-squan/blob/main/docs/sq1opt_old.txt" target="_blank" rel="noreferrer">here</a>. Note that it is largely not applicable within v3.
+          Read the old documentations <a href="https://github.com/abid/solve-da-squan/blob/main/docs/sq1opt_old.txt" target="_blank" rel="noreferrer">here</a>. Note that it is largely not applicable within v3.
         </p>
         <p>
           This is the official <strong>v3</strong>. New in v3:
@@ -1357,7 +1357,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
   useEffect(() => {
-    const saved = localStorage.getItem("solve-a-squan-settings");
+    const saved = localStorage.getItem("solve-da-squan-settings");
     try { if (saved) {
       const value = JSON.parse(saved) as Record<string, unknown>;
       if (typeof value.smartKarn === "boolean") setSmartKarn(value.smartKarn);
@@ -1390,7 +1390,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!settingsReady.current) return;
-    localStorage.setItem("solve-a-squan-settings", JSON.stringify({
+    localStorage.setItem("solve-da-squan-settings", JSON.stringify({
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle,
       maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue,
@@ -1421,10 +1421,10 @@ export default function App() {
     return () => { cancelled = true; };
   }, [cubeState]);
   useEffect(() => {
-    try { setFavorites(JSON.parse(localStorage.getItem("solve-a-squan-favorites") || "{}")); }
+    try { setFavorites(JSON.parse(localStorage.getItem("solve-da-squan-favorites") || "{}")); }
     catch { setFavorites({}); }
   }, []);
-  useEffect(() => { localStorage.setItem("solve-a-squan-favorites", JSON.stringify(favorites)); }, [favorites]);
+  useEffect(() => { localStorage.setItem("solve-da-squan-favorites", JSON.stringify(favorites)); }, [favorites]);
   const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
@@ -1565,14 +1565,11 @@ export default function App() {
   );
   const renderOutputShell = () => (
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
-      <div className="mobile-modal-head">
-        <b>{tableView ? "Table" : "Terminal"}</b>
-        <button aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>✕</button>
-      </div>
       <div className="output-tools">
         <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
         <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
         <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => setTableView((v) => !v)}>{tableView ? "▤" : "⊞"}</button>
+        <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
         <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "⤡" : "⤢"}</button>
       </div>
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { setTableView(true); setCompletedWhilePaused(false); }}>⊞</button>}
@@ -1599,7 +1596,7 @@ export default function App() {
           ☰
         </button>
         <div className="brand">
-          <b>SOLVE-A-SQUAN</b>
+          <b>SOLVE-DA-SQUAN</b>
           <small>by Abid and Matt</small>
         </div>
       </header>
@@ -1689,7 +1686,7 @@ export default function App() {
             <button title="Redo  [Ctrl+Y]" disabled={!redo.length || running} onClick={doRedo}>Redo (Ctrl+Y)</button>
           </div>
           <button className={`solve ${running ? "is-running" : ""}`} disabled={!running && twoGenBlocked} title={running ? "Stop the current solve and make the UI ready for another solve." : twoGenBlocked ? "This position is not compatible with the selected 2-gen constraints." : commandPreview} onClick={() => void solve()}>{running ? "■ Stop [Ctrl+Enter]" : "▶ Solve [Ctrl+Enter]"}</button>
-          <button className="mobile-open-output" onClick={openMobileOutput}>Open input terminal/table</button>
+          <button className="mobile-open-output" onClick={openMobileOutput}>Open Output Terminal / Table</button>
         </aside>
         <section className="right-column">
           {renderOptionsPanel()}
