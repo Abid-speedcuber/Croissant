@@ -44,7 +44,7 @@ struct TwoGenStatus { compatibility: i32, corners_two: bool, corners_pseudo: boo
 fn run_karn_bridge(input: &str, position: Option<&str>, generator: bool, convert_to_karn: bool) -> Result<String, String> {
     let input = std::ffi::CString::new(input).map_err(|_| "Input contains a NUL byte")?;
     let position_c = std::ffi::CString::new(position.unwrap_or("")).map_err(|_| "Position contains a NUL byte")?;
-    let mut output = vec![0_i8; input.as_bytes().len().saturating_mul(16).max(4096)];
+    let mut output = vec![0 as c_char; input.as_bytes().len().saturating_mul(16).max(4096)];
     let result = unsafe {
         match (convert_to_karn, position) {
             (false, _) => sq1_unkarnify(input.as_ptr(), output.as_mut_ptr(), output.len()),
@@ -146,6 +146,7 @@ fn stop_solver(state: State<'_, SolverState>) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(SolverState::default())

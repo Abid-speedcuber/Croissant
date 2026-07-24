@@ -84,3 +84,8 @@ main/src-tauri/binaries/sq1opt.exe
 main/src-tauri/resources/pruning-tables/
 legacy/build
 public/
+
+# Android build artifacts
+main/src-tauri/gen/
+*.keystore
+*.jks
