@@ -11,24 +11,21 @@ if [[ -z "$platform" ]]; then
   exit 2
 fi
 
+resource_dir="$root_dir/main/src-tauri/resources/pruning-tables"
+if [[ -d "$root_dir/legacy/build/Desktop-Debug/pruning-tables" ]]; then
+  mkdir -p "$resource_dir"
+  cp "$root_dir"/legacy/build/Desktop-Debug/pruning-tables/*.dat "$resource_dir"/
+fi
+echo "Prepared embedded solver pruning tables in $resource_dir"
+
 cd "$root_dir/main"
 npm ci
 
 case "$platform" in
-  linux)
-    "$root_dir/scripts/build-solver.sh" tables
-    npx tauri build
-    ;;
-  windows)
-    "$root_dir/scripts/build-solver.sh" tables
-    npx tauri build
-    ;;
-  macos)
-    "$root_dir/scripts/build-solver.sh" tables
+  linux|windows|macos)
     npx tauri build
     ;;
   android)
-    "$root_dir/scripts/build-solver.sh" tables
     if [[ ! -d src-tauri/gen/android ]]; then
       npx tauri android init
     fi
