@@ -1447,7 +1447,13 @@ export default function App() {
     return rows;
   })();
   const tableSolutions = [...visibleSolutions].sort((a, b) => {
-    if (showErgo && solutions.some((row) => row.ergo !== undefined || row.ergoRaw !== undefined)) return 0;
+    if (showErgo && solutions.some((row) => solutionErgo(row) !== undefined)) {
+      const aErgo = solutionErgo(a), bErgo = solutionErgo(b);
+      const aNan = aErgo === undefined, bNan = bErgo === undefined;
+      if (aNan && !bNan) return 1;
+      if (!aNan && bNan) return -1;
+      if (!aNan && !bNan && aErgo !== bErgo) return bErgo - aErgo;
+    }
     if (a.slices !== b.slices) return a.slices - b.slices;
     return a.moves - b.moves;
   });
