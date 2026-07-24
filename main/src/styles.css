@@ -374,7 +374,7 @@ body {
 .check-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 28px;
+  grid-auto-rows: minmax(28px, auto);
   gap: 0 28px;
   margin: 5px 4px 18px;
   align-items: center;
@@ -390,14 +390,17 @@ body {
   display: flex !important;
   align-items: center;
   gap: 8px;
+  grid-column: 1 / -1;
   min-height: 28px;
+  white-space: nowrap;
 }
 .all-optimal-label {
   color: #9ac7f2;
   font-weight: 700;
-  min-width: 88px;
+  min-width: 76px;
 }
 .stepper-group {
+  flex: 0 0 auto;
   display: inline-flex;
   gap: 4px;
 }
@@ -671,9 +674,18 @@ body {
     height: 385px;
   }
   .select-grid,
-  .check-grid,
   .limit-grid {
     grid-template-columns: 1fr 1fr;
+  }
+  .check-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 18px;
+  }
+  .inline-all-optimal {
+    gap: 7px;
+  }
+  .all-optimal-label {
+    min-width: 68px;
   }
 }
 
