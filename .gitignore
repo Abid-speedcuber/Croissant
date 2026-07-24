@@ -126,3 +126,4 @@ main/src-tauri/gen/android/app/src/main/res/values/*
 !main/src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher*.png
 *.keystore
 *.jks
+.local-jdk/
