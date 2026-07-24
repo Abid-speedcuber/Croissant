@@ -377,9 +377,11 @@ function medianNormalize(rows: Solution[]) {
 function Cube({
   onChange,
   actionsRef,
+  onOptions,
 }: {
   onChange: (s: CubeState, action?: string) => void;
   actionsRef: React.MutableRefObject<CubeActions | undefined>;
+  onOptions: () => void;
 }) {
   const [s, setS] = useState<CubeState>({
     position: [...solved],
@@ -712,6 +714,9 @@ function Cube({
       <button className="cube-reset" onClick={() => invoke("reset")}>
         Reset
       </button>
+      <button className="cube-options" onClick={onOptions}>
+        Options
+      </button>
     </div>
   );
 }
@@ -970,6 +975,7 @@ export default function App() {
     [inputError, setInputError] = useState(""),
     [undo, setUndo] = useState<string[]>([]), [redo, setRedo] = useState<string[]>([]),
     [tableView, setTableView] = useState(false), [expanded, setExpanded] = useState(false),
+    [mobileOptionsOpen, setMobileOptionsOpen] = useState(false), [mobileOutputOpen, setMobileOutputOpen] = useState(false),
     [zoom, setZoom] = useState(1),
     [smartKarn, setSmartKarn] = useState(true), [abidNotation, setAbidNotation] = useState(false),
     [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false);
@@ -1031,6 +1037,10 @@ export default function App() {
     setFollowTerminal(true);
     setCompletedWhilePaused(false);
     node.scrollTop = node.scrollHeight;
+  };
+  const openMobileOutput = () => {
+    setMobileOutputOpen(true);
+    requestAnimationFrame(scrollTerminalToBottom);
   };
   const handleTerminalScroll = () => {
     const node = terminalTextRef.current;
@@ -1262,6 +1272,7 @@ export default function App() {
       const fallback = { raw: "Native solving is available from the Tauri desktop app, not the browser preview.", karn: "Native solving is available from the Tauri desktop app, not the browser preview.", isSolution: false };
       outputLinesRef.current = [fallback];
       setOutputLines([fallback]);
+      openMobileOutput();
       return;
     }
     if (runningRef.current) {
@@ -1274,6 +1285,7 @@ export default function App() {
     }
     if ((two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
         (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)))) return;
+    openMobileOutput();
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     stopped.current = false;
@@ -1491,8 +1503,97 @@ export default function App() {
     maxTotal: "Limit the maximum combined |top|+|bottom| turn per move pair (1-12).",
     depths: "Comma-separated list of depths to search, e.g. 8,9.",
   };
+  const renderOptionsPanel = () => (
+    <div className="options-panel">
+      <div className="mobile-modal-head">
+        <b>Options</b>
+        <button aria-label="Close options" onClick={() => setMobileOptionsOpen(false)}>✕</button>
+      </div>
+      <h2>Options</h2>
+      <div className="select-grid">
+        <label title={tooltips.metric}>Metric<select value={metric} disabled={running} onChange={(e) => setMetric(e.target.value)}><option>Slice</option><option>Move</option><option>Angle</option></select></label>
+        <label title={tooltips.twoGen}>2 Gen<select value={two} disabled={running} onChange={(e) => setTwo(e.target.value)}><option>None</option><option>Pseudo 2 Gen</option><option>2 Gen</option></select></label>
+        <label title={tooltips.angle}>Lock layer angle on preabf<select value={angle} disabled={running} onChange={(e) => setAngle(e.target.value)}><option>None</option><option>Both</option><option>Top</option><option>Bottom</option></select></label>
+        <label title={tooltips.normalize}>Normalize ABF<select value={normalize} disabled={running} onChange={(e) => setNormalize(e.target.value)}><option>None</option><option>Both</option><option>PreABF</option><option>PostABF</option></select></label>
+      </div>
+      <div className="check-grid">
+        <label className="inline-all-optimal" title={tooltips.all}>
+          <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
+          <span>Generate All Solutions:</span>
+          <span className="all-optimal-label">{suboptimal ? `Optimal+${suboptimal}` : "Optimal"}</span>
+          <span className="stepper-group">
+            <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => Math.max(0, value - 1))}>−</button>
+            <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
+          </span>
+        </label>
+        <label title={tooltips.generator}><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
+        <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
+        <label title={tooltips.ignoreEquator}><input type="checkbox" checked={ignoreMiddle} disabled={running} onChange={(e) => toggleIgnoreMiddle(e.target.checked)} /> Ignore equator</label>
+        <label title={tooltips.karn}><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
+      </div>
+      <div className="limit-grid">
+        <label title={tooltips.maxX}>Max top turn:
+          <div className="number-input-wrap">
+            <input type="number" min="0" max="6" value={maxX ? maxXValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxX, setMaxXValue)} />
+            <div className="number-stepper">
+              <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.min(6, (maxX ? value : 0) + 1)); }}>▲</button>
+              <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.max(0, (maxX ? value : 1) - 1)); }}>▼</button>
+            </div>
+          </div>
+        </label>
+        <label title={tooltips.maxY}>Max bottom turn:
+          <div className="number-input-wrap">
+            <input type="number" min="0" max="6" value={maxY ? maxYValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxY, setMaxYValue)} />
+            <div className="number-stepper">
+              <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.min(6, (maxY ? value : 0) + 1)); }}>▲</button>
+              <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.max(0, (maxY ? value : 1) - 1)); }}>▼</button>
+            </div>
+          </div>
+        </label>
+        <label title={tooltips.maxTotal}>Max total turn:
+          <div className="number-input-wrap">
+            <input type="number" min="1" max="12" value={maxTotal ? maxTotalValue : ""} placeholder="12" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 1, 12, setMaxTotal, setMaxTotalValue)} />
+            <div className="number-stepper">
+              <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.min(12, (maxTotal ? value : 0) + 1)); }}>▲</button>
+              <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.max(1, (maxTotal ? value : 2) - 1)); }}>▼</button>
+            </div>
+          </div>
+        </label>
+        <label title={tooltips.depths}>Specific depths:<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
+      </div>
+    </div>
+  );
+  const renderOutputShell = () => (
+    <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
+      <div className="mobile-modal-head">
+        <b>{tableView ? "Table" : "Terminal"}</b>
+        <button aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>✕</button>
+      </div>
+      <div className="output-tools">
+        <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
+        <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
+        <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => setTableView((v) => !v)}>{tableView ? "▤" : "⊞"}</button>
+        <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "⤡" : "⤢"}</button>
+      </div>
+      {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { setTableView(true); setCompletedWhilePaused(false); }}>⊞</button>}
+      {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
+      {running && <button className="mobile-floating-stop" onClick={() => void solve()}>Stop</button>}
+      {tableView ? <div className={`terminal metric-${metric.toLowerCase()} ${showErgo ? "with-ergo" : ""}`}>
+        <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
+        {tableSolutions.map((x, i) => {
+          const ergo = solutionErgo(x);
+          return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+        })}
+      </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
+        {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">solution will be displayed here...</span>}
+        {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
+        {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: line.solution.display }); }}>{renderSolutionText(line.text)}</span>)}
+        {statusLines.map((line, index) => <span key={`status-${index}-${line}`} className="terminal-line terminal-line-final">{line}</span>)}
+      </div>}
+    </div>
+  );
   return (
-    <div className={`app ${expanded ? "output-expanded" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
+    <div className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
         <button className="hamburger" title={tooltips.menu} onClick={() => setMenu(true)}>
           ☰
@@ -1568,6 +1669,7 @@ export default function App() {
           <Cube
             actionsRef={cubeActions}
             onChange={onCubeChange}
+            onOptions={() => setMobileOptionsOpen(true)}
           />
           <div className="moves">
             <button title="Turn top layer counterclockwise." onClick={() => cubeActions.current?.up()}>U′</button>
@@ -1587,84 +1689,11 @@ export default function App() {
             <button title="Redo  [Ctrl+Y]" disabled={!redo.length || running} onClick={doRedo}>Redo (Ctrl+Y)</button>
           </div>
           <button className={`solve ${running ? "is-running" : ""}`} disabled={!running && twoGenBlocked} title={running ? "Stop the current solve and make the UI ready for another solve." : twoGenBlocked ? "This position is not compatible with the selected 2-gen constraints." : commandPreview} onClick={() => void solve()}>{running ? "■ Stop [Ctrl+Enter]" : "▶ Solve [Ctrl+Enter]"}</button>
+          <button className="mobile-open-output" onClick={openMobileOutput}>Open input terminal/table</button>
         </aside>
         <section className="right-column">
-          <div className="options-panel">
-            <h2>Options</h2>
-            <div className="select-grid">
-              <label title={tooltips.metric}>Metric<select value={metric} disabled={running} onChange={(e) => setMetric(e.target.value)}><option>Slice</option><option>Move</option><option>Angle</option></select></label>
-              <label title={tooltips.twoGen}>2 Gen<select value={two} disabled={running} onChange={(e) => setTwo(e.target.value)}><option>None</option><option>Pseudo 2 Gen</option><option>2 Gen</option></select></label>
-              <label title={tooltips.angle}>Lock layer angle on preabf<select value={angle} disabled={running} onChange={(e) => setAngle(e.target.value)}><option>None</option><option>Both</option><option>Top</option><option>Bottom</option></select></label>
-              <label title={tooltips.normalize}>Normalize ABF<select value={normalize} disabled={running} onChange={(e) => setNormalize(e.target.value)}><option>None</option><option>Both</option><option>PreABF</option><option>PostABF</option></select></label>
-            </div>
-            <div className="check-grid">
-              <label className="inline-all-optimal" title={tooltips.all}>
-                <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
-                <span>Generate All Solutions:</span>
-                <span className="all-optimal-label">{suboptimal ? `Optimal+${suboptimal}` : "Optimal"}</span>
-                <span className="stepper-group">
-                  <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => Math.max(0, value - 1))}>−</button>
-                  <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
-                </span>
-              </label>
-              <label title={tooltips.generator}><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
-              <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
-              <label title={tooltips.ignoreEquator}><input type="checkbox" checked={ignoreMiddle} disabled={running} onChange={(e) => toggleIgnoreMiddle(e.target.checked)} /> Ignore equator</label>
-              <label title={tooltips.karn}><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
-            </div>
-            <div className="limit-grid">
-              <label title={tooltips.maxX}>Max top turn:
-                <div className="number-input-wrap">
-                  <input type="number" min="0" max="6" value={maxX ? maxXValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxX, setMaxXValue)} />
-                  <div className="number-stepper">
-                    <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.min(6, (maxX ? value : 0) + 1)); }}>▲</button>
-                    <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.max(0, (maxX ? value : 1) - 1)); }}>▼</button>
-                  </div>
-                </div>
-              </label>
-              <label title={tooltips.maxY}>Max bottom turn:
-                <div className="number-input-wrap">
-                  <input type="number" min="0" max="6" value={maxY ? maxYValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxY, setMaxYValue)} />
-                  <div className="number-stepper">
-                    <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.min(6, (maxY ? value : 0) + 1)); }}>▲</button>
-                    <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.max(0, (maxY ? value : 1) - 1)); }}>▼</button>
-                  </div>
-                </div>
-              </label>
-              <label title={tooltips.maxTotal}>Max total turn:
-                <div className="number-input-wrap">
-                  <input type="number" min="1" max="12" value={maxTotal ? maxTotalValue : ""} placeholder="12" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 1, 12, setMaxTotal, setMaxTotalValue)} />
-                  <div className="number-stepper">
-                    <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.min(12, (maxTotal ? value : 0) + 1)); }}>▲</button>
-                    <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.max(1, (maxTotal ? value : 2) - 1)); }}>▼</button>
-                  </div>
-                </div>
-              </label>
-              <label title={tooltips.depths}>Specific depths:<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
-            </div>
-          </div>
-          <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
-            <div className="output-tools">
-              <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
-              <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
-              <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => setTableView((v) => !v)}>{tableView ? "▤" : "⊞"}</button>
-              <button title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "⤡" : "⤢"}</button>
-            </div>
-            {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { setTableView(true); setCompletedWhilePaused(false); }}>⊞</button>}
-            {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
-            {tableView ? <div className={`terminal metric-${metric.toLowerCase()} ${showErgo ? "with-ergo" : ""}`}>
-              <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
-              {tableSolutions.map((x, i) => {
-                const ergo = solutionErgo(x);
-                return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
-              })}
-            </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
-              {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">solution will be displayed here...</span>}
-              {terminalNonSolutions.map((line, index) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
-              {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: line.solution.display }); }}>{renderSolutionText(line.text)}</span>)}
-              {statusLines.map((line, index) => <span key={`status-${index}-${line}`} className="terminal-line terminal-line-final">{line}</span>)}
-            </div>}
-          </div>
+          {renderOptionsPanel()}
+          {renderOutputShell()}
         </section>
       </div>
       {menu && (
