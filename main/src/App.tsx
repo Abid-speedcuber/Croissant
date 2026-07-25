@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const solved = [
   0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7,
@@ -987,6 +987,11 @@ export default function App() {
   const [completedWhilePaused, setCompletedWhilePaused] = useState(false);
   const [outputToolsFaded, setOutputToolsFaded] = useState(false);
   const terminalTextRef = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const terminalScrollPositionRef = useRef(0);
+  const tableScrollPositionRef = useRef(0);
+  const firstTableSwitchAfterSolveRef = useRef(true);
+  const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
 
   useEffect(() => {
@@ -1053,13 +1058,51 @@ export default function App() {
   const handleTerminalScroll = () => {
     const node = terminalTextRef.current;
     if (!node) return;
+    // Save current terminal scroll position
+    terminalScrollPositionRef.current = node.scrollTop;
+    // Detect if user scrolled up during solving
     const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
     followTerminalRef.current = nearBottom;
     setFollowTerminal(nearBottom);
   };
+  const handleTableScroll = () => {
+    const node = tableContainerRef.current;
+    if (!node) return;
+    // Save current table scroll position
+    tableScrollPositionRef.current = node.scrollTop;
+  };
+  const switchToTableMode = () => {
+    if (terminalTextRef.current) {
+      terminalScrollPositionRef.current = terminalTextRef.current.scrollTop;
+    }
+    if (firstTableSwitchAfterSolveRef.current) {
+      terminalScrollPositionRef.current = 0;
+      tableScrollPositionRef.current = 0;
+      firstTableSwitchAfterSolveRef.current = false;
+    }
+    isSwitchingViewRef.current = true;
+    setTableView(true);
+  };
+  const switchToTerminalMode = () => {
+    if (tableContainerRef.current) {
+      tableScrollPositionRef.current = tableContainerRef.current.scrollTop;
+    }
+    isSwitchingViewRef.current = true;
+    setTableView(false);
+  };
+  useLayoutEffect(() => {
+    if (tableView && tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = tableScrollPositionRef.current;
+    } else if (!tableView && terminalTextRef.current) {
+      terminalTextRef.current.scrollTop = terminalScrollPositionRef.current;
+    }
+  }, [tableView]);
   useEffect(() => {
-    if (followTerminal) requestAnimationFrame(scrollTerminalToBottom);
+    if (followTerminal && !isSwitchingViewRef.current) requestAnimationFrame(scrollTerminalToBottom);
   }, [outputLines, statusLines, solutions, tableView, running, followTerminal]);
+  useEffect(() => {
+    isSwitchingViewRef.current = false;
+  }, [tableView]);
   const armOutputToolFade = () => {
     if (outputIdleTimer.current !== undefined) window.clearTimeout(outputIdleTimer.current);
     outputIdleTimer.current = window.setTimeout(() => setOutputToolsFaded(true), 1500);
@@ -1306,6 +1349,9 @@ export default function App() {
     firstSolutionAt.current = 0;
     followTerminalRef.current = true;
     lastSolveCubeShape.current = cubeShape;
+    firstTableSwitchAfterSolveRef.current = true;
+    terminalScrollPositionRef.current = 0;
+    tableScrollPositionRef.current = 0;
     setRunCubeShape(cubeShape);
     setOutputLines([{ raw: "Solving…", karn: "Solving…", isSolution: false }]);
     outputLinesRef.current = [{ raw: "Solving…", karn: "Solving…", isSolution: false }];
@@ -1339,7 +1385,7 @@ export default function App() {
       if (count) {
         if (followTerminalRef.current) {
           const delay = firstSolutionAt.current && performance.now() - firstSolutionAt.current < 3000 ? 400 : 0;
-          window.setTimeout(() => setTableView(true), delay);
+          window.setTimeout(() => switchToTableMode(), delay);
         } else {
           setCompletedWhilePaused(true);
         }
@@ -1604,14 +1650,14 @@ export default function App() {
       <div className="output-tools">
         <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
         <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
-        <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => setTableView((v) => !v)}>{tableView ? "▤" : "⊞"}</button>
+        <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
         <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
         <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "⤡" : "⤢"}</button>
       </div>
-      {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { setTableView(true); setCompletedWhilePaused(false); }}>⊞</button>}
+      {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>Stop</button>}
-      {tableView ? <div className={`terminal metric-${metric.toLowerCase()} ${showErgo ? "with-ergo" : ""}`}>
+      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${metric.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll}>
         <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = solutionErgo(x);
