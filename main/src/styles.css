@@ -151,17 +151,45 @@ body {
 .main-grid {
   display: grid;
   grid-template-columns: 344px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "cube options"
+    "cube terminal";
   gap: 10px;
   padding: 10px;
   min-height: 0;
   overflow: hidden;
 }
 .cube-column {
+  grid-area: cube;
   border-right: 1px solid #2a3445;
   padding-right: 4px;
   min-height: 0;
   overflow-y: auto;
 }
+.options-panel {
+  grid-area: options;
+  container-type: inline-size;
+}
+.terminal-shell {
+  grid-area: terminal;
+}
+
+@media (min-height: 840px) {
+  .main-grid {
+    grid-template-rows: auto minmax(230px, 1fr);
+    grid-template-areas:
+      "cube options"
+      "terminal terminal";
+  }
+  .options-panel {
+    align-self: stretch;
+  }
+  .terminal-shell {
+    min-height: 230px;
+  }
+}
+
 .cube-holder {
   height: 385px;
   position: relative;
@@ -253,14 +281,6 @@ body {
 }
 .mobile-open-output {
   display: none;
-}
-.right-column {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  gap: 5px;
-  container-type: inline-size;
 }
 .options-panel {
   flex: 0 1 373px;
@@ -726,9 +746,6 @@ body {
     min-height: 0;
     overflow-y: auto;
   }
-  .right-column {
-    display: contents;
-  }
   .options-panel {
     display: none;
   }
@@ -1139,9 +1156,6 @@ body {
 }
 .output-expanded .main-grid {
   grid-template-columns: 1fr;
-}
-.output-expanded .right-column {
-  height: 100%;
 }
 .output-expanded .terminal-head,
 .output-expanded .solution {

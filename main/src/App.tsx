@@ -1694,10 +1694,8 @@ export default function App() {
           <button className={`solve ${running ? "is-running" : ""}`} disabled={!running && twoGenBlocked} title={running ? "Stop the current solve and make the UI ready for another solve." : twoGenBlocked ? "This position is not compatible with the selected 2-gen constraints." : commandPreview} onClick={() => void solve()}>{running ? "■ Stop [Ctrl+Enter]" : "▶ Solve [Ctrl+Enter]"}</button>
           <button className="mobile-open-output" onClick={openMobileOutput}>Open Output Terminal / Table</button>
         </aside>
-        <section className="right-column">
-          {renderOptionsPanel()}
-          {renderOutputShell()}
-        </section>
+        {renderOptionsPanel()}
+        {renderOutputShell()}
       </div>
       {menu && (
         <div className="shade" onClick={() => setMenu(false)}>
