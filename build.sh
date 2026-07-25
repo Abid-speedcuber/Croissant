@@ -133,7 +133,7 @@ ensure_release_keystore() {
     -validity 10000 \
     -storepass "$ANDROID_KEYSTORE_PASS" \
     -keypass "$ANDROID_KEY_PASS" \
-    -dname "CN=Solve-Da-Squan, OU=Development, O=Solve-Da-Squan, L=Unknown, ST=Unknown, C=US"
+    -dname "CN=Croissant, OU=Development, O=Croissant, L=Unknown, ST=Unknown, C=US"
 }
 
 sign_apk() {

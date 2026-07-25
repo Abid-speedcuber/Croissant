@@ -789,7 +789,7 @@ function Modal({
       </div>
     ) : type === "about" ? (
       <div className="modal-article">
-        <h2>About Solve-Da-Squan</h2>
+        <h2>About Croissant</h2>
         <p>
           This program stemmed from the optimal Square-1 solver by <a href="https://www.jaapsch.net/puzzles/" target="_blank" rel="noreferrer">Jaap Scherphuis</a>.
         </p>
@@ -797,7 +797,7 @@ function Modal({
           v2 was created by Michael Gottlieb (<a href="https://github.com/qqwref" target="_blank" rel="noreferrer">GitHub</a>, <a href="https://www.worldcubeassociation.org/persons/2006GOTT01" target="_blank" rel="noreferrer">WCA</a>), who rewrote the solver with significant improvements and optimisations.
         </p>
         <p>
-          Read the old documentations <a href="https://github.com/abid/solve-da-squan/blob/main/docs/sq1opt_old.txt" target="_blank" rel="noreferrer">here</a>. Note that it is largely not applicable within v3.
+          Read the old documentations <a href="https://github.com/abid/croissant/blob/main/docs/sq1opt_old.txt" target="_blank" rel="noreferrer">here</a>. Note that it is largely not applicable within v3.
         </p>
         <p>
           This is the official <strong>v3</strong>. New in v3:
@@ -987,7 +987,15 @@ export default function App() {
   const [completedWhilePaused, setCompletedWhilePaused] = useState(false);
   const [outputToolsFaded, setOutputToolsFaded] = useState(false);
   const terminalTextRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(1);
 
+  useEffect(() => {
+    const el = document.documentElement;
+    const update = () => el.classList.toggle("tall-viewport", window.innerHeight / zoomRef.current >= 810);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (!modeControlRef.current?.contains(event.target as Node)) {
@@ -1348,9 +1356,30 @@ export default function App() {
         event.preventDefault();
         void solve();
       }
-      if (event.ctrlKey && (event.key === "=" || event.key === "+")) { event.preventDefault(); setZoom((value) => Math.min(2, Math.round((value + 0.1) * 10) / 10)); }
-      if (event.ctrlKey && event.key === "-") { event.preventDefault(); setZoom((value) => Math.max(0.5, Math.round((value - 0.1) * 10) / 10)); }
-      if (event.ctrlKey && event.key === "0") { event.preventDefault(); setZoom(1); }
+      if (event.ctrlKey && (event.key === "=" || event.key === "+")) {
+        event.preventDefault();
+        setZoom((value) => {
+          const next = Math.min(2, Math.round((value + 0.1) * 10) / 10);
+          zoomRef.current = next;
+          document.documentElement.classList.toggle("tall-viewport", window.innerHeight / next >= 810);
+          return next;
+        });
+      }
+      if (event.ctrlKey && event.key === "-") {
+        event.preventDefault();
+        setZoom((value) => {
+          const next = Math.max(0.5, Math.round((value - 0.1) * 10) / 10);
+          zoomRef.current = next;
+          document.documentElement.classList.toggle("tall-viewport", window.innerHeight / next >= 810);
+          return next;
+        });
+      }
+      if (event.ctrlKey && event.key === "0") {
+        event.preventDefault();
+        zoomRef.current = 1;
+        setZoom(1);
+        document.documentElement.classList.toggle("tall-viewport", window.innerHeight >= 810);
+      }
       if (event.ctrlKey && event.key.toLowerCase() === "z") { event.preventDefault(); doUndo(); }
       if (event.ctrlKey && event.key.toLowerCase() === "y") { event.preventDefault(); doRedo(); }
     };
@@ -1358,7 +1387,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
   useEffect(() => {
-    const saved = localStorage.getItem("solve-da-squan-settings");
+    const saved = localStorage.getItem("croissant-settings");
     try { if (saved) {
       const value = JSON.parse(saved) as Record<string, unknown>;
       if (typeof value.smartKarn === "boolean") setSmartKarn(value.smartKarn);
@@ -1391,7 +1420,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!settingsReady.current) return;
-    localStorage.setItem("solve-da-squan-settings", JSON.stringify({
+    localStorage.setItem("croissant-settings", JSON.stringify({
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle,
       maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue,
@@ -1422,10 +1451,10 @@ export default function App() {
     return () => { cancelled = true; };
   }, [cubeState]);
   useEffect(() => {
-    try { setFavorites(JSON.parse(localStorage.getItem("solve-da-squan-favorites") || "{}")); }
+    try { setFavorites(JSON.parse(localStorage.getItem("croissant-favorites") || "{}")); }
     catch { setFavorites({}); }
   }, []);
-  useEffect(() => { localStorage.setItem("solve-da-squan-favorites", JSON.stringify(favorites)); }, [favorites]);
+  useEffect(() => { localStorage.setItem("croissant-favorites", JSON.stringify(favorites)); }, [favorites]);
   const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
@@ -1603,7 +1632,7 @@ export default function App() {
           ☰
         </button>
         <div className="brand">
-          <b>SOLVE-DA-SQUAN</b>
+          <b>CROISSANT</b>
           <small>by Abid and Matt</small>
         </div>
       </header>

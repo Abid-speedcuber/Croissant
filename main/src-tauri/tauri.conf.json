@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Solve-Da-Squan",
+  "productName": "Croissant",
   "version": "3.0.0",
-  "identifier": "com.solvedasquan.desktop",
+  "identifier": "com.croissant.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -11,7 +11,7 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{ "title": "Solve-Da-Squan", "width": 1000, "height": 760, "minWidth": 720, "minHeight": 560, "resizable": true }],
+    "windows": [{ "title": "Croissant", "width": 1000, "height": 760, "minWidth": 720, "minHeight": 560, "resizable": true }],
     "security": { "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline';" }
   },
   "bundle": {
