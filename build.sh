@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Usage: ./build.sh {linux|windows|macos|android} [--aarch64] [--armv7] [--i686] [--x86_64]
+# Usage: ./build.sh {linux|windows|macos|android} [flags]
 # Desktop artifacts must be built on their target OS, or with an appropriately
 # configured Rust/C++ cross toolchain. Android requires the Tauri Android SDK.
+#
+# Linux bundle flags:
+#   --appimage   Build AppImage only
+#   --deb        Build .deb package only
+#   --rpm        Build .rpm package only
+#   (default: all formats)
 #
 # Android architecture flags:
 #   --aarch64    Build for 64-bit ARM (most modern phones)
@@ -22,7 +28,7 @@ set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 platform="${1:-}"
 if [[ -z "$platform" ]]; then
-  echo "Usage: $0 {windows|linux|macos|android} [--aarch64] [--armv7] [--i686] [--x86_64]" >&2
+  echo "Usage: $0 {windows|linux|macos|android} [flags]" >&2
   exit 2
 fi
 
@@ -195,11 +201,45 @@ cd "$root_dir/main"
 npm install
 
 case "$platform" in
-  linux|windows|macos)
-    npx tauri build
-    if [[ "$platform" == "linux" ]]; then
+  linux)
+    shift || true
+    build_appimage=false
+    build_deb=false
+    build_rpm=false
+    for arg in "$@"; do
+      case "$arg" in
+        --appimage) build_appimage=true ;;
+        --deb)      build_deb=true ;;
+        --rpm)      build_rpm=true ;;
+        *) echo "Unknown flag: $arg" >&2; exit 2 ;;
+      esac
+    done
+
+    if ! $build_appimage && ! $build_deb && ! $build_rpm; then
+      build_appimage=true
+      build_deb=true
+      build_rpm=true
+    fi
+
+    bundles=()
+    $build_appimage && bundles+=("appimage")
+    $build_deb      && bundles+=("deb")
+    $build_rpm      && bundles+=("rpm")
+
+    echo "Building Linux bundles: ${bundles[*]}"
+
+    tauri_args=()
+    for b in "${bundles[@]}"; do
+      tauri_args+=(--bundles "$b")
+    done
+    npx tauri build "${tauri_args[@]}"
+
+    if $build_appimage; then
       "$root_dir/fix-appimage-icon.sh"
     fi
+    ;;
+  windows|macos)
+    npx tauri build
     ;;
   android)
     shift || true

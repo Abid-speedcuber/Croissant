@@ -7,6 +7,7 @@
 //   karnifycs(alg, stateHex, generatorMode)
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <vector>
 #include <sstream>
@@ -400,6 +401,80 @@ inline std::string replaceWithVector(std::string str, const std::vector<std::pai
 }
 
 // ===========================================================================
+// OPTIMIZED: Hash map versions for O(1) lookup instead of O(n) vector search
+// ===========================================================================
+
+// Lazy-initialized hash maps
+inline std::unordered_map<std::string, std::string> &getWCAToKarnMap()
+{
+    static std::unordered_map<std::string, std::string> map;
+    static bool initialized = false;
+    if (!initialized) {
+        for (const auto &[k, v] : WCA_TO_KARN) {
+            map[k] = v;
+        }
+        initialized = true;
+    }
+    return map;
+}
+
+inline std::unordered_map<std::string, std::string> &getWCAToKarnOCSMap()
+{
+    static std::unordered_map<std::string, std::string> map;
+    static bool initialized = false;
+    if (!initialized) {
+        for (const auto &[k, v] : WCA_TO_KARN_OCS) {
+            map[k] = v;
+        }
+        initialized = true;
+    }
+    return map;
+}
+
+inline std::unordered_map<std::string, std::string> &getKarnToHighKarnMap()
+{
+    static std::unordered_map<std::string, std::string> map;
+    static bool initialized = false;
+    if (!initialized) {
+        for (const auto &[k, v] : KARN_TO_HIGHKARN) {
+            map[k] = v;
+        }
+        initialized = true;
+    }
+    return map;
+}
+
+inline std::unordered_map<std::string, std::string> &getKarnToHighKarnOCSMap()
+{
+    static std::unordered_map<std::string, std::string> map;
+    static bool initialized = false;
+    if (!initialized) {
+        for (const auto &[k, v] : KARN_TO_HIGHKARN_OCS) {
+            map[k] = v;
+        }
+        initialized = true;
+    }
+    return map;
+}
+
+// Helper: Apply KARN_TO_HIGHKARN replacements with hash map optimization
+inline std::string applyHighKarnReplacements(std::string str, const std::unordered_map<std::string, std::string> &map)
+{
+    std::string prev;
+    do
+    {
+        prev = str;
+        for (const auto &[k, v] : map)
+        {
+            str = replaceAll(str, k, v);
+            if (str != prev)
+                break;
+        }
+    } while (str != prev);
+    return str;
+}
+
+// ===========================================================================
 // splitStr / addCommasToMove / getAlignment — helpers shared with sq1_logic
 // ===========================================================================
 
@@ -721,6 +796,7 @@ inline std::string unkarnify(const std::string &algIn)
 // Accepts only the alg portion (no bracket suffix).
 // Commas are stripped; numeric moves that have no Karn name stay as numeric
 // but with commas removed (e.g. "-1,2" -> "-12").
+// OPTIMIZED: Uses hash map lookups instead of linear vector search.
 // ===========================================================================
 inline std::string karnify(const std::string &algPart)
 {
@@ -757,7 +833,8 @@ inline std::string karnify(const std::string &algPart)
         return false;
     };
 
-    // Per-token karnification.
+    // Per-token karnification using hash map lookup (OPTIMIZED).
+    auto &wcaMap = getWCAToKarnMap();
     std::vector<std::string> out_tokens;
     for (size_t i = 0; i < tokens.size(); i++)
     {
@@ -767,15 +844,22 @@ inline std::string karnify(const std::string &algPart)
 
         if (canKarn)
         {
-            std::string k = replaceWithVector(" " + tokens[i] + " ", WCA_TO_KARN);
-            k = trimStr(k);
+            // Hash map lookup for O(1) instead of O(n) vector search
+            std::string padded = " " + tokens[i] + " ";
+            auto it = wcaMap.find(padded);
+            std::string k;
+            if (it != wcaMap.end()) {
+                k = trimStr(it->second);
+            } else {
+                // Fallback: not found in map, keep numeric with commas removed
+                k = replaceAll(tokens[i], ",", "");
+            }
+            // Remove duplicate spaces that might have been introduced
             std::string prev;
-            do
-            {
+            do {
                 prev = k;
                 k = replaceAll(k, "  ", " ");
             } while (k != prev);
-            k = replaceAll(k, ",", "");
             out_tokens.push_back(k);
         }
         else
@@ -792,14 +876,10 @@ inline std::string karnify(const std::string &algPart)
     for (size_t i = 0; i < out_tokens.size(); i++)
         out += " " + out_tokens[i];
 
-    std::string k = replaceWithVector(" " + out + " ", KARN_TO_HIGHKARN);
+    // Apply KARN_TO_HIGHKARN replacements (still needs do-while for combining moves)
+    auto &highKarnMap = getKarnToHighKarnMap();
+    std::string k = applyHighKarnReplacements(" " + out + " ", highKarnMap);
     k = trimStr(k);
-    std::string prev;
-    do
-    {
-        prev = k;
-        k = replaceAll(k, "  ", " ");
-    } while (k != prev);
 
     return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
            ((trailingSlash && !lastIsKarn) ? "/" : "");
@@ -1029,6 +1109,11 @@ inline std::string karnifycs(
     // inspect the first/last output before deciding on leading/trailing slashes.
     std::vector<std::string> substGroups;
     substGroups.reserve(groups.size());
+    
+    // Get optimized hash maps for O(1) lookups
+    auto &wcaToKarnMap = getWCAToKarnMap();
+    auto &wcaToKarnOCSMap = getWCAToKarnOCSMap();
+    
     for (size_t gi = 0; gi < groups.size(); gi++)
     {
         const auto &g = groups[gi];
@@ -1040,9 +1125,19 @@ inline std::string karnifycs(
         std::string subst;
         if (canKarn)
         {
-            const auto &table = g.inCS ? WCA_TO_KARN : WCA_TO_KARN_OCS;
-            subst = replaceWithVector(" " + g.joined + " ", table);
-            subst = trimStr(subst);
+            // Use hash map lookup instead of replaceWithVector (OPTIMIZED)
+            const auto &map = g.inCS ? wcaToKarnMap : wcaToKarnOCSMap;
+            std::string padded = " " + g.joined + " ";
+            
+            // Try hash map lookup first
+            auto it = map.find(padded);
+            if (it != map.end()) {
+                subst = trimStr(it->second);
+            } else {
+                // Fallback: if not found, keep numeric with commas removed
+                subst = g.joined;
+            }
+            
             std::string prev;
             do
             {
@@ -1083,14 +1178,10 @@ inline std::string karnifycs(
         out += s;
     }
 
-    std::string k = replaceWithVector(" " + out + " ", KARN_TO_HIGHKARN_OCS);
+    // Apply KARN_TO_HIGHKARN_OCS replacements using optimized function
+    auto &highKarnOCSMap = getKarnToHighKarnOCSMap();
+    std::string k = applyHighKarnReplacements(" " + out + " ", highKarnOCSMap);
     k = trimStr(k);
-    std::string prev;
-    do
-    {
-        prev = k;
-        k = replaceAll(k, "  ", " ");
-    } while (k != prev);
 
     return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
            ((trailingSlash && !lastIsKarn) ? "/" : "");

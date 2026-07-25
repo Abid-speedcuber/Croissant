@@ -175,9 +175,9 @@ body {
   grid-area: terminal;
 }
 
-@media (min-height: 840px) {
+@media (min-height: 810px) {
   .main-grid {
-    grid-template-rows: auto minmax(230px, 1fr);
+    grid-template-rows: auto minmax(160px, 1fr);
     grid-template-areas:
       "cube options"
       "terminal terminal";
@@ -186,7 +186,7 @@ body {
     align-self: stretch;
   }
   .terminal-shell {
-    min-height: 230px;
+    min-height: 160px;
   }
 }
 

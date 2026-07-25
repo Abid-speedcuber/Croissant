@@ -1233,6 +1233,8 @@ export default function App() {
     scheduleSolutionFlush();
   };
   const receiveSolverLine = async (line: string, startPosition: string, runId: number) => {
+    // Early exit: don't process lines if stop was requested
+    if (stopped.current) return;
     if (runId !== solveRunId.current) return;
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
     if (lb < 0 || rb < 0) {
@@ -1250,9 +1252,8 @@ export default function App() {
         if (rating.valid) sliceStart = ratingSliceStart(rating);
       } catch { /* an unrated row remains available */ }
     }
-    const { rawDisplay, karnDisplay } = stopped.current
-      ? { rawDisplay: injectSliceIndicator(line, sliceStart), karnDisplay: injectSliceIndicator(line, sliceStart) }
-      : await buildDisplayPair(line, startPosition, sliceStart);
+    // Always apply karnify, even for late solutions (FIXED: removed stopped.current check)
+    const { rawDisplay, karnDisplay } = await buildDisplayPair(line, startPosition, sliceStart);
     if (runId !== solveRunId.current) return;
     const displayAlg = lineAlg(normalizeLine(karn ? karnDisplay : rawDisplay));
     if (seenDisplay.current.has(displayAlg)) return;
