@@ -16,3 +16,4 @@ cc = "1"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2.0.0", features = [] }
+tauri-plugin-store = "2.4.4"

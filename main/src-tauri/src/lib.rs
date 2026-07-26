@@ -149,6 +149,7 @@ fn stop_solver(state: State<'_, SolverState>) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(SolverState::default())
         .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, two_gen_status])
         .run(tauri::generate_context!())

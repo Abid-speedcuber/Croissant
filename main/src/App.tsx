@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { loadSettings, saveSettings, loadFavorites, saveFavorites } from "./storage";
 
 const solved = [
   0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7,
@@ -997,6 +998,7 @@ export default function App() {
   const slicePending = useRef<string[]>([]), sliceTimer = useRef<number | undefined>(undefined);
   const stopped = useRef(false);
   const settingsReady = useRef(false);
+  const favoritesReady = useRef(false);
   const [menu, setMenu] = useState(false),
     [modal, setModal] = useState<Modal>(null),
     [modeMenu, setModeMenu] = useState(false),
@@ -1511,9 +1513,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
   useEffect(() => {
-    const saved = localStorage.getItem("croissant-settings");
-    try { if (saved) {
-      const value = JSON.parse(saved) as Record<string, unknown>;
+    void loadSettings().then((value) => {
+      if (!value) return;
       if (typeof value.smartKarn === "boolean") setSmartKarn(value.smartKarn);
       if (typeof value.abidNotation === "boolean") setAbidNotation(value.abidNotation);
       if (typeof value.ignoreTransforms === "boolean") setIgnoreTransforms(value.ignoreTransforms);
@@ -1539,16 +1540,16 @@ export default function App() {
       if (typeof value.maxYValue === "number") setMaxYValue(value.maxYValue);
       if (typeof value.maxTotal === "boolean") setMaxTotal(value.maxTotal);
       if (typeof value.maxTotalValue === "number") setMaxTotalValue(value.maxTotalValue);
-    }} catch { /* ignore corrupt local settings */ }
-    queueMicrotask(() => { settingsReady.current = true; });
+      queueMicrotask(() => { settingsReady.current = true; });
+    });
   }, []);
   useEffect(() => {
     if (!settingsReady.current) return;
-    localStorage.setItem("croissant-settings", JSON.stringify({
+    void saveSettings({
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle,
       maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue,
-    }));
+    });
   }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue]);
   useEffect(() => {
     if (!solutions.length || running) return;
@@ -1575,10 +1576,15 @@ export default function App() {
     return () => { cancelled = true; };
   }, [cubeState]);
   useEffect(() => {
-    try { setFavorites(JSON.parse(localStorage.getItem("croissant-favorites") || "{}")); }
-    catch { setFavorites({}); }
+    void loadFavorites().then((value) => {
+      if (value) setFavorites(value);
+      queueMicrotask(() => { favoritesReady.current = true; });
+    });
   }, []);
-  useEffect(() => { localStorage.setItem("croissant-favorites", JSON.stringify(favorites)); }, [favorites]);
+  useEffect(() => {
+    if (!favoritesReady.current) return;
+    void saveFavorites(favorites);
+  }, [favorites]);
   const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const specificDepthsActive = depths.trim().length > 0;
@@ -1741,7 +1747,7 @@ export default function App() {
         <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
         <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
         <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
-        <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "⤡" : "⤢"}</button>
+        <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
       </div>
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
