@@ -400,6 +400,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "croissant"
+version = "3.0.0"
+dependencies = [
+ "cc",
+ "serde",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2741,16 +2751,6 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "croissant"
-version = "3.0.0"
-dependencies = [
- "cc",
- "serde",
- "tauri",
- "tauri-build",
 ]
 
 [[package]]

@@ -99,11 +99,7 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
         if (lb != std::string::npos) a = a.substr(0, lb);
     }
     a = trimStr(a);
-    bool isKarnAlg = false;
-    for (char ch : a)
-        if (std::isalpha(ch)) { isKarnAlg = true; break; }
-
-    std::string numeric = isKarnAlg ? unkarnify(a) : replaceAll(a, " ", "");
+    std::string numeric = unkarnify(a);
     auto rawParts = splitStr(numeric, '/');
     std::vector<std::string> r;
     for (size_t i = 0; i < rawParts.size(); i++) {
@@ -193,12 +189,7 @@ rateAndSort(const QStringList &solutionLines, const QString &posHex, bool useKar
         AlgRating rating;
         bool rated = false;
         try {
-            // Always rate on numeric alg — unkarnify if needed
-            std::string numericAlg = algOnly;
-            bool isKarn = false;
-            for (char ch : algOnly)
-                if (std::isalpha((unsigned char)ch)) { isKarn = true; break; }
-            if (isKarn) numericAlg = unkarnify(algOnly);
+            std::string numericAlg = unkarnify(algOnly);
 
             rating = rateAlg(numericAlg, initial_top_A, W1, W2, W3, W4);
             if (rating.valid)
