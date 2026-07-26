@@ -200,8 +200,16 @@ fi
 cd "$root_dir/main"
 npm install
 
-echo "Generating icons..."
-"$root_dir/icon.sh"
+case "$platform" in
+  linux|windows|macos)
+    echo "Generating desktop icons..."
+    "$root_dir/icon.sh" --pc
+    ;;
+  android)
+    echo "Generating desktop + mobile icons..."
+    "$root_dir/icon.sh" --pc --mobile
+    ;;
+esac
 
 case "$platform" in
   linux)

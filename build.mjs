@@ -43,6 +43,11 @@ function requireTool(command, installHint) {
 
 requireTool("emcc", "Install and activate Emscripten, then rerun: node build.mjs");
 
+const iconScript = resolve(root, "icon.sh");
+if (existsSync(iconScript)) {
+  run("bash", [iconScript, "--web"]);
+}
+
 mkdirSync(wasmOut, { recursive: true });
 
 run("emcc", [
