@@ -64,6 +64,58 @@ type RatingResult = {
 };
 type TwoGenStatus = { compatibility: number; cornersTwo: boolean; cornersPseudo: boolean };
 type DisplaySolution = Solution & { display: string; alg: string };
+type DropdownProps = {
+  id: string;
+  label: string;
+  title: string;
+  value: string;
+  options: string[];
+  disabled?: boolean;
+  open: boolean;
+  setOpen: (id: string | null) => void;
+  onChange: (value: string) => void;
+};
+
+function OptionDropdown({ id, label, title, value, options, disabled, open, setOpen, onChange }: DropdownProps) {
+  return (
+    <label className="option-dropdown-label" title={title}>
+      {label}
+      <div className="option-dropdown">
+        <button
+          type="button"
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => !disabled && setOpen(open ? null : id)}
+        >
+          <span>{value}</span>
+          <span className="option-dropdown-arrow">▾</span>
+        </button>
+        {open && !disabled && (
+          <div className="option-dropdown-menu" role="listbox">
+            {options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="option"
+                aria-selected={option === value}
+                className={option === value ? "selected" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onChange(option);
+                  setOpen(null);
+                }}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </label>
+  );
+}
 
 function twistable(p: number[]) {
   return p[0] !== p[11] && p[5] !== p[6] && p[12] !== p[23] && p[17] !== p[18];
@@ -359,7 +411,7 @@ function ratingSliceStart(rating?: RatingResult) {
   return value || undefined;
 }
 function solutionErgo(solution: Solution) {
-  return solution.ergo ?? solution.ergoRaw;
+  return solution.ergo;
 }
 function medianNormalize(rows: Solution[]) {
   const valid = rows.map((row) => row.ergoRaw).filter((score): score is number => Number.isFinite(score)).sort((a, b) => a - b);
@@ -947,6 +999,7 @@ export default function App() {
   const [menu, setMenu] = useState(false),
     [modal, setModal] = useState<Modal>(null),
     [modeMenu, setModeMenu] = useState(false),
+    [openDropdown, setOpenDropdown] = useState<string | null>(null),
     [input, setInput] = useState(""),
     [mode, setMode] = useState("SCRAMBLE"),
     [cubeState, setCubeState] = useState<CubeState>({ position: [...solved], partial: Array(24).fill(0), middle: 1, middlePartial: 0 }),
@@ -985,6 +1038,8 @@ export default function App() {
   const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 2, cornersTwo: true, cornersPseudo: true });
   const [followTerminal, setFollowTerminal] = useState(true);
   const [completedWhilePaused, setCompletedWhilePaused] = useState(false);
+  const [tableBusyMessage, setTableBusyMessage] = useState("");
+  const [tableBusyTick, setTableBusyTick] = useState(0);
   const [outputToolsFaded, setOutputToolsFaded] = useState(false);
   const terminalTextRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -1005,6 +1060,9 @@ export default function App() {
     const handlePointerDown = (event: MouseEvent) => {
       if (!modeControlRef.current?.contains(event.target as Node)) {
         setModeMenu(false);
+      }
+      if (!(event.target as Element | null)?.closest(".option-dropdown")) {
+        setOpenDropdown(null);
       }
       if (!contextMenu) return;
       setContextMenu(null);
@@ -1058,12 +1116,7 @@ export default function App() {
   const handleTerminalScroll = () => {
     const node = terminalTextRef.current;
     if (!node) return;
-    // Save current terminal scroll position
     terminalScrollPositionRef.current = node.scrollTop;
-    // Detect if user scrolled up during solving
-    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
-    followTerminalRef.current = nearBottom;
-    setFollowTerminal(nearBottom);
   };
   const handleTableScroll = () => {
     const node = tableContainerRef.current;
@@ -1082,6 +1135,9 @@ export default function App() {
     }
     isSwitchingViewRef.current = true;
     setTableView(true);
+  };
+  const finishTableBusySoon = () => {
+    requestAnimationFrame(() => requestAnimationFrame(() => setTableBusyMessage("")));
   };
   const switchToTerminalMode = () => {
     if (tableContainerRef.current) {
@@ -1103,6 +1159,11 @@ export default function App() {
   useEffect(() => {
     isSwitchingViewRef.current = false;
   }, [tableView]);
+  useEffect(() => {
+    if (!tableBusyMessage) return;
+    const id = window.setInterval(() => setTableBusyTick((value) => value + 1), 900);
+    return () => window.clearInterval(id);
+  }, [tableBusyMessage]);
   const armOutputToolFade = () => {
     if (outputIdleTimer.current !== undefined) window.clearTimeout(outputIdleTimer.current);
     outputIdleTimer.current = window.setTimeout(() => setOutputToolsFaded(true), 1500);
@@ -1359,6 +1420,7 @@ export default function App() {
     setSolutions([]);
     setFollowTerminal(true);
     setTableView(false);
+    setTableBusyMessage("");
     setCompletedWhilePaused(false);
     setRunningState(true);
     const runId = ++solveRunId.current;
@@ -1373,24 +1435,36 @@ export default function App() {
       };
       const result = await native.core.invoke<{ code: number | null; stdout: string; stderr: string }>("solve", { position: start, flags, onLine });
       if (runId !== solveRunId.current) return;
-      if (!stopped.current) await lineQueue.current;
+      const shouldAutoTable = followTerminalRef.current;
+      if (shouldAutoTable) {
+        switchToTableMode();
+        setTableBusyMessage("Resolving latest solutions");
+      }
+      await lineQueue.current;
+      if (shouldAutoTable) setTableBusyMessage("Rating algs");
       for (const line of `${result.stderr || ""}`.split(/\r?\n/).filter(Boolean))
         await receiveSolverLine(line, start, runId);
       if (runId !== solveRunId.current) return;
-      if (!stopped.current && lastSolveCubeShape.current) setSolutionRows(medianNormalize(solutionsRef.current));
+      if (lastSolveCubeShape.current) {
+        if (shouldAutoTable && solutionsRef.current.length) setTableBusyMessage("Normalizing rating");
+        setSolutionRows(medianNormalize(solutionsRef.current));
+      }
+      if (shouldAutoTable) setTableBusyMessage("Building the table");
       flushSolutionState();
       const count = solutionsRef.current.length;
       const status = `${stopped.current ? "Stopped" : result.code === 0 ? "Done" : "Error"} — ${count} solution${count === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`;
       setStatusLines(lastSolveCubeShape.current && count ? [`Ranked ${count} algs by ergonomics.`] : [status]);
-      if (count) {
-        if (followTerminalRef.current) {
-          const delay = firstSolutionAt.current && performance.now() - firstSolutionAt.current < 3000 ? 400 : 0;
-          window.setTimeout(() => switchToTableMode(), delay);
-        } else {
-          setCompletedWhilePaused(true);
-        }
+      if (shouldAutoTable) {
+        switchToTableMode();
+        finishTableBusySoon();
+      } else if (count) {
+        setCompletedWhilePaused(true);
+        setTableBusyMessage("");
+      } else {
+        setTableBusyMessage("");
       }
     } catch (error) {
+      setTableBusyMessage("");
       setStatusLines((lines) => [...lines, "ERROR: " + String(error)].slice(-8));
     } finally {
       if (runId === solveRunId.current) setRunningState(false);
@@ -1503,6 +1577,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem("croissant-favorites", JSON.stringify(favorites)); }, [favorites]);
   const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
+  const specificDepthsActive = depths.trim().length > 0;
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
   if (ignoreTransforms) commandFlags.push("-x");
   const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
@@ -1522,9 +1597,11 @@ export default function App() {
     }
     return rows;
   })();
+  const displayErgo = (solution: Solution) =>
+    running || tableBusyMessage ? solutionErgo(solution) ?? solution.ergoRaw : solutionErgo(solution);
   const tableSolutions = [...visibleSolutions].sort((a, b) => {
-    if (showErgo && solutions.some((row) => solutionErgo(row) !== undefined)) {
-      const aErgo = solutionErgo(a), bErgo = solutionErgo(b);
+    if (showErgo && solutions.some((row) => displayErgo(row) !== undefined)) {
+      const aErgo = displayErgo(a), bErgo = displayErgo(b);
       const aNan = aErgo === undefined, bNan = bErgo === undefined;
       if (aNan && !bNan) return 1;
       if (!aNan && bNan) return -1;
@@ -1534,7 +1611,7 @@ export default function App() {
     return a.moves - b.moves;
   });
   const terminalSolutions = visibleSolutions.map((solution, index) => {
-    const ergo = solutionErgo(solution);
+    const ergo = displayErgo(solution);
     const suffix = showErgo && !running
       ? ergo === undefined ? "  (⚠)" : `  (${ergo.toFixed(2)})`
       : "";
@@ -1554,6 +1631,14 @@ export default function App() {
     if (lb <= 0) return <span className="abid-inline">{abidify(text)}</span>;
     return <><span className="abid-inline">{abidify(text.slice(0, lb).trim())}</span>{"  " + text.slice(lb).trim()}</>;
   };
+  const tableBusyMessages = [
+    tableBusyMessage,
+    "Resolving latest solutions",
+    "Rating algs",
+    "Normalizing rating",
+    "Building the table",
+  ].filter((message, index, all) => message && all.indexOf(message) === index);
+  const tableBusyText = tableBusyMessages[tableBusyTick % tableBusyMessages.length] || tableBusyMessage;
   const updateOptionalLimit = (raw: string, min: number, max: number, setEnabled: (value: boolean) => void, setValue: (value: number) => void) => {
     if (raw.trim() === "") {
       setEnabled(false);
@@ -1593,20 +1678,20 @@ export default function App() {
       </div>
       <h2>Options</h2>
       <div className="select-grid">
-        <label title={tooltips.metric}>Metric<select value={metric} disabled={running} onChange={(e) => setMetric(e.target.value)}><option>Slice</option><option>Move</option><option>Angle</option></select></label>
-        <label title={tooltips.twoGen}>2 Gen<select value={two} disabled={running} onChange={(e) => setTwo(e.target.value)}><option>None</option><option>Pseudo 2 Gen</option><option>2 Gen</option></select></label>
-        <label title={tooltips.angle}>Lock layer angle on preabf<select value={angle} disabled={running} onChange={(e) => setAngle(e.target.value)}><option>None</option><option>Both</option><option>Top</option><option>Bottom</option></select></label>
-        <label title={tooltips.normalize}>Normalize ABF<select value={normalize} disabled={running} onChange={(e) => setNormalize(e.target.value)}><option>None</option><option>Both</option><option>PreABF</option><option>PostABF</option></select></label>
+        <OptionDropdown id="metric" label="Metric" title={tooltips.metric} value={metric} options={["Slice", "Move", "Angle"]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
+        <OptionDropdown id="two" label="2 Gen" title={tooltips.twoGen} value={two} options={["None", "Pseudo 2 Gen", "2 Gen"]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
+        <OptionDropdown id="angle" label="Lock layer angle on preabf" title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+        <OptionDropdown id="normalize" label="Normalize ABF" title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">
         <label className="inline-all-optimal" title={tooltips.all}>
           <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
           <span>Generate All Solutions:</span>
-          <span className="all-optimal-label">{suboptimal ? `Optimal+${suboptimal}` : "Optimal"}</span>
-          <span className="stepper-group">
+          <span className="all-optimal-label">{suboptimal && !specificDepthsActive ? `Optimal+${suboptimal}` : "Optimal"}</span>
+          {!specificDepthsActive && <span className="stepper-group">
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => Math.max(0, value - 1))}>−</button>
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
-          </span>
+          </span>}
         </label>
         <label title={tooltips.generator}><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
         <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
@@ -1660,9 +1745,10 @@ export default function App() {
       {tableView ? <div ref={tableContainerRef} className={`terminal metric-${metric.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll}>
         <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
         {tableSolutions.map((x, i) => {
-          const ergo = solutionErgo(x);
+          const ergo = displayErgo(x);
           return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
+        {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
         {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">solution will be displayed here...</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
@@ -1684,14 +1770,18 @@ export default function App() {
       </header>
       <div className="inputbar">
         <div className="mode-control" ref={modeControlRef}>
-          <button className="mode" title={tooltips.inputMode} onClick={cycleMode}>
+          <button className="mode" title={tooltips.inputMode} onMouseDown={(event) => event.preventDefault()} onClick={cycleMode}>
             {mode}
           </button>
           <button
             className="arrow"
             aria-label="Choose input mode"
             title={tooltips.modeMenu}
-            onClick={() => setModeMenu((v) => !v)}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              setOpenDropdown(null);
+              setModeMenu((v) => !v);
+            }}
           >
             ▾
           </button>
@@ -1699,18 +1789,21 @@ export default function App() {
             <div className="mode-menu">
               <button
                 className={mode === "SCRAMBLE" ? "selected" : ""}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseMode("SCRAMBLE")}
               >
                 Scramble
               </button>
               <button
                 className={mode === "ALG" ? "selected" : ""}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseMode("ALG")}
               >
                 Alg
               </button>
               <button
                 className={mode === "POSITION" ? "selected" : ""}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseMode("POSITION")}
               >
                 Position
@@ -1740,8 +1833,8 @@ export default function App() {
           <button className="apply" title={tooltips.apply} onClick={() => void apply()}>
             Apply
           </button>
+          {inputError && <span className="input-error">{inputError}</span>}
         </div>
-        {inputError && <span className="input-error">{inputError}</span>}
       </div>
       <div className="main-grid">
         <aside className="cube-column">
