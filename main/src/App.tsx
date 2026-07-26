@@ -814,6 +814,7 @@ function Modal({
     ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
     debugOutput: boolean; setDebugOutput: (value: boolean) => void;
     disabled: boolean;
+    hasMaxTurn: boolean;
   };
 }) {
   const content =
@@ -830,7 +831,7 @@ function Modal({
             <span>Abid's notation</span>
           </label>
           <label className="modal-check">
-            <input type="checkbox" checked={settings?.ignoreTransforms ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setIgnoreTransforms(e.target.checked)} />
+            <input type="checkbox" checked={(settings?.ignoreTransforms || settings?.hasMaxTurn) ?? false} disabled={settings?.disabled || settings?.hasMaxTurn} onChange={(e) => settings?.setIgnoreTransforms(e.target.checked)} />
             <span>Ignore move equivalences</span>
           </label>
           <label className="modal-check">
@@ -1914,7 +1915,7 @@ export default function App() {
       </div>}
       {modal && <Modal type={modal} close={() => setModal(null)} settings={{
         smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
-        debugOutput, setDebugOutput, disabled: running,
+        debugOutput, setDebugOutput, disabled: running, hasMaxTurn: maxX || maxY || maxTotal,
       }} />}
       {favoritesOpen && <div className="modal-shade" onClick={() => setFavoritesOpen(false)}>
         <div className="modal favorites-modal" onClick={(event) => event.stopPropagation()}>
