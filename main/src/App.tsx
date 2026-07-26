@@ -1065,6 +1065,9 @@ export default function App() {
       if (!(event.target as Element | null)?.closest(".option-dropdown")) {
         setOpenDropdown(null);
       }
+      if (!(event.target as Element | null)?.closest(".top-menu-wrap")) {
+        setMenu(false);
+      }
       if (!contextMenu) return;
       setContextMenu(null);
     };
@@ -1761,12 +1764,42 @@ export default function App() {
   return (
     <div className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
-        <button className="hamburger" title={tooltips.menu} onClick={() => setMenu(true)}>
-          ☰
-        </button>
+        <img className="app-icon" src="/icon-web.png" alt="" />
         <div className="brand">
-          <b>CROISSANT</b>
-          <small>by Abid and Matt</small>
+          <b>CROISSANT</b><sub> &nbsp; &nbsp; by Abid and Matt</sub>
+        </div>
+        <div className="top-menu-wrap">
+          <button className="top-menu-button" aria-label="Open menu" aria-expanded={menu} title={tooltips.menu} onMouseDown={(event) => event.preventDefault()} onClick={() => setMenu((value) => !value)}>
+            ⋮
+          </button>
+          {menu && (
+            <div className="top-menu" onClick={(event) => event.stopPropagation()}>
+              <button
+                onClick={() => {
+                  setModal("settings");
+                  setMenu(false);
+                }}
+              >
+                Settings
+              </button>
+              <button
+                onClick={() => {
+                  setModal("how");
+                  setMenu(false);
+                }}
+              >
+                How to Use
+              </button>
+              <button
+                onClick={() => {
+                  setModal("about");
+                  setMenu(false);
+                }}
+              >
+                About
+              </button>
+            </div>
+          )}
         </div>
       </header>
       <div className="inputbar">
@@ -1867,40 +1900,6 @@ export default function App() {
         {renderOptionsPanel()}
         {renderOutputShell()}
       </div>
-      {menu && (
-        <div className="shade" onClick={() => setMenu(false)}>
-          <nav className="sidebar" onClick={(e) => e.stopPropagation()}>
-            <div className="side-head">
-              <b>Menu</b>
-              <button onClick={() => setMenu(false)}>✕</button>
-            </div>
-            <button
-              onClick={() => {
-                setModal("settings");
-                setMenu(false);
-              }}
-            >
-              ⚙　Settings
-            </button>
-            <button
-              onClick={() => {
-                setModal("how");
-                setMenu(false);
-              }}
-            >
-              ?　 How to Use
-            </button>
-            <button
-              onClick={() => {
-                setModal("about");
-                setMenu(false);
-              }}
-            >
-              ℹ　About
-            </button>
-          </nav>
-        </div>
-      )}
       {contextMenu && <div className="solution-context" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
         <button onClick={() => { void navigator.clipboard.writeText(lineWithoutBracket(contextMenu.alg)); setContextMenu(null); }}>⧉  Copy alg</button>
         <button onClick={() => {

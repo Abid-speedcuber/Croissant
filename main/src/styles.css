@@ -35,7 +35,34 @@ body {
   padding: 0 14px;
   gap: 10px;
 }
-.hamburger {
+.app-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  margin-top: -5px;
+}
+.brand {
+  display: flex;
+  flex-direction: row;
+  line-height: 14px;
+}
+.brand b {
+  font-size: 17px;
+  letter-spacing: 1px;
+}
+.brand sub {
+  font-size: 10px;
+  color: #8290a6;
+  margin-top: 1px;
+}
+.top-menu-wrap {
+  position: relative;
+  margin-left: auto;
+}
+.top-menu-button {
+  display: grid;
+  place-items: center;
   width: 30px;
   height: 30px;
   border: 1px solid #354256;
@@ -43,20 +70,40 @@ body {
   background: #1a202b;
   color: #aeb9cd;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 18px;
+  line-height: 1;
 }
-.brand {
-  display: flex;
-  flex-direction: column;
-  line-height: 14px;
+.top-menu-button:hover,
+.top-menu-button[aria-expanded="true"] {
+  background: #243247;
+  border-color: #536178;
 }
-.brand b {
-  font-size: 17px;
-  letter-spacing: 1px;
+.top-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 150px;
+  padding: 5px;
+  background: #1a202b;
+  border: 1px solid #536178;
+  border-radius: 7px;
+  box-shadow: 0 12px 28px #0009;
 }
-.brand small {
-  font-size: 10px;
-  color: #8290a6;
+.top-menu button {
+  display: block;
+  width: 100%;
+  height: 34px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #d8e6f9;
+  padding: 0 10px;
+  text-align: left;
+  font-size: 12px;
+}
+.top-menu button:hover {
+  background: #345078;
 }
 .inputbar {
   height: 50px;
@@ -610,55 +657,6 @@ body {
   inset: 0;
   background: rgba(0, 0, 0, 0.48);
   z-index: 20;
-}
-.sidebar {
-  height: 100%;
-  width: 220px;
-  background: #17202d;
-  border-right: 2px solid #354256;
-  box-shadow: 10px 0 30px #0005;
-  animation: slide 0.25s ease-out;
-}
-.side-head {
-  height: 52px;
-  padding: 0 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #111720;
-  border-bottom: 1px solid #354256;
-  color: #e8ecf4;
-  font-size: 15px;
-}
-.side-head button {
-  width: 26px;
-  height: 26px;
-  border-radius: 13px;
-  border: 1px solid #536178;
-  background: #27303d;
-  color: #aeb9cd;
-}
-.sidebar > button {
-  height: 48px;
-  width: 100%;
-  text-align: left;
-  padding-left: 12px;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid #354256;
-  color: #e8ecf4;
-  font-size: 13px;
-}
-.sidebar > button:hover {
-  background: #345078;
-}
-@keyframes slide {
-  from {
-    transform: translateX(-220px);
-  }
-  to {
-    transform: translateX(0);
-  }
 }
 .modal-shade {
   display: grid;
@@ -1223,8 +1221,24 @@ body {
 .output-expanded .options-panel {
   display: none;
 }
+.app.output-expanded {
+  max-width: none;
+  width: 100%;
+}
 .output-expanded .main-grid {
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "terminal";
+  min-height: 0;
+}
+.output-expanded .terminal-shell {
+  min-height: 0;
+  height: 100%;
+}
+.output-expanded .terminal-shell > .terminal {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
 }
 .output-expanded .terminal-head,
 .output-expanded .solution {
