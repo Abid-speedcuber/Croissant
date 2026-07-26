@@ -125,7 +125,7 @@ fn solve_blocking(app: tauri::AppHandle, state: SolverState, position: String, f
     let mut code = -1;
     let channel_context = &on_line as *const Channel<String> as *mut c_void;
     let output_pointer = unsafe { sq1_run_alloc(pointers.len() as i32, pointers.as_ptr(), table_directory.as_ptr(), &mut code, solver_line_callback, channel_context) };
-    if output_pointer.is_null() { return Err("The embedded sq1opt solver returned no output".into()); }
+    if output_pointer.is_null() { return Err("The solver returned no output".into()); }
     let output = unsafe { CStr::from_ptr(output_pointer) }.to_string_lossy().into_owned();
     unsafe { sq1_free_string(output_pointer); }
     Ok(SolverResult { code: Some(code), stdout: output, stderr: String::new() })
@@ -153,6 +153,72 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, two_gen_status])
         .run(tauri::generate_context!())
         .expect("error while running Croissant");
+}
+
+pub fn run_cli(args: Vec<String>) -> ! {
+    let mut solver_args = vec!["sq1opt".to_owned()];
+    solver_args.extend(args.into_iter().skip(1));
+
+    let c_args: Vec<CString> = solver_args
+        .into_iter()
+        .map(|a| CString::new(a).expect("Solver argument contains NUL byte"))
+        .collect();
+    let pointers: Vec<*const c_char> = c_args.iter().map(|a| a.as_ptr()).collect();
+
+    let table_path = cli_table_dir();
+    fs::create_dir_all(&table_path).expect("Failed to create pruning table directory");
+    let table_c =
+        CString::new(table_path.to_string_lossy().as_bytes()).expect("Table path contains NUL byte");
+
+    extern "C" fn print_line(line: *const c_char, _ctx: *mut c_void) {
+        if !line.is_null() {
+            let s = unsafe { CStr::from_ptr(line) }.to_string_lossy();
+            println!("{s}");
+        }
+    }
+
+    let mut code: i32 = -1;
+    let output = unsafe {
+        sq1_run_alloc(
+            pointers.len() as i32,
+            pointers.as_ptr(),
+            table_c.as_ptr(),
+            &mut code,
+            print_line,
+            std::ptr::null_mut(),
+        )
+    };
+
+    if !output.is_null() {
+        unsafe {
+            sq1_free_string(output);
+        }
+    }
+
+    std::process::exit(code.max(0));
+}
+
+fn cli_table_dir() -> std::path::PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let bundled = dir.join("resources/pruning-tables");
+            if bundled.join("sq1stt.dat").exists() {
+                return bundled;
+            }
+            if let Some(grandparent) = dir.parent() {
+                let alt = grandparent.join("resources/pruning-tables");
+                if alt.join("sq1stt.dat").exists() {
+                    return alt;
+                }
+            }
+        }
+    }
+    let base = if let Ok(home) = std::env::var("HOME") {
+        std::path::PathBuf::from(home).join(".local/share")
+    } else {
+        std::path::PathBuf::from(".")
+    };
+    base.join("com.croissant.desktop/pruning-tables")
 }
 
 #[cfg(test)]

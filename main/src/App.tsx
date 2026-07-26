@@ -1505,7 +1505,7 @@ export default function App() {
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
   if (ignoreTransforms) commandFlags.push("-x");
-  const commandPreview = `sq1opt ${commandFlags.join(" ")} ${positionString(cubeState)}`;
+  const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   const showErgo = runCubeShape;
   const displaySolution = (solution: Solution): DisplaySolution => {
     const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay);
