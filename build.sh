@@ -200,6 +200,9 @@ fi
 cd "$root_dir/main"
 npm install
 
+echo "Generating icons..."
+"$root_dir/icon.sh"
+
 case "$platform" in
   linux)
     shift || true
@@ -284,9 +287,6 @@ case "$platform" in
     fi
     if [[ ! -d src-tauri/gen/android ]]; then
       npx tauri android init
-      if [[ -x "$root_dir/icon.sh" && -f "$root_dir/main/src-tauri/icons/icon.png" ]]; then
-        "$root_dir/icon.sh" "$root_dir/main/src-tauri/icons/icon.png"
-      fi
     fi
 
     tauri_args=(--apk)

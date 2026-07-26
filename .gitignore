@@ -85,15 +85,19 @@ main/src-tauri/resources/pruning-tables/
 legacy/build
 public/
 !main/public/
-!main/public/favicon.ico
-!main/public/favicon-16x16.png
-!main/public/favicon-32x32.png
-!main/public/favicon-48x48.png
-!main/public/apple-touch-icon.png
-!main/public/pwa-192x192.png
-!main/public/pwa-512x512.png
-!main/public/maskable-icon-512x512.png
 !main/public/site.webmanifest
+
+# Generated icons (source of truth: ./icons/)
+main/src-tauri/icons/
+legacy/res/icon.ico
+main/public/favicon.ico
+main/public/favicon-16x16.png
+main/public/favicon-32x32.png
+main/public/favicon-48x48.png
+main/public/apple-touch-icon.png
+main/public/pwa-192x192.png
+main/public/pwa-512x512.png
+main/public/maskable-icon-512x512.png
 
 # Android build artifacts
 main/src-tauri/gen/
@@ -116,14 +120,16 @@ main/src-tauri/gen/android/app/src/main/res/*
 !main/src-tauri/gen/android/app/src/main/res/mipmap-xhdpi/
 !main/src-tauri/gen/android/app/src/main/res/mipmap-xxhdpi/
 !main/src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/
+!main/src-tauri/gen/android/app/src/main/res/drawable/
+!main/src-tauri/gen/android/app/src/main/res/drawable-v24/
 !main/src-tauri/gen/android/app/src/main/res/values/
 main/src-tauri/gen/android/app/src/main/res/values/*
 !main/src-tauri/gen/android/app/src/main/res/values/ic_launcher_background.xml
-!main/src-tauri/gen/android/app/src/main/res/mipmap-hdpi/ic_launcher*.png
-!main/src-tauri/gen/android/app/src/main/res/mipmap-mdpi/ic_launcher*.png
-!main/src-tauri/gen/android/app/src/main/res/mipmap-xhdpi/ic_launcher*.png
-!main/src-tauri/gen/android/app/src/main/res/mipmap-xxhdpi/ic_launcher*.png
-!main/src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher*.png
+main/src-tauri/gen/android/app/src/main/res/mipmap-mdpi/ic_launcher*.png
+main/src-tauri/gen/android/app/src/main/res/mipmap-hdpi/ic_launcher*.png
+main/src-tauri/gen/android/app/src/main/res/mipmap-xhdpi/ic_launcher*.png
+main/src-tauri/gen/android/app/src/main/res/mipmap-xxhdpi/ic_launcher*.png
+main/src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher*.png
 *.keystore
 *.jks
 .local-jdk/
