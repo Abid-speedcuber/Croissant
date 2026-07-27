@@ -1,4 +1,5 @@
 :root {
+  --header-h: 60px;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   color: #e8ecf4;
   background: #11151c;
@@ -24,15 +25,15 @@ body {
   margin: auto;
   background: #11151c;
   display: grid;
-  grid-template-rows: 52px 50px minmax(0, 1fr);
+  grid-template-rows: var(--header-h) 50px minmax(0, 1fr);
   overflow: hidden;
 }
 .app > header {
-  height: 52px;
+  height: var(--header-h);
   background: #111720;
   display: flex;
   align-items: center;
-  padding: 0 14px;
+  padding: 14px 14px 0 14px;
   gap: 10px;
 }
 .app-icon {
@@ -774,7 +775,7 @@ body {
     height: 100dvh;
     max-height: 100dvh;
     min-height: 0;
-    grid-template-rows: 52px 50px minmax(0, 1fr);
+    grid-template-rows: var(--header-h) 50px minmax(0, 1fr);
     overflow: hidden;
   }
   .inputbar {
@@ -872,12 +873,12 @@ body {
   }
   .mobile-options-open .options-panel {
     position: fixed;
-    inset: 52px 0 0;
+    inset: var(--header-h) 0 0;
     z-index: 50;
     display: block;
     width: 100%;
-    height: calc(100dvh - 52px);
-    max-height: calc(100dvh - 52px);
+    height: calc(100dvh - var(--header-h));
+    max-height: calc(100dvh - var(--header-h));
     padding: 54px 14px 18px;
     overflow: auto;
     border: 0;
@@ -895,13 +896,13 @@ body {
   }
   .mobile-output-open .terminal-shell {
     position: fixed;
-    inset: 52px 0 0;
+    inset: var(--header-h) 0 0;
     z-index: 50;
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: calc(100dvh - 52px);
-    max-height: calc(100dvh - 52px);
+    height: calc(100dvh - var(--header-h));
+    max-height: calc(100dvh - var(--header-h));
     min-height: 0;
     overflow: hidden;
     background: #0a0f18;
@@ -1313,13 +1314,13 @@ body {
   }
   .mobile-output-open .terminal-shell {
     position: fixed;
-    inset: 52px 0 0;
+    inset: var(--header-h) 0 0;
     z-index: 50;
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: calc(100dvh - 52px);
-    max-height: calc(100dvh - 52px);
+    height: calc(100dvh - var(--header-h));
+    max-height: calc(100dvh - var(--header-h));
     min-height: 0;
     overflow: hidden;
     background: #0a0f18;
