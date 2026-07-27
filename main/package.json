@@ -4,6 +4,7 @@
   "version": "3.0.0",
   "type": "module",
   "scripts": {
+    "predev": "cd .. && ./icon.sh --pc",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:web": "node ../build.mjs",

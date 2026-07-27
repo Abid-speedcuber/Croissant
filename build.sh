@@ -3,10 +3,13 @@
 # Desktop artifacts must be built on their target OS, or with an appropriately
 # configured Rust/C++ cross toolchain. Android requires the Tauri Android SDK.
 #
+# The version is read from docs/version.txt and stamped into every artifact.
+#
 # Linux bundle flags:
 #   --appimage   Build AppImage only
 #   --deb        Build .deb package only
 #   --rpm        Build .rpm package only
+#   --pkg        Build Arch Linux .pkg.tar.zst only
 #   (default: all formats)
 #
 # Android architecture flags:
@@ -32,6 +35,34 @@ if [[ -z "$platform" ]]; then
   exit 2
 fi
 
+# ---------------------------------------------------------------------------
+# Version management
+# ---------------------------------------------------------------------------
+version_file="$root_dir/docs/version.txt"
+if [[ ! -f "$version_file" ]]; then
+  echo "Error: $version_file not found" >&2
+  exit 1
+fi
+VERSION="$(tr -d '[:space:]' < "$version_file")"
+if [[ -z "$VERSION" ]]; then
+  echo "Error: version.txt is empty" >&2
+  exit 1
+fi
+echo "Building Croissant $VERSION"
+
+# Stamp version into tauri.conf.json and Cargo.toml so the binary and
+# installer filenames carry the correct version.
+tauri_conf="$root_dir/main/src-tauri/tauri.conf.json"
+cargo_toml="$root_dir/main/src-tauri/Cargo.toml"
+
+# Use perl for in-place edits that work identically on Linux and macOS.
+perl -pi -e "s/\"version\":\\s*\"[^\"]*\"/\"version\": \"$VERSION\"/" "$tauri_conf"
+perl -pi -e "s/^version\\s*=\\s*\"[^\"]*\"/version = \"$VERSION\"/" "$cargo_toml"
+echo "Stamped version $VERSION into tauri.conf.json and Cargo.toml"
+
+# ---------------------------------------------------------------------------
+# Helper functions (unchanged)
+# ---------------------------------------------------------------------------
 find_java_home() {
   if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]]; then
     printf '%s\n' "$JAVA_HOME"
@@ -186,6 +217,122 @@ sign_apk() {
   echo "APK signed: $apk"
 }
 
+# ---------------------------------------------------------------------------
+# Rename Tauri output artifacts to include the version string.
+# Tauri already uses the version from tauri.conf.json in filenames, but this
+# function provides a central place to copy final artifacts into a clean
+# output directory.
+# ---------------------------------------------------------------------------
+bundle_dir="$root_dir/main/src-tauri/target/release/bundle"
+output_dir="$root_dir/output"
+rename_artifacts() {
+  local fmt="$1"   # deb | rpm | appimage | nsis | msi
+  local search_ext="$2"
+  mkdir -p "$output_dir"
+
+  local found=0
+  while IFS= read -r -d '' file; do
+    local base
+    base="$(basename "$file")"
+    cp "$file" "$output_dir/$base"
+    echo "  -> $output_dir/$base"
+    found=1
+  done < <(find "$bundle_dir" -maxdepth 3 -type f -name "*$search_ext*" -print0 2>/dev/null)
+
+  if [[ "$found" -eq 0 ]]; then
+    echo "  Warning: no $fmt artifacts found under $bundle_dir" >&2
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Arch Linux .pkg.tar.zst builder
+# ---------------------------------------------------------------------------
+build_arch_pkg() {
+  if ! command -v makepkg >/dev/null 2>&1; then
+    echo "Warning: makepkg not found, skipping .pkg.tar.zst" >&2
+    return 0
+  fi
+
+  local pkg_name="croissant"
+  local pkg_dir="$root_dir/output/arch-pkg"
+  rm -rf "$pkg_dir"
+  mkdir -p "$pkg_dir/usr/bin" "$pkg_dir/usr/share/applications" "$pkg_dir/usr/share/icons"
+
+  # Locate the built binary.
+  local binary=""
+  for candidate in \
+    "$root_dir/main/src-tauri/target/release/croissant" \
+    "$root_dir/main/src-tauri/target/release/croissant.exe"; do
+    if [[ -f "$candidate" ]]; then
+      binary="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$binary" ]]; then
+    echo "Error: release binary not found, cannot build .pkg.tar.zst" >&2
+    return 1
+  fi
+  cp "$binary" "$pkg_dir/usr/bin/croissant"
+  chmod 755 "$pkg_dir/usr/bin/croissant"
+
+  # Copy resources (pruning tables) if present.
+  local resources="$root_dir/main/src-tauri/target/release/resources"
+  if [[ -d "$resources" ]]; then
+    cp -r "$resources" "$pkg_dir/usr/share/croissant-resources"
+  fi
+
+  # Generate a minimal .desktop file.
+  cat > "$pkg_dir/usr/share/applications/croissant.desktop" <<DESKTOP
+[Desktop Entry]
+Name=Croissant
+Exec=/usr/bin/croissant
+Icon=croissant
+Type=Application
+Categories=Education;Utility;
+DESKTOP
+
+  # Copy icon.
+  local icon="$root_dir/icons/icon.png"
+  if [[ -f "$icon" ]]; then
+    cp "$icon" "$pkg_dir/usr/share/icons/croissant.png"
+  fi
+
+  # Build the package with makepkg.
+  local pkgver="${VERSION//-/.}"
+  pushd "$pkg_dir" > /dev/null
+
+  # Generate a PKGBUILD on the fly.
+  cat > PKGBUILD <<PKGBUILD
+# Maintainer: Croissant Developers
+pkgname=croissant
+pkgver=$VERSION
+pkgrel=1
+pkgdesc="A native Square-1 optimal solver UI"
+arch=('x86_64')
+url="https://github.com/anomalyco/sq1opt-ui"
+license=('MIT')
+depends=()
+options=(!strip)
+
+package() {
+  cp -r "\$startdir/usr" "\$pkgdir/usr"
+}
+PKGBUILD
+
+  makepkg --noconfirm --nocheck --cleanbuild
+  # makepkg outputs into the current directory.
+  local pkg_file
+  pkg_file="$(ls -1 *.pkg.tar.zst 2>/dev/null | head -1)"
+  if [[ -n "$pkg_file" ]]; then
+    cp "$pkg_file" "$root_dir/output/"
+    echo "  -> $root_dir/output/$pkg_file"
+  fi
+  popd > /dev/null
+}
+
+# ---------------------------------------------------------------------------
+# Prep: pruning tables & npm
+# ---------------------------------------------------------------------------
 resource_dir="$root_dir/main/src-tauri/resources/pruning-tables"
 if [[ -d "$root_dir/legacy/build/Desktop-Debug/pruning-tables" ]]; then
   mkdir -p "$resource_dir"
@@ -206,30 +353,36 @@ case "$platform" in
     "$root_dir/icon.sh" --pc
     ;;
   android)
-    echo "Generating desktop + mobile icons..."
-    "$root_dir/icon.sh" --pc --mobile
+    echo "Generating desktop icons..."
+    "$root_dir/icon.sh" --pc
     ;;
 esac
 
+# ---------------------------------------------------------------------------
+# Platform builds
+# ---------------------------------------------------------------------------
 case "$platform" in
   linux)
     shift || true
     build_appimage=false
     build_deb=false
     build_rpm=false
+    build_pkg=false
     for arg in "$@"; do
       case "$arg" in
         --appimage) build_appimage=true ;;
         --deb)      build_deb=true ;;
         --rpm)      build_rpm=true ;;
+        --pkg)      build_pkg=true ;;
         *) echo "Unknown flag: $arg" >&2; exit 2 ;;
       esac
     done
 
-    if ! $build_appimage && ! $build_deb && ! $build_rpm; then
+    if ! $build_appimage && ! $build_deb && ! $build_rpm && ! $build_pkg; then
       build_appimage=true
       build_deb=true
       build_rpm=true
+      build_pkg=true
     fi
 
     bundles=()
@@ -237,20 +390,40 @@ case "$platform" in
     $build_deb      && bundles+=("deb")
     $build_rpm      && bundles+=("rpm")
 
-    echo "Building Linux bundles: ${bundles[*]}"
-
-    tauri_args=()
-    for b in "${bundles[@]}"; do
-      tauri_args+=(--bundles "$b")
-    done
-    npx tauri build "${tauri_args[@]}"
+    if [[ ${#bundles[@]} -gt 0 ]]; then
+      echo "Building Linux bundles: ${bundles[*]}"
+      tauri_args=()
+      for b in "${bundles[@]}"; do
+        tauri_args+=(--bundles "$b")
+      done
+      npx tauri build "${tauri_args[@]}"
+    fi
 
     if $build_appimage; then
       "$root_dir/fix-appimage-icon.sh"
     fi
+
+    # Rename Tauri-produced artifacts into the output directory.
+    $build_deb      && rename_artifacts "deb"      ".deb"
+    $build_rpm      && rename_artifacts "rpm"      ".rpm"
+    $build_appimage && rename_artifacts "appimage"  ".AppImage"
+
+    # Arch Linux package.
+    if $build_pkg; then
+      echo "Building Arch Linux .pkg.tar.zst..."
+      build_arch_pkg
+    fi
     ;;
   windows|macos)
     npx tauri build
+
+    # Rename Tauri-produced artifacts into the output directory.
+    if [[ "$platform" == "windows" ]]; then
+      rename_artifacts "nsis" ".exe"
+      rename_artifacts "msi"  ".msi"
+    else
+      rename_artifacts "dmg"  ".dmg"
+    fi
     ;;
   android)
     shift || true
@@ -297,6 +470,10 @@ case "$platform" in
       npx tauri android init
     fi
 
+    # Generate Android mipmaps AFTER init (init creates default icons).
+    echo "Generating Android mipmaps..."
+    "$root_dir/icon.sh" --mobile
+
     tauri_args=(--apk)
     for t in "${targets[@]}"; do
       tauri_args+=(--target "$t")
@@ -311,3 +488,10 @@ case "$platform" in
     ;;
   *) echo "Unknown platform: $platform" >&2; exit 2 ;;
 esac
+
+echo ""
+echo "Build complete. Version: $VERSION"
+if [[ -d "$output_dir" ]]; then
+  echo "Artifacts in $output_dir:"
+  ls -1 "$output_dir"
+fi
