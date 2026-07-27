@@ -225,6 +225,38 @@ body {
   grid-area: terminal;
 }
 
+/*
+ * BREAKPOINT LEGEND
+ *
+ * Width classes (toggled on :root based on window.innerWidth / zoom):
+ *   (none)   = Wide:              > 720px
+ *   bp-720   = Semi-wide:         621px – 720px
+ *   bp-620   = Semi-narrow:       461px – 620px
+ *   bp-460   = Narrow:            ≤ 460px
+ *
+ * Height class (toggled on :root based on window.innerHeight / zoom):
+ *   (none)               = Not tall:  < 810px
+ *   tall-viewport        = Tall:      ≥ 810px
+ *
+ * Container queries (on .options-panel, which has container-type: inline-size):
+ *   @container (max-width: 520px)  = Narrow options panel  (forces limit-grid to 2-col)
+ *   @container (min-width: 521px)  = Wide options panel    (select-grid goes 4-col)
+ *   @container (max-width: 360px)  = Tiny options panel    (select-grid/check-grid to 1-col)
+ *
+ * Common combinations:
+ *   Wide + tall          :  .tall-viewport only
+ *   Semi-wide + tall     :  .tall-viewport.bp-720
+ *   Semi-narrow + tall   :  .tall-viewport.bp-720.bp-620
+ *   Narrow + tall        :  .tall-viewport.bp-720.bp-620.bp-460
+ *   Wide + not-tall      :  (no classes)
+ *   Semi-wide + not-tall :  .bp-720
+ *   Semi-narrow + not-tall: .bp-720.bp-620
+ *   Narrow + not-tall    :  .bp-720.bp-620.bp-460
+ *
+ *   Note: At narrow widths (bp-720 and below), the layout collapses to single-column
+ *   mobile mode regardless of height, so tall vs not-tall barely matters.
+ */
+
 .tall-viewport .main-grid {
   grid-template-rows: auto minmax(160px, 1fr);
   grid-template-areas:
@@ -235,6 +267,16 @@ body {
   align-self: stretch;
   max-height: var(--cube-h, none);
   overflow: auto;
+}
+:root.tall-viewport:not(.bp-720) .options-panel {
+  padding: 18px 16px 18px;
+}
+:root.tall-viewport:not(.bp-720) .options-panel .select-grid {
+  gap: 26px;
+  margin-bottom: 28px;
+}
+:root.tall-viewport:not(.bp-720) .options-panel .limit-grid {
+  gap: 22px;
 }
 .tall-viewport .terminal-shell {
   min-height: 160px;
