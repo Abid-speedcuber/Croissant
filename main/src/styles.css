@@ -1085,10 +1085,6 @@ body {
   .limit-grid {
     grid-template-columns: 1fr 1fr;
   }
-  .limit-grid label:nth-child(3),
-  .limit-grid label:nth-child(4) {
-    grid-column: 1 / -1;
-  }
 }
 
 @container (max-width: 360px) {
@@ -1127,12 +1123,10 @@ body {
   grid-template-columns: 1fr 1fr;
 }
 :root.bp-620 .limit-grid label:nth-child(1),
-:root.bp-620 .limit-grid label:nth-child(2) {
-  grid-column: span 1;
-}
+:root.bp-620 .limit-grid label:nth-child(2),
 :root.bp-620 .limit-grid label:nth-child(3),
 :root.bp-620 .limit-grid label:nth-child(4) {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 :root.bp-460 .limit-grid {
   grid-template-columns: 1fr;
