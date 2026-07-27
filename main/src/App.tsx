@@ -1059,6 +1059,8 @@ export default function App() {
   const firstTableSwitchAfterSolveRef = useRef(true);
   const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
+  const cubeColumnRef = useRef<HTMLDivElement>(null);
+  const mainGridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = document.documentElement;
@@ -1071,6 +1073,48 @@ export default function App() {
     zoomRef.current = zoom;
     document.documentElement.classList.toggle("tall-viewport", window.innerHeight / zoom >= 810);
   }, [zoom]);
+  useEffect(() => {
+    const updateBreakpoints = () => {
+      const effW = window.innerWidth / zoomRef.current;
+      document.documentElement.classList.toggle("bp-720", effW <= 720);
+      document.documentElement.classList.toggle("bp-620", effW <= 620);
+      document.documentElement.classList.toggle("bp-460", effW <= 460);
+    };
+    updateBreakpoints();
+    window.addEventListener("resize", updateBreakpoints);
+    return () => window.removeEventListener("resize", updateBreakpoints);
+  }, []);
+  useEffect(() => {
+    const update = () => {
+      const effW = window.innerWidth / zoomRef.current;
+      document.documentElement.classList.toggle("bp-720", effW <= 720);
+      document.documentElement.classList.toggle("bp-620", effW <= 620);
+      document.documentElement.classList.toggle("bp-460", effW <= 460);
+    };
+    update();
+  }, [zoom]);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const col = cubeColumnRef.current;
+      const grid = mainGridRef.current;
+      if (col && grid) {
+        grid.style.setProperty("--cube-h", col.scrollHeight + "px");
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
+  useEffect(() => {
+    const measure = () => {
+      const col = cubeColumnRef.current;
+      const grid = mainGridRef.current;
+      if (col && grid) {
+        grid.style.setProperty("--cube-h", col.scrollHeight + "px");
+      }
+    };
+    measure();
+  }, [zoom, running, undo.length, redo.length, tableView, expanded]);
   useEffect(() => {
     const anyOpen = modal !== null || favoritesOpen;
     if (anyOpen) {
@@ -1901,8 +1945,8 @@ export default function App() {
           {inputError && <span className="input-error">{inputError}</span>}
         </div>
       </div>
-      <div className="main-grid">
-        <aside className="cube-column">
+      <div className="main-grid" ref={mainGridRef}>
+        <aside className="cube-column" ref={cubeColumnRef}>
           <Cube
             actionsRef={cubeActions}
             onChange={onCubeChange}
