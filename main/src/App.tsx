@@ -1850,6 +1850,7 @@ export default function App() {
         <OptionDropdown id="normalize" label="Normalize ABF" title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">
+        <span className="generator-toggle" title={tooltips.generator} onClick={() => !running && setGenerator((g) => !g)}>Output: <span className="generator-toggle-value">{generator ? "Scramble" : "Solution"}</span></span>
         <label className="inline-all-optimal" title={tooltips.all}>
           <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
           <span>Generate All Solutions:</span>
@@ -1859,10 +1860,7 @@ export default function App() {
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
           </span>}
         </label>
-        <label title={tooltips.generator}><input type="checkbox" checked={generator} disabled={running} onChange={(e) => setGenerator(e.target.checked)} /> Generator alg</label>
         <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
-        <label title={tooltips.ignoreEquator}><input type="checkbox" checked={ignoreMiddle} disabled={running} onChange={(e) => toggleIgnoreMiddle(e.target.checked)} /> Ignore equator</label>
-        <label title={tooltips.karn}><input type="checkbox" checked={karn} disabled={running} onChange={(e) => setKarn(e.target.checked)} /> Karn output</label>
       </div>
       <div className="limit-grid">
         <label title={tooltips.maxX}>Max top turn:
@@ -1899,11 +1897,19 @@ export default function App() {
   const renderOutputShell = () => (
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
       <div className="output-tools">
-        <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
-        <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
-        <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
-        <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
-        <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
+        <div className="output-tools-left">
+          <select className="karn-select" title={tooltips.karn} value={karn ? "karn" : "normal"} disabled={running} onChange={(e) => setKarn(e.target.value === "karn")}>
+            <option value="normal">Normal</option>
+            <option value="karn">Karn</option>
+          </select>
+        </div>
+        <div className="output-tools-right">
+          <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
+          <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
+          <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
+          <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
+          <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
+        </div>
       </div>
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
@@ -1916,7 +1922,7 @@ export default function App() {
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
-        {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">solution will be displayed here...</span>}
+        {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">{generator ? "scramble will be displayed here..." : "solution will be displayed here..."}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: line.solution.display }); }}>{renderSolutionText(line.text)}</span>)}
         {statusLines.map((line, index) => <span key={`status-${index}-${line}`} className="terminal-line terminal-line-final">{line}</span>)}
