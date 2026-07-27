@@ -307,7 +307,7 @@ function parsePosition(text: string): CubeState | undefined {
     if (partial[i] === 2) { encoded[i] = take(corner ? freeC : freeE); if (corner) encoded[i + 1] = encoded[i]; }
     if (corner) i++;
   }
-  const middle = input.length === 16 ? 0 : input[16] === "-" ? 1 : input[16] === "+" ? -1 : 0;
+  const middle = input.length === 16 ? 0 : input[16] === "-" ? 1 : input[16] === "/" ? -1 : 0;
   return { position: encoded, partial, middle, middlePartial: 0 };
 }
 function invertScramble(text: string) {
@@ -1261,7 +1261,7 @@ export default function App() {
     const current = stateRef.current;
     if (checked && current.middle !== 0) preIgnoreMiddle.current = current.middle;
     const next = { ...current, middle: checked ? 0 : preIgnoreMiddle.current };
-    ignoreHistory.current = true; cubeActions.current?.set(next); ignoreHistory.current = false;
+    cubeActions.current?.set(next);
     setIgnoreMiddle(checked);
   };
   const currentRunKey = () => {
@@ -1279,7 +1279,7 @@ export default function App() {
     setGenerator(flags.includes("-g"));
     setTwo(flags.includes("-2") ? "2 Gen" : flags.includes("-p") ? "Pseudo 2 Gen" : "None");
     setCubeShape(flags.includes("-c"));
-    if (flags.includes("-m") !== ignoreMiddle) toggleIgnoreMiddle(flags.includes("-m"));
+    if (flags.includes("-m") !== ignoreMiddle) { ignoreHistory.current = true; toggleIgnoreMiddle(flags.includes("-m")); ignoreHistory.current = false; }
     setAngle(flags.includes("-nb") ? "Both" : flags.includes("-nu") ? "Top" : flags.includes("-nd") ? "Bottom" : "None");
     const setLimit = (prefix: string, setEnabled: (v: boolean) => void, setValue: (v: number) => void) => {
       const flag = flags.find((value) => value.startsWith(prefix)); setEnabled(Boolean(flag));
@@ -1608,7 +1608,7 @@ export default function App() {
       if (typeof value.cubeShape === "boolean") setCubeShape(value.cubeShape);
       if (typeof value.ignoreMiddle === "boolean") {
         setIgnoreMiddle(value.ignoreMiddle);
-        if (value.ignoreMiddle) queueMicrotask(() => toggleIgnoreMiddle(true));
+        if (value.ignoreMiddle) queueMicrotask(() => { ignoreHistory.current = true; toggleIgnoreMiddle(true); ignoreHistory.current = false; });
       }
       if (typeof value.maxX === "boolean") setMaxX(value.maxX);
       if (typeof value.maxXValue === "number") setMaxXValue(value.maxXValue);
