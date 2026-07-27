@@ -1052,6 +1052,69 @@ export default function App() {
   const [tableBusyMessage, setTableBusyMessage] = useState("");
   const [tableBusyTick, setTableBusyTick] = useState(0);
   const [outputToolsFaded, setOutputToolsFaded] = useState(false);
+  /* ============================================================================
+   * TERMINAL / OUTPUT PANEL BEHAVIOR
+   * ============================================================================
+   *
+   * The terminal is the output panel that shows solver log lines and solutions.
+   * There are two views: terminal (raw text) and table (structured solutions).
+   * Key refs/state:
+   *   followTerminal / followTerminalRef  – whether auto-scroll is active
+   *   completedWhilePaused               – solve finished while user had scrolled up
+   *   isSwitchingViewRef                  – suppresses scroll during terminal↔table toggle
+   *   terminalScrollPositionRef           – remembered scroll offset when switching views
+   *   tableScrollPositionRef              – same, for table view
+   *
+   * ── SOLVE START (line ~1493) ──────────────────────────────────────────────
+   *   Resets everything: followTerminal = true, tableView = false, scroll
+   *   positions = 0, completedWhilePaused = false.
+   *
+   * ── DURING SOLVE (running = true) ─────────────────────────────────────────
+   *   • New outputLines / statusLines / solutions arrive continuously.
+   *   • The useEffect at line ~1230 fires on every content change. If
+   *     followTerminal is true, it schedules a requestAnimationFrame to scroll
+   *     the terminal to the bottom.
+   *   • Scrolling UP (onWheel with deltaY < 0) sets followTerminal = false,
+   *     which stops auto-scroll. A ⌄ button appears to re-enable it.
+   *   • Scrolling up via scrollbar drag (no onWheel) is detected by
+   *     handleTerminalScroll: it compares the new scrollTop with the previous
+   *     one — only if scrollTop decreased (user actually scrolled up) AND the
+   *     user is >50px above the bottom does it disable followTerminal. This
+   *     avoids false triggers from content being added (scrollHeight grows
+   *     but scrollTop stays the same). Re-enabling is only via the ⌄ button.
+   *
+   * ── SOLVE FINISHES (line ~1520) ──────────────────────────────────────────
+   *   • If followTerminal was still true (user never scrolled away):
+   *     → auto-switches to table view
+   *     → shows busy messages while normalizing / building table
+   *   • If followTerminal was false (user scrolled up during solve):
+   *     → sets completedWhilePaused = true
+   *     → shows ⊞ button to manually switch to table view later
+   *
+   * ── ⌄ BUTTON (line ~1830) ────────────────────────────────────────────────
+   *   Calls scrollTerminalToBottom() which:
+   *     1. Sets followTerminal = true
+   *     2. Sets completedWhilePaused = false
+   *     3. Scrolls the div to the bottom
+   *
+   * ── ⊞ BUTTON (line ~1829) ────────────────────────────────────────────────
+   *   Appears when completedWhilePaused is true (solve finished while user
+   *   was scrolled up). Clicking switches to table view.
+   *
+   * ── VIEW SWITCHING (terminal ↔ table) ─────────────────────────────────────
+   *   switchToTableMode / switchToTerminalMode save the current scroll
+   *   position, set isSwitchingViewRef = true, then toggle tableView.
+   *   The useLayoutEffect at line ~1223 restores the saved position.
+   *   isSwitchingViewRef is cleared by the useEffect at line ~1233 so that
+   *   the auto-scroll effect does NOT fire during the switch.
+   *
+   * ── COMMON PITFALL ────────────────────────────────────────────────────────
+   *   The rAF in the auto-scroll effect must NOT call scrollTerminalToBottom()
+   *   directly, because that function unconditionally sets followTerminal=true,
+   *   which would override a user who just scrolled up. Instead, the rAF
+   *   callback must check followTerminalRef.current before scrolling.
+   * ============================================================================
+   */
   const terminalTextRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const terminalScrollPositionRef = useRef(0);
@@ -1190,7 +1253,16 @@ export default function App() {
   const handleTerminalScroll = () => {
     const node = terminalTextRef.current;
     if (!node) return;
-    terminalScrollPositionRef.current = node.scrollTop;
+    const prev = terminalScrollPositionRef.current;
+    const next = node.scrollTop;
+    terminalScrollPositionRef.current = next;
+    if (running && next < prev) {
+      const nearBottom = node.scrollHeight - next - node.clientHeight < 50;
+      if (!nearBottom && followTerminalRef.current) {
+        followTerminalRef.current = false;
+        setFollowTerminal(false);
+      }
+    }
   };
   const handleTableScroll = () => {
     const node = tableContainerRef.current;
@@ -1228,7 +1300,14 @@ export default function App() {
     }
   }, [tableView]);
   useEffect(() => {
-    if (followTerminal && !isSwitchingViewRef.current) requestAnimationFrame(scrollTerminalToBottom);
+    if (followTerminal && !isSwitchingViewRef.current) {
+      requestAnimationFrame(() => {
+        if (followTerminalRef.current) {
+          const node = terminalTextRef.current;
+          if (node) node.scrollTop = node.scrollHeight;
+        }
+      });
+    }
   }, [outputLines, statusLines, solutions, tableView, running, followTerminal]);
   useEffect(() => {
     isSwitchingViewRef.current = false;
