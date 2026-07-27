@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadSettings, saveSettings, loadFavorites, saveFavorites } from "./storage";
 
 const solved = [
@@ -1071,6 +1072,18 @@ export default function App() {
     document.documentElement.classList.toggle("tall-viewport", window.innerHeight / zoom >= 810);
   }, [zoom]);
   useEffect(() => {
+    const anyOpen = modal !== null || favoritesOpen;
+    if (anyOpen) {
+      history.pushState({ modal: true }, "");
+    }
+    const onPop = () => {
+      setModal(null);
+      setFavoritesOpen(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [modal, favoritesOpen]);
+  useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (!modeControlRef.current?.contains(event.target as Node)) {
         setModeMenu(false);
@@ -1239,7 +1252,7 @@ export default function App() {
     setStatusLines([]);
     setRunCubeShape(false);
     setTableView(false);
-    setFavoritesOpen(false);
+    history.back();
   };
   const restore = (position: string) => {
     const next = parsePosition(position);
@@ -1930,13 +1943,14 @@ export default function App() {
           setFavoritesOpen(true);
         }}>♥  Add to Favorites Bin</button>
       </div>}
-      {modal && <Modal type={modal} close={() => setModal(null)} settings={{
+      {createPortal(<>
+      {modal && <Modal type={modal} close={() => history.back()} settings={{
         smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal,
       }} />}
-      {favoritesOpen && <div className="modal-shade" onClick={() => setFavoritesOpen(false)}>
+      {favoritesOpen && <div className="modal-shade" onClick={() => history.back()}>
         <div className="modal favorites-modal" onClick={(event) => event.stopPropagation()}>
-          <button className="modal-close" onClick={() => setFavoritesOpen(false)}>✕</button>
+          <button className="modal-close" onClick={() => history.back()}>✕</button>
           <h2>Favorites</h2>
           {!!solutions.length && <button className="favorite-save" onClick={() => {
             const key = currentRunKey();
@@ -1953,6 +1967,7 @@ export default function App() {
           </section>)}
         </div>
       </div>}
+      </>, document.body)}
     </div>
   );
 }
