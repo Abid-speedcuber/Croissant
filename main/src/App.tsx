@@ -814,6 +814,7 @@ function Modal({
     abidNotation: boolean; setAbidNotation: (value: boolean) => void;
     ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
     debugOutput: boolean; setDebugOutput: (value: boolean) => void;
+    zoom: number; setZoom: (value: number) => void;
     disabled: boolean;
     hasMaxTurn: boolean;
   };
@@ -839,6 +840,12 @@ function Modal({
             <input type="checkbox" checked={settings?.debugOutput ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setDebugOutput(e.target.checked)} />
             <span>Debug output</span>
           </label>
+        </div>
+        <div className="settings-slider">
+          <span className="settings-slider-label">UI scale</span>
+          <input type="range" min="0.5" max="2" step="0.1" value={settings?.zoom ?? 1} disabled={settings?.disabled} onChange={(e) => settings?.setZoom(Number(e.target.value))} />
+          <span className="settings-slider-value">{Math.round((settings?.zoom ?? 1) * 100)}%</span>
+          {(settings?.zoom ?? 1) !== 1 && <button className="settings-slider-reset" disabled={settings?.disabled} onClick={() => settings?.setZoom(1)}>Reset</button>}
         </div>
       </div>
     ) : type === "about" ? (
@@ -1059,6 +1066,10 @@ export default function App() {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
+  useEffect(() => {
+    zoomRef.current = zoom;
+    document.documentElement.classList.toggle("tall-viewport", window.innerHeight / zoom >= 810);
+  }, [zoom]);
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (!modeControlRef.current?.contains(event.target as Node)) {
@@ -1540,6 +1551,7 @@ export default function App() {
       if (typeof value.maxYValue === "number") setMaxYValue(value.maxYValue);
       if (typeof value.maxTotal === "boolean") setMaxTotal(value.maxTotal);
       if (typeof value.maxTotalValue === "number") setMaxTotalValue(value.maxTotalValue);
+      if (typeof value.zoom === "number") { setZoom(value.zoom); zoomRef.current = value.zoom; document.documentElement.classList.toggle("tall-viewport", window.innerHeight / value.zoom >= 810); }
       queueMicrotask(() => { settingsReady.current = true; });
     });
   }, []);
@@ -1548,9 +1560,9 @@ export default function App() {
     void saveSettings({
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle,
-      maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue,
+      maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom,
     });
-  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue]);
+  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom]);
   useEffect(() => {
     if (!solutions.length || running) return;
     let cancelled = false;
@@ -1920,7 +1932,7 @@ export default function App() {
       </div>}
       {modal && <Modal type={modal} close={() => setModal(null)} settings={{
         smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
-        debugOutput, setDebugOutput, disabled: running, hasMaxTurn: maxX || maxY || maxTotal,
+        debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal,
       }} />}
       {favoritesOpen && <div className="modal-shade" onClick={() => setFavoritesOpen(false)}>
         <div className="modal favorites-modal" onClick={(event) => event.stopPropagation()}>
