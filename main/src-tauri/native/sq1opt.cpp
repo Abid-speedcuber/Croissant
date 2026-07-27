@@ -1803,7 +1803,7 @@ public:
 		shpx = stt.getShape(p.getShape(),!p.getParityOdd());
 		shpx2 = stt.tranTable[shpx][3];
 	};
-	inline int doMove(int m){
+	inline int doMove(int m) override {
 		const int mirrmv[3]={1,0,2};
 		int r=0;
 		if(m==0){
@@ -1830,7 +1830,7 @@ public:
 		shpx2 = stt.tranTable[shpx2][mirrmv[m]];
 		return r;
 	}
-	int solve(int twoGen, int extraMoves, bool keepCubeShape){
+	int solve(int twoGen, int extraMoves, bool keepCubeShape) override {
 		// Partial-aware preadf detection doubles as the 2-gen / p2g solve guard:
 		// twoGenPreadf understands U/V/W/X/Y/Z pieces, so it returns every rotation
 		// that can bring a (possibly partially-specified) solved block to the frozen
@@ -1940,12 +1940,12 @@ public:
 		m_preadfBot = 0;
 		return 0;
 	}
-	inline bool isSolved() {
+	inline bool isSolved() override {
 		return (fp.matchesSolved() && middle>=0);
 	}
 	// determine if we should prune this branch of the tree
 	// we should have a shape-only pruning table
-	inline bool prunedOut(int l) {
+	inline bool prunedOut(int l) override {
 		if (e0>-1 && c0>-1) {
 			if( pr1.table[shp ][e0][c0]>l+1 && pr1.table[shpx][e0][c0]>l+1) return true;
 		}
