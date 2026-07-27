@@ -1,5 +1,3 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
-
 type StorageBackend = {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
@@ -32,6 +30,7 @@ async function getBackend(): Promise<StorageBackend> {
   if (backend) return backend;
   if (isTauri()) {
     try {
+      const { LazyStore } = await import("@tauri-apps/plugin-store");
       const store = new LazyStore("croissant.json", { autoSave: 200 });
       await store.init();
       backend = {
