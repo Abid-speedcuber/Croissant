@@ -1306,18 +1306,26 @@ export default function App() {
     ignoreHistory.current = false;
   };
   const doUndo = () => {
-    if (!undo.length || running) return;
-    const previous = undo[undo.length - 1];
-    setRedo((items) => [...items, positionString(stateRef.current)].slice(-64));
-    restore(previous);
-    setUndo(undo.slice(0, -1));
+    if (running) return;
+    setUndo((stack) => {
+      if (!stack.length) return stack;
+      const previous = stack[stack.length - 1];
+      const snapshot = positionString(stateRef.current);
+      restore(previous);
+      setRedo((items) => [...items, snapshot].slice(-64));
+      return stack.slice(0, -1);
+    });
   };
   const doRedo = () => {
-    if (!redo.length || running) return;
-    const next = redo[redo.length - 1];
-    setUndo((items) => [...items, positionString(stateRef.current)].slice(-64));
-    restore(next);
-    setRedo(redo.slice(0, -1));
+    if (running) return;
+    setRedo((stack) => {
+      if (!stack.length) return stack;
+      const next = stack[stack.length - 1];
+      const snapshot = positionString(stateRef.current);
+      restore(next);
+      setUndo((items) => [...items, snapshot].slice(-64));
+      return stack.slice(0, -1);
+    });
   };
   const chooseMode = (next: string) => {
     setMode(next);
