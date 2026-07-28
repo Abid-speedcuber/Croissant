@@ -1085,7 +1085,8 @@ export default function App() {
     [smartKarn, setSmartKarn] = useState(true), [abidNotation, setAbidNotation] = useState(false),
     [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false),
-    [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({});
+    [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
+    [pendingDeletes, setPendingDeletes] = useState<Record<string, number>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; alg: string } | null>(null);
   const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 2, cornersTwo: true, cornersPseudo: true });
   const [followTerminal, setFollowTerminal] = useState(true);
@@ -2154,15 +2155,28 @@ export default function App() {
               <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
               <div className="favorite-actions">
                 <button title="Apply setup" onClick={() => applyRunConfig(key)}>Apply setup</button>
-                <button title="Copy all algs" onClick={() => void navigator.clipboard.writeText(bin.algorithms.join("\n"))}>⧉</button>
+                <button title="Copy all algs" onClick={() => void navigator.clipboard.writeText(bin.algorithms.map(lineWithoutBracket).join("\n"))}>⧉</button>
                 <button title="Delete bin" onClick={() => setFavorites((old) => { const next = { ...old }; delete next[key]; return next; })}>🗑</button>
               </div>
             </div>
             <ul className="favorite-algs">
-              {bin.algorithms.map((alg, i) => <li key={`${alg}-${i}`}>
-                <code>{alg}</code>
-                <button className="favorite-alg-remove" title="Remove" onClick={() => setFavorites((old) => ({ ...old, [key]: { ...old[key], algorithms: old[key].algorithms.filter((_, j) => j !== i) } }))}>✕</button>
-              </li>)}
+              {bin.algorithms.map((alg, i) => {
+                const deleteKey = `${key}::${alg}`;
+                const isPending = deleteKey in pendingDeletes;
+                return <li key={`${alg}-${i}`} className={isPending ? "favorite-alg-deleted" : ""}>
+                  {isPending ? <><span>Successfully deleted,</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[deleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; }); }}>undo</button>?</> : <>
+                    <code>{alg}</code>
+                    <button className="favorite-alg-copy" title="Copy alg" onClick={() => void navigator.clipboard.writeText(lineWithoutBracket(alg))}>⧉</button>
+                    <button className="favorite-alg-remove" title="Remove" onClick={() => {
+                      const timer = window.setTimeout(() => {
+                        setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; });
+                        setFavorites((old) => ({ ...old, [key]: { ...old[key], algorithms: old[key].algorithms.filter((_, j) => j !== i) } }));
+                      }, 5000);
+                      setPendingDeletes((old) => ({ ...old, [deleteKey]: timer }));
+                    }}>✕</button>
+                  </>}
+                </li>;
+              })}
             </ul>
           </section>)}
         </div>
