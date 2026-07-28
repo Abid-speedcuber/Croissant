@@ -1088,7 +1088,7 @@ export default function App() {
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
     [pendingDeletes, setPendingDeletes] = useState<Record<string, number>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; alg: string } | null>(null);
-  const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 2, cornersTwo: true, cornersPseudo: true });
+  const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 0, cornersTwo: false, cornersPseudo: false });
   const [followTerminal, setFollowTerminal] = useState(true);
   const [completedWhilePaused, setCompletedWhilePaused] = useState(false);
   const [tableBusyMessage, setTableBusyMessage] = useState("");
@@ -1182,7 +1182,7 @@ export default function App() {
   useEffect(() => {
     const updateBreakpoints = () => {
       const effW = window.innerWidth / zoomRef.current;
-      document.documentElement.classList.toggle("bp-720", effW <= 720);
+      document.documentElement.classList.toggle("bp-720", effW <= 860);
       document.documentElement.classList.toggle("bp-620", effW <= 620);
       document.documentElement.classList.toggle("bp-460", effW <= 460);
     };
@@ -1193,7 +1193,7 @@ export default function App() {
   useEffect(() => {
     const update = () => {
       const effW = window.innerWidth / zoomRef.current;
-      document.documentElement.classList.toggle("bp-720", effW <= 720);
+      document.documentElement.classList.toggle("bp-720", effW <= 860);
       document.documentElement.classList.toggle("bp-620", effW <= 620);
       document.documentElement.classList.toggle("bp-460", effW <= 460);
     };
@@ -1777,7 +1777,7 @@ export default function App() {
     if (!tauri()?.core?.invoke) return;
     void tauri()!.core!.invoke<TwoGenStatus>("two_gen_status", { position: rawPosition(cubeState) })
       .then((status) => { if (!cancelled) setTwoGenStatus(status); })
-      .catch(() => undefined);
+      .catch((err) => console.error("two_gen_status invoke failed:", err));
     return () => { cancelled = true; };
   }, [cubeState]);
   useEffect(() => {
@@ -1911,7 +1911,7 @@ export default function App() {
       <div className="select-grid">
         <OptionDropdown id="metric" label="Metric" title={tooltips.metric} value={metric} options={["Slice", "Move", "Angle"]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
         <OptionDropdown id="two" label="2 Gen" title={tooltips.twoGen} value={two} options={["None", "Pseudo 2 Gen", "2 Gen"]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
-        <OptionDropdown id="angle" label="Lock layer angle on Pre-ABF" title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+        <OptionDropdown id="angle" label="Lock layer (preABF)" title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
         <OptionDropdown id="normalize" label="Normalize ABF" title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">

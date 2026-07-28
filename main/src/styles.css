@@ -250,8 +250,8 @@ body {
  * BREAKPOINT LEGEND
  *
  * Width classes (toggled on :root based on window.innerWidth / zoom):
- *   (none)   = Wide:              > 720px
- *   bp-720   = Semi-wide:         621px – 720px
+ *   (none)   = Wide:              > 860px
+ *   bp-720   = Semi-wide:         621px – 860px
  *   bp-620   = Semi-narrow:       461px – 620px
  *   bp-460   = Narrow:            ≤ 460px
  *
@@ -274,7 +274,7 @@ body {
  *   Semi-narrow + not-tall: .bp-720.bp-620
  *   Narrow + not-tall    :  .bp-720.bp-620.bp-460
  *
- *   Note: At narrow widths (bp-720 and below), the layout collapses to single-column
+ *   Note: At narrow widths (bp-720 and below, i.e. ≤860px), the layout collapses to single-column
  *   mobile mode regardless of height, so tall vs not-tall barely matters.
  */
 
@@ -290,7 +290,7 @@ body {
   overflow: auto;
 }
 :root.tall-viewport:not(.bp-720) .options-panel {
-  padding: 18px max(16px, calc((100vw - 720px) * 0.7)) 18px 16px;
+  padding: 18px max(16px, calc((100vw - 860px) * 0.7)) 18px 16px;
 }
 :root.tall-viewport:not(.bp-720) .options-panel .select-grid {
   gap: 26px;
