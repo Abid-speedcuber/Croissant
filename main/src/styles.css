@@ -609,6 +609,11 @@ body {
   margin: 0;
   accent-color: #4a90d9;
 }
+.check-grid label:has(input[type="checkbox"]:disabled),
+.modal-check:has(input[type="checkbox"]:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .limit-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

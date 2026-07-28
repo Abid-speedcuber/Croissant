@@ -1792,6 +1792,11 @@ export default function App() {
   }, [favorites]);
   const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
+  const cubeshapeBlockedBy2Gen = (two === "2 Gen" && !twoGenStatus.cornersTwo) ||
+    (two === "Pseudo 2 Gen" && !twoGenStatus.cornersPseudo);
+  useEffect(() => {
+    if (cubeShape && cubeshapeBlockedBy2Gen) setCubeShape(false);
+  }, [cubeshapeBlockedBy2Gen]);
   const specificDepthsActive = depths.trim().length > 0;
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
   if (ignoreTransforms) commandFlags.push("-x");
@@ -1909,7 +1914,7 @@ export default function App() {
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
           </span>}
         </label>
-        <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState)} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
+        <label title={cubeshapeBlockedBy2Gen ? "The cube\u2019s corners cannot be solved with 2 gen in CS." : tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
       </div>
       <div className="limit-grid">
         <label title={tooltips.maxX}>Max top turn:
