@@ -1218,6 +1218,7 @@ export default function App() {
         setMenu(false);
       }
       if (!contextMenu) return;
+      if ((event.target as Element | null)?.closest(".solution-context")) return;
       setContextMenu(null);
     };
     window.addEventListener("pointerdown", handlePointerDown);
@@ -1862,7 +1863,7 @@ export default function App() {
       <div className="select-grid">
         <OptionDropdown id="metric" label="Metric" title={tooltips.metric} value={metric} options={["Slice", "Move", "Angle"]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
         <OptionDropdown id="two" label="2 Gen" title={tooltips.twoGen} value={two} options={["None", "Pseudo 2 Gen", "2 Gen"]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
-        <OptionDropdown id="angle" label="Lock layer angle on preabf" title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+        <OptionDropdown id="angle" label="Lock layer angle on Pre-ABF" title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
         <OptionDropdown id="normalize" label="Normalize ABF" title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">

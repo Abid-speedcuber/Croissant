@@ -618,6 +618,15 @@ body {
   color: #dce5f2;
   padding: 6px 8px;
   text-align: left;
+  cursor: pointer;
+}
+.solution-context button:hover {
+  background: #35445a;
+  border-color: #6880a0;
+}
+.solution-context button:active {
+  background: #4a6080;
+  border-color: #7e9aba;
 }
 .terminal {
   position: relative;
