@@ -290,7 +290,7 @@ body {
   overflow: auto;
 }
 :root.tall-viewport:not(.bp-720) .options-panel {
-  padding: 18px 16px 18px;
+  padding: 18px max(16px, calc((100vw - 720px) * 0.7)) 18px 16px;
 }
 :root.tall-viewport:not(.bp-720) .options-panel .select-grid {
   gap: 26px;
