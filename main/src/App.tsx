@@ -927,71 +927,94 @@ function Modal({
         <p>
           For the first two modes, use <strong>Enter</strong> to apply the moves from the current state, or <strong>Shift + Enter</strong> to first reset the cube to solved state before applying.
         </p>
-        <div className="modal-section-title">Favorites</div>
+        <div className="modal-section-title">Options</div>
         <p>
-          Algs can be saved to bins for later reference. Right-click a generated alg to:
+          Hover over any option to read its description. Quick reference:
+        </p>
+        <ul>
+          <li><strong>Output</strong>: toggle between <em>Solution</em> (solve from current state) and <em>Scramble</em> (generate a scramble that leads to the current state).</li>
+          <li><strong>Metric</strong>: how move length is counted — <strong>Slice</strong> (only slices), <strong>Move</strong> (layer turns too), or <strong>Angle</strong>.</li>
+          <li><strong>2 Gen / Pseudo 2 Gen</strong>: restrict moves to top-layer turns and slices (or a pseudo variant).</li>
+          <li><strong>Generate All Solutions</strong>: find every shortest solution, not just the first one found. Use the <strong>−</strong>/<strong>+</strong> stepper to also return solutions up to N moves beyond optimal.</li>
+          <li><strong>Specific depths</strong>: search only the listed move counts (comma-separated, e.g. "8,9").</li>
+          <li><strong>Stay in cubeshape</strong>: restrict to algs that keep the puzzle in cubeshape throughout. Automatically disabled when the position is incompatible.</li>
+          <li><strong>Lock layer angle on Pre-ABF</strong>: constrain the pre-ABF move to ±1 or 0 on either/both layers.</li>
+          <li><strong>Normalize ABF</strong>: simplify ABF moves in the output (e.g. 3-1 → 0-1, 43 → 10).</li>
+          <li><strong>Max top / bottom / total turns</strong>: cap how large layer turns can be.</li>
+        </ul>
+        <div className="modal-section-title">Settings</div>
+        <p>
+          Opened from the <strong>⋮</strong> menu in the top bar. Options:
+        </p>
+        <ul>
+          <li><strong>Use smarter karn</strong>: don't karnify things like T when the alg goes out of CS.</li>
+          <li><strong>Abid's notation</strong>: use barred numbers for negatives. This is just a display setting.</li>
+          <li><strong>Ignore move equivalences</strong>: generate all possible algs, even with y2 algs.</li>
+          <li><strong>Debug output</strong>: outputs internal solver states.</li>
+          <li><strong>UI scale</strong>: adjust the interface size (50%–200%).</li>
+        </ul>
+        <div className="modal-section-title">Output</div>
+        <p>
+          Solutions appear in the terminal as they are found. The output area has two views:
+        </p>
+        <ul>
+          <li><strong>Terminal view</strong>: solutions stream in as they are found, like a log.</li>
+          <li><strong>Table view</strong>: a sorted, comparable list of all solutions with move counts and ergonomics. Auto-enabled when 2 or more solutions are found.</li>
+        </ul>
+        <p>
+          Right-click (or left-click in table view) on any solution to open a context menu:
         </p>
         <ul>
           <li><strong>⧉ Copy alg</strong> — copies the alg itself</li>
           <li><strong>♥ Add to Favorites Bin</strong> — saves the alg to a bin</li>
         </ul>
         <p>
-          Bins are identified by the <strong>configurations</strong> of the solve, so algs from the same setup always land in the same bin regardless of when they were added.
-        </p>
-        <p>
-          Click the <strong>♥</strong> button (visible in the terminal area) to open the Favorites Bin, where you can:
+          Other buttons in the terminal area:
         </p>
         <ul>
-          <li>Click a <strong>bin title</strong> to re-apply that configuration and clear the terminal.</li>
-          <li>Use <strong>✏</strong> to rename a bin</li>
-          <li><strong>⧉</strong> to copy all its algs</li>
-          <li><strong>🗑</strong> to delete the bin entirely</li>
-          <li>Click <strong>✕</strong> next to any alg to remove it</li>
-        </ul>
-        <p>
-          Favorited algs are stored on your device, unless you delete them.
-        </p>
-        <div className="modal-section-title">Options</div>
-        <p>
-          Hover over any option to read its description. Quick reference:
-        </p>
-        <ul>
-          <li><strong>Metric</strong>: how move length is counted — <strong>Slice</strong> (only slices), <strong>Move</strong> (layer turns too), or <strong>Angle</strong>.</li>
-          <li><strong>All optimal</strong>: find every shortest solution, not just the first one found.</li>
-          <li><strong>+suboptimal</strong>: also return solutions up to N moves longer than optimal.</li>
-          <li><strong>Specific depths</strong>: search only the listed move counts (comma-separated, e.g. "8,9").</li>
-          <li><strong>Generator alg</strong>: output algs will set up the case from solved instead of solving it.</li>
-          <li><strong>2 Gen / Pseudo 2 Gen</strong>: restrict moves to top-layer turns and slices (or a pseudo variant).</li>
-          <li><strong>Stay in cubeshape</strong>: restrict to algs that keep the puzzle in cubeshape throughout.</li>
-          <li><strong>Karn output</strong>: display solutions in karn instead of WCA notation.</li>
-          <li><strong>Lock layer angle on pre-ABF</strong>: constrain the pre-ABF move to ±1 or 0 on either/both layers.</li>
-          <li><strong>Normalize ABF</strong>: simplify ABF moves in the output (e.g. 3-1 → 0-1, 43 → 10).</li>
-          <li><strong>Max top / bottom / total turns</strong>: cap how large layer turns can be.</li>
-        </ul>
-        <div className="modal-section-title">Settings</div>
-        <ul>
-          <li><strong>Use smarter karn</strong>: don't karnify things like T when the alg goes out of CS.</li>
-          <li><strong>Abid's notation</strong>: use barred numbers for negatives. This is just a display setting.</li>
-          <li><strong>Ignore move equivalences</strong>: generate all possible algs, even with y2 algs.</li>
-          <li><strong>Debug output</strong>: outputs internal solver states.</li>
-        </ul>
-        <div className="modal-section-title">Output</div>
-        <p>
-          Solutions appear in the terminal as they are found. Once algs are present, several buttons appear in the corner of the terminal area:
-        </p>
-        <ul>
+          <li><strong>Normal</strong> / <strong>Karn</strong> dropdown — switch between WCA and karnotation display.</li>
           <li><strong>⧉</strong> — copy all algs in the terminal to the clipboard.</li>
-          <li><strong>♥</strong> — see the Favorites section.</li>
-          <li><strong>⊞</strong> — switch between terminal view and table view.</li>
+          <li><strong>⊞</strong> / <strong>▤</strong> — switch between terminal and table view.</li>
           <li><strong>⤢</strong> — expand the terminal to full screen.</li>
         </ul>
         <p>
           If <strong>Stay in cubeshape</strong> was active, algs will be roughly sorted by their <strong>ergonomics</strong>. The numbers are relative and for reference only.
         </p>
+        <div className="modal-section-title">Favorites</div>
+        <p>
+          Algs can be saved to bins for later reference. Open the Favorites Bin from the <strong>♥</strong> button in the top bar.
+        </p>
+        <p>
+          Right-click (or left-click in table view) on any solution to add it to a bin.
+        </p>
+        <p>
+          Bins are identified by the <strong>configurations</strong> of the solve, so algs from the same setup always land in the same bin regardless of when they were added.
+        </p>
+        <p>
+          Inside the Favorites Bin, you can:
+        </p>
+        <ul>
+          <li>Click <strong>Apply setup</strong> to re-apply a bin's configuration and clear the terminal.</li>
+          <li>Use <strong>✏</strong> to rename a bin.</li>
+          <li><strong>⧉</strong> to copy all its algs.</li>
+          <li><strong>🗑</strong> to delete the bin entirely.</li>
+          <li>Click <strong>✕</strong> next to any alg to remove it.</li>
+        </ul>
+        <p>
+          Favorited algs are stored on your device, unless you delete them.
+        </p>
       </div>
     );
+  const shadeStartRef = useRef<EventTarget | null>(null);
+  const shadeEndRef = useRef<EventTarget | null>(null);
   return (
-    <div className="modal-shade" onClick={close}>
+    <div className="modal-shade" onPointerDown={(e) => { shadeStartRef.current = e.target; }} onPointerUp={(e) => { shadeEndRef.current = e.target; }} onClick={() => {
+      const startOutside = !shadeStartRef.current || !(shadeStartRef.current as Element).closest(".modal");
+      const endOutside = !shadeEndRef.current || !(shadeEndRef.current as Element).closest(".modal");
+      if (startOutside && endOutside) close();
+      shadeStartRef.current = null;
+      shadeEndRef.current = null;
+    }}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={close}>
           ✕
@@ -1023,6 +1046,8 @@ export default function App() {
   const stopped = useRef(false);
   const settingsReady = useRef(false);
   const favoritesReady = useRef(false);
+  const favShadeStartRef = useRef<EventTarget | null>(null);
+  const favShadeEndRef = useRef<EventTarget | null>(null);
   const [menu, setMenu] = useState(false),
     [modal, setModal] = useState<Modal>(null),
     [modeMenu, setModeMenu] = useState(false),
@@ -1614,7 +1639,9 @@ export default function App() {
       const result = await native.core.invoke<{ code: number | null; stdout: string; stderr: string }>("solve", { position: start, flags, onLine });
       if (runId !== solveRunId.current) return;
       const shouldAutoTable = followTerminalRef.current;
-      if (shouldAutoTable) {
+      // Intentional feature by Abid: only auto-switch to table view when there are
+      // 2+ solutions, since table view is only useful for comparing/organizing output.
+      if (shouldAutoTable && solutionsRef.current.length >= 2) {
         switchToTableMode();
         setTableBusyMessage("Resolving latest solutions");
       }
@@ -1632,7 +1659,9 @@ export default function App() {
       const count = solutionsRef.current.length;
       const status = `${stopped.current ? "Stopped" : result.code === 0 ? "Done" : "Error"} — ${count} solution${count === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`;
       setStatusLines(lastSolveCubeShape.current && count ? [`Ranked ${count} algs by ergonomics.`] : [status]);
-      if (shouldAutoTable) {
+      // Intentional feature by Abid: only auto-switch to table view when 2+ solutions
+      // exist, since table view is only useful for comparing/organizing output.
+      if (shouldAutoTable && count >= 2) {
         switchToTableMode();
         finishTableBusySoon();
       } else if (count) {
@@ -1922,7 +1951,6 @@ export default function App() {
         </div>
         <div className="output-tools-right">
           <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
-          <button title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
           <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
           <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
           <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
@@ -1954,6 +1982,7 @@ export default function App() {
           <b>CROISSANT</b><sub> &nbsp; &nbsp; by Abid and Matt</sub>
         </div>
         <div className="top-menu-wrap">
+          <button className="top-favorites-button" title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
           <button className="top-menu-button" aria-label="Open menu" aria-expanded={menu} title={tooltips.menu} onMouseDown={(event) => event.preventDefault()} onClick={() => setMenu((value) => !value)}>
             ⋮
           </button>
@@ -2102,7 +2131,13 @@ export default function App() {
         smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal,
       }} />}
-      {favoritesOpen && <div className="modal-shade" onClick={() => history.back()}>
+      {favoritesOpen && <div className="modal-shade" onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
+        const startOutside = !favShadeStartRef.current || !(favShadeStartRef.current as Element).closest(".favorites-modal");
+        const endOutside = !favShadeEndRef.current || !(favShadeEndRef.current as Element).closest(".favorites-modal");
+        if (startOutside && endOutside) history.back();
+        favShadeStartRef.current = null;
+        favShadeEndRef.current = null;
+      }}>
         <div className="modal favorites-modal" onClick={(event) => event.stopPropagation()}>
           <button className="modal-close" onClick={() => history.back()}>✕</button>
           <h2>Favorites</h2>
@@ -2115,9 +2150,20 @@ export default function App() {
           }}>Save current solutions</button>}
           {!Object.keys(favorites).length && <p>No saved solution bins yet.</p>}
           {Object.entries(favorites).map(([key, bin]) => <section className="favorite-bin" key={key}>
-            <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
-            <div className="favorite-actions"><button onClick={() => applyRunConfig(key)}>Apply setup</button><button onClick={() => void navigator.clipboard.writeText(bin.algorithms.join("\n"))}>Copy</button><button onClick={() => setFavorites((old) => { const next = { ...old }; delete next[key]; return next; })}>Delete</button></div>
-            <pre>{bin.algorithms.join("\n")}</pre>
+            <div className="favorite-bin-head">
+              <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
+              <div className="favorite-actions">
+                <button title="Apply setup" onClick={() => applyRunConfig(key)}>Apply setup</button>
+                <button title="Copy all algs" onClick={() => void navigator.clipboard.writeText(bin.algorithms.join("\n"))}>⧉</button>
+                <button title="Delete bin" onClick={() => setFavorites((old) => { const next = { ...old }; delete next[key]; return next; })}>🗑</button>
+              </div>
+            </div>
+            <ul className="favorite-algs">
+              {bin.algorithms.map((alg, i) => <li key={`${alg}-${i}`}>
+                <code>{alg}</code>
+                <button className="favorite-alg-remove" title="Remove" onClick={() => setFavorites((old) => ({ ...old, [key]: { ...old[key], algorithms: old[key].algorithms.filter((_, j) => j !== i) } }))}>✕</button>
+              </li>)}
+            </ul>
           </section>)}
         </div>
       </div>}
