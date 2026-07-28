@@ -1794,6 +1794,17 @@ export default function App() {
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const cubeshapeBlockedBy2Gen = (two === "2 Gen" && !twoGenStatus.cornersTwo) ||
     (two === "Pseudo 2 Gen" && !twoGenStatus.cornersPseudo);
+  const cubeshapeDisableReason = cubeshapeBlockedBy2Gen
+    ? "The cube\u2019s corners cannot be solved with 2 gen in cubeshape."
+    : !inCubeshape(cubeState) ? (() => {
+      const rTop = getLayerR(cubeState.position, 0), rBot = getLayerR(cubeState.position, 12);
+      if (rTop < 0 || rBot < 0 || rTop === 1 || rBot === 1) return "Cube is not in cubeshape.";
+      if (cubeState.partial.every((v) => v === 0)) {
+        const odd = getParityOdd(cubeState.position);
+        if ((rTop === rBot) !== odd) return "Current parity cannot be solved from within cubeshape.";
+      }
+      return "Cube is not in cubeshape.";
+    })() : null;
   useEffect(() => {
     if (cubeShape && cubeshapeBlockedBy2Gen) setCubeShape(false);
   }, [cubeshapeBlockedBy2Gen]);
@@ -1914,7 +1925,7 @@ export default function App() {
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
           </span>}
         </label>
-        <label title={cubeshapeBlockedBy2Gen ? "The cube\u2019s corners cannot be solved with 2 gen in CS." : tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
+        <label title={cubeshapeDisableReason ?? tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
       </div>
       <div className="limit-grid">
         <label title={tooltips.maxX}>Max top turn:
