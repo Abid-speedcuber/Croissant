@@ -1165,6 +1165,7 @@ export default function App() {
   const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
   const cubeColumnRef = useRef<HTMLDivElement>(null);
+  const tableMetricRef = useRef("Slice");
   const mainGridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1615,6 +1616,7 @@ export default function App() {
     followTerminalRef.current = true;
     lastSolveCubeShape.current = cubeShape;
     firstTableSwitchAfterSolveRef.current = true;
+    tableMetricRef.current = metric;
     terminalScrollPositionRef.current = 0;
     tableScrollPositionRef.current = 0;
     setRunCubeShape(cubeShape);
@@ -1960,11 +1962,12 @@ export default function App() {
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>Stop</button>}
-      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${metric.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll}>
-        <div className="terminal-head"><span>#</span><b>Solution</b>{metric === "Angle" && <span>Angle</span>}{metric !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
+      {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
+      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll}>
+        <div className="terminal-head"><span>#</span><b>Solution</b>{tableMetricRef.current === "Angle" && <span>Angle</span>}{tableMetricRef.current !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
-          return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{metric === "Angle" && <span>{x.angle}</span>}{metric !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
