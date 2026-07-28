@@ -1964,6 +1964,34 @@ int show(int e){
 	return(e);
 }
 
+// Standalone cubeshape check: edges at positions i%3==r for some r, both layers.
+// Does not need ShapeTranTable — works directly on the raw position array.
+static bool isInCubeshapeRaw(const int pos[24]) {
+	for (int base = 0; base < 24; base += 12) {
+		bool layerOk = false;
+		for (int r = 0; r < 3; r++) {
+			bool match = true;
+			for (int i = 0; i < 12; i++) {
+				if ((i % 3 == r) != (pos[base + i] >= 8)) { match = false; break; }
+			}
+			if (match) { layerOk = true; break; }
+		}
+		if (!layerOk) return false;
+	}
+	return true;
+}
+
+// Pre-validate position against keepCubeShape + twoGen constraints.
+// Returns 0 if OK, error code (19) if unsolvable with these constraints.
+// Safe to call before pruning tables exist.
+static int preValidate(FullPosition& p, bool keepCubeShape, int twoGen) {
+	if (!keepCubeShape) return 0;
+	if (!isInCubeshapeRaw(p.pos)) return 19;
+	if (!p.isPartial() && p.getParityOdd()) return 19;
+	if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(p.pos, twoGen)) return 19;
+	return 0;
+}
+
 int parseInteger(const char* s){
 	int n=0;
 	while( *s!='\0' ){
@@ -2146,13 +2174,16 @@ int sq1optMain(int argc, char* argv[]){
 
 	FullPosition p;
 	std::ifstream is;
+	bool havePosition = false;
 	// Use directly injected position if available (bypasses string encoding/decoding)
 	if( s_hasInjectedPosition ){
 		p.set(s_injectedPos, s_injectedMiddle);
 		s_hasInjectedPosition = false;
+		havePosition = true;
 	}else if( posArg>=0 ){
 		int r=p.parseInput(argv[posArg]);
 		if(r) return show(r);
+		havePosition = true;
 	}else if( inpFile!=NULL ){
 		is.open(inpFile);
 		if(is.fail()) return show(3);
@@ -2161,7 +2192,13 @@ int sq1optMain(int argc, char* argv[]){
 		return 0;
 	}
 
-	// now we have a position p to solve
+	// now we have a position p to solve (if posArg>=0 or injected)
+
+	// Pre-validate: catch impossible constraints before expensive table init
+	if (havePosition) {
+		int pre = preValidate(p, keepCubeShape, twoGen);
+		if (pre) return show(pre);
+	}
 
 	if(verbosity>=3) std::cout << "Initializing..."<<std::endl;
 	// calculate transition tables
@@ -2221,6 +2258,12 @@ int sq1optMain(int argc, char* argv[]){
 			std::cout<<"Position: ";
 			p.print();
 			std::cout<<std::endl;
+		}
+
+		// Pre-validate per-position (file/random input) — skip expensive solve if impossible
+		if (posArg < 0) {
+			int pre = preValidate(p, keepCubeShape, twoGen);
+			if (pre) { show(pre); continue; }
 		}
 
 		if (p.isPartial()) {

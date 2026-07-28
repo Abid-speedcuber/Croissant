@@ -122,20 +122,36 @@ function OptionDropdown({ id, label, title, value, options, disabled, open, setO
 function twistable(p: number[]) {
   return p[0] !== p[11] && p[5] !== p[6] && p[12] !== p[23] && p[17] !== p[18];
 }
-function inCubeshape(state: CubeState) {
-  for (let base = 0; base < 24; base += 12) {
-    let layerMatches = false;
-    for (let remainder = 0; remainder < 3; remainder++) {
-      let match = true;
-      for (let i = 0; i < 12; i++) {
-        const expectedEdge = i % 3 === remainder, edge = state.position[base + i] >= 8;
-        if (expectedEdge !== edge) { match = false; break; }
-      }
-      if (match) { layerMatches = true; break; }
+function getLayerR(pos: number[], base: number): number {
+  for (let r = 0; r < 3; r++) {
+    let ok = true;
+    for (let i = 0; i < 12; i++) {
+      if ((i % 3 === r) !== (pos[base + i] >= 8)) { ok = false; break; }
     }
-    if (!layerMatches) return false;
+    if (ok) return r;
   }
-  return true;
+  return -1;
+}
+function getParityOdd(pos: number[]): boolean {
+  let p = false;
+  for (let i = 0; i < 24; i++) {
+    for (let j = i; j < 24; j++) {
+      if (pos[j] < pos[i]) p = !p;
+      if (pos[j] < 8) j++;
+    }
+    if (pos[i] < 8) i++;
+  }
+  return p;
+}
+function inCubeshape(state: CubeState) {
+  const rTop = getLayerR(state.position, 0);
+  if (rTop < 0) return false;
+  const rBot = getLayerR(state.position, 12);
+  if (rBot < 0) return false;
+  if (rTop === 1 || rBot === 1) return false;
+  if (state.partial.some((v) => v !== 0)) return true;
+  const odd = getParityOdd(state.position);
+  return (rTop === rBot) === odd;
 }
 function turn(
   p: number[],
