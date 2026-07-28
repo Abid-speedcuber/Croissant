@@ -2150,16 +2150,27 @@ export default function App() {
             } }));
           }}>Save current solutions</button>}
           {!Object.keys(favorites).length && <p>No saved solution bins yet.</p>}
-          {Object.entries(favorites).map(([key, bin]) => <section className="favorite-bin" key={key}>
+          {Object.entries(favorites).map(([key, bin]) => {
+            const binDeleteKey = `bin::${key}`;
+            const isBinPending = binDeleteKey in pendingDeletes;
+            return <section className={`favorite-bin${isBinPending ? " favorite-bin-deleted" : ""}`} key={key}>
             <div className="favorite-bin-head">
+              {isBinPending ? <><span>Bin deleted,</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[binDeleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[binDeleteKey]; return next; }); }}>undo</button>?</> : <>
               <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
               <div className="favorite-actions">
                 <button title="Apply setup" onClick={() => applyRunConfig(key)}>Apply setup</button>
                 <button title="Copy all algs" onClick={() => void navigator.clipboard.writeText(bin.algorithms.map(lineWithoutBracket).join("\n"))}>⧉</button>
-                <button title="Delete bin" onClick={() => setFavorites((old) => { const next = { ...old }; delete next[key]; return next; })}>🗑</button>
+                <button title="Delete bin" onClick={() => {
+                  const timer = window.setTimeout(() => {
+                    setPendingDeletes((old) => { const next = { ...old }; delete next[binDeleteKey]; return next; });
+                    setFavorites((old) => { const next = { ...old }; delete next[key]; return next; });
+                  }, 5000);
+                  setPendingDeletes((old) => ({ ...old, [binDeleteKey]: timer }));
+                }}>🗑</button>
               </div>
+              </>}
             </div>
-            <ul className="favorite-algs">
+            {!isBinPending && <ul className="favorite-algs">
               {bin.algorithms.map((alg, i) => {
                 const deleteKey = `${key}::${alg}`;
                 const isPending = deleteKey in pendingDeletes;
@@ -2170,15 +2181,21 @@ export default function App() {
                     <button className="favorite-alg-remove" title="Remove" onClick={() => {
                       const timer = window.setTimeout(() => {
                         setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; });
-                        setFavorites((old) => ({ ...old, [key]: { ...old[key], algorithms: old[key].algorithms.filter((_, j) => j !== i) } }));
+                        setFavorites((old) => {
+                          const bin = old[key];
+                          if (!bin) return old;
+                          const remaining = bin.algorithms.filter((_, j) => j !== i);
+                          if (remaining.length === 0) { const next = { ...old }; delete next[key]; return next; }
+                          return { ...old, [key]: { ...bin, algorithms: remaining } };
+                        });
                       }, 5000);
                       setPendingDeletes((old) => ({ ...old, [deleteKey]: timer }));
                     }}>✕</button>
                   </>}
                 </li>;
               })}
-            </ul>
-          </section>)}
+            </ul>}
+          </section>})}
         </div>
       </div>}
       </>, document.body)}

@@ -1556,6 +1556,16 @@ body {
 .favorite-undo:hover {
   color: #bde0ff;
 }
+.favorite-bin-deleted {
+  padding: 14px 16px;
+  display: flex;
+  justify-content: center;
+  color: #667;
+  font-style: italic;
+  border: 1px solid #2d3644;
+  border-radius: 10px;
+  background: #1a202c;
+}
 .solve:disabled {
   cursor: not-allowed;
   border-color: #444;
