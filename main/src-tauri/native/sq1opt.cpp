@@ -1620,7 +1620,9 @@ class PositionSolver {
 				int topMove = lastTurns[4];
 				int absTopMove = topMove>6 ? 12-topMove : topMove;
 				int absBottomMove = i>6 ? 12-i : i;
-				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || l<2 || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngleBot || absBottomMove < 2)) {
+				// use the following to respect generator's solution inversion
+				bool nearExemptBoundary = generator ? (m_slicesDone < 2) : (l < 2);
+				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || nearExemptBoundary || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngleBot || absBottomMove < 2)) {
 					moveList[moveLen++]=i+12;
 					lastTurns[5]=i;
 					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
