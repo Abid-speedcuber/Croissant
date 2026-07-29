@@ -66,7 +66,7 @@ run("emcc", [
   "-sALLOW_MEMORY_GROWTH=1",
   "-sINITIAL_MEMORY=268435456",
   "-sEXPORTED_FUNCTIONS=['_main','_sq1opt_web_set_table_directory','_sq1opt_web_request_stop','_sq1_web_unkarnify_alloc','_sq1_web_karnify_alloc','_sq1_web_rate_algorithm_json_alloc','_sq1_web_two_gen_status_json_alloc','_sq1_web_free_string','_malloc','_free']",
-  "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap','UTF8ToString','FS']",
+  "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap','UTF8ToString','FS','HEAP32']",
   "-o",
   "public/wasm/sq1opt.js",
 ], { cwd: main });
