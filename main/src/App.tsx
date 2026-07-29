@@ -836,7 +836,7 @@ function Modal({
     disabled: boolean;
     hasMaxTurn: boolean;
   };
-  debugStats?: { elapsed: string; solutionCount: number; rollingRate: number; avgRate: number; stddevRate: number; nodesSearched: number; searchDepth: number } | null;
+  debugStats?: { elapsed: string; solutionCount: number; rollingRate: number; avgRate: number; stddevRate: number; nodesSearched: number; searchDepth: number; nodeRate: number } | null;
 }) {
   const content =
     type === "settings" ? (
@@ -883,8 +883,10 @@ function Modal({
           <span className="debug-value">{debugStats?.stddevRate != null ? debugStats.stddevRate.toFixed(1) : "—"}</span>
           <span className="debug-label">Nodes searched</span>
           <span className="debug-value">{debugStats?.nodesSearched != null ? debugStats.nodesSearched.toLocaleString() : "—"}</span>
-          <span className="debug-label">Search depth</span>
+          <span className="debug-label">Depth</span>
           <span className="debug-value">{debugStats?.searchDepth ?? "—"}</span>
+          <span className="debug-label">Nodes/s</span>
+          <span className="debug-value">{debugStats?.nodeRate != null ? Math.round(debugStats.nodeRate).toLocaleString() : "—"}</span>
         </div>
       </div>
     ) : type === "about" ? (
@@ -1392,7 +1394,7 @@ export default function App() {
   useEffect(() => {
     if (modal !== "debug") return;
     const id = setInterval(() => {
-      if (!runningRef.current) return;
+      if (!runningRef.current || !solveStartTimeRef.current) return;
       const stats = debugStatsRef.current;
       const now = performance.now();
       const elapsedTotal = (now - solveStartTimeRef.current) / 1000;
@@ -1610,6 +1612,7 @@ export default function App() {
     if (stopped.current) return;
     if (runId !== solveRunId.current) return;
     if (line.startsWith("__PROGRESS__")) {
+      if (!solveStartTimeRef.current) solveStartTimeRef.current = performance.now();
       const nm = line.match(/nodes=(\d+)/), dm = line.match(/depth=(\d+)/);
       if (nm) progressNodesRef.current = parseInt(nm[1], 10);
       if (dm) progressDepthRef.current = parseInt(dm[1], 10);
@@ -1659,6 +1662,7 @@ export default function App() {
     seenDisplay.current.add(displayAlg);
     if (seenRaw.current.size === 1) {
       firstSolutionAt.current = performance.now();
+      if (!solveStartTimeRef.current) solveStartTimeRef.current = firstSolutionAt.current;
       if (!debugOutput) replaceOutputLines(outputLinesRef.current.filter((entry) => entry.isSolution));
     }
     const counts = parseSolutionCounts(line);
@@ -1696,7 +1700,7 @@ export default function App() {
     seenDisplay.current.clear();
     lineQueue.current = Promise.resolve();
     firstSolutionAt.current = 0;
-    solveStartTimeRef.current = performance.now();
+    solveStartTimeRef.current = 0;
     solveStopTimeRef.current = 0;
     debugStatsRef.current = { solutionTimestamps: [], rateSamples: [] };
     progressNodesRef.current = 0;
@@ -2051,7 +2055,7 @@ export default function App() {
     const stats = debugStatsRef.current;
     const now = performance.now();
     const start = solveStartTimeRef.current;
-    if (!start) return { elapsed: "—", solutionCount: 0, rollingRate: 0, avgRate: 0, stddevRate: 0 };
+    if (!start) return { elapsed: "—", solutionCount: 0, rollingRate: 0, avgRate: 0, stddevRate: 0, nodesSearched: 0, searchDepth: 0, nodeRate: 0 };
     const end = runningRef.current ? now : (solveStopTimeRef.current || now);
     const elapsed = ((end - start) / 1000).toFixed(1);
     const solutionCount = solutionsRef.current.length;
@@ -2063,7 +2067,10 @@ export default function App() {
     const samples = stats.rateSamples;
     const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
     const stddev = samples.length > 1 ? Math.sqrt(samples.reduce((sum, v) => sum + (v - avg) ** 2, 0) / samples.length) : 0;
-    return { elapsed, solutionCount, rollingRate, avgRate: avg, stddevRate: stddev, nodesSearched: progressNodesRef.current, searchDepth: progressDepthRef.current };
+    const nodesSearched = progressNodesRef.current;
+    const searchDepth = progressDepthRef.current;
+    const nodeRate = elapsedTotal > 0 ? nodesSearched / elapsedTotal : 0;
+    return { elapsed, solutionCount, rollingRate, avgRate: avg, stddevRate: stddev, nodesSearched, searchDepth, nodeRate };
   };
   const renderOutputShell = () => (
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
