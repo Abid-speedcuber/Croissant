@@ -30,7 +30,7 @@ type CubeState = {
   middle: number;
   middlePartial: number;
 };
-type Modal = "settings" | "how" | "about" | null;
+type Modal = "settings" | "how" | "about" | "debug" | null;
 type FavoriteBin = { name: string; algorithms: string[] };
 type Solution = {
   raw: string;
@@ -823,6 +823,7 @@ function Modal({
   type,
   close,
   settings,
+  debugStats,
 }: {
   type: Exclude<Modal, null>;
   close: () => void;
@@ -835,6 +836,7 @@ function Modal({
     disabled: boolean;
     hasMaxTurn: boolean;
   };
+  debugStats?: { elapsed: string; solutionCount: number; rollingRate: number; avgRate: number; stddevRate: number; nodesSearched: number; searchDepth: number } | null;
 }) {
   const content =
     type === "settings" ? (
@@ -863,6 +865,26 @@ function Modal({
           <input type="range" min="0.5" max="2" step="0.1" value={settings?.zoom ?? 1} disabled={settings?.disabled} onChange={(e) => settings?.setZoom(Number(e.target.value))} />
           <span className="settings-slider-value">{Math.round((settings?.zoom ?? 1) * 100)}%</span>
           {(settings?.zoom ?? 1) !== 1 && <button className="settings-slider-reset" disabled={settings?.disabled} onClick={() => settings?.setZoom(1)}>Reset</button>}
+        </div>
+      </div>
+    ) : type === "debug" ? (
+      <div className="modal-article">
+        <h2>Debug Stats</h2>
+        <div className="debug-stats-grid">
+          <span className="debug-label">Elapsed</span>
+          <span className="debug-value">{debugStats?.elapsed ?? "—"}s</span>
+          <span className="debug-label">Solutions</span>
+          <span className="debug-value">{debugStats?.solutionCount ?? "—"}</span>
+          <span className="debug-label">Solutions/min</span>
+          <span className="debug-value">{debugStats?.rollingRate != null ? debugStats.rollingRate.toFixed(1) : "—"}</span>
+          <span className="debug-label">Avg rate</span>
+          <span className="debug-value">{debugStats?.avgRate != null ? debugStats.avgRate.toFixed(1) : "—"}</span>
+          <span className="debug-label">Stddev rate</span>
+          <span className="debug-value">{debugStats?.stddevRate != null ? debugStats.stddevRate.toFixed(1) : "—"}</span>
+          <span className="debug-label">Nodes searched</span>
+          <span className="debug-value">{debugStats?.nodesSearched != null ? debugStats.nodesSearched.toLocaleString() : "—"}</span>
+          <span className="debug-label">Search depth</span>
+          <span className="debug-value">{debugStats?.searchDepth ?? "—"}</span>
         </div>
       </div>
     ) : type === "about" ? (
@@ -1036,6 +1058,11 @@ export default function App() {
   const outputLinesRef = useRef<OutputLine[]>([]);
   const followTerminalRef = useRef(true);
   const firstSolutionAt = useRef(0);
+  const solveStartTimeRef = useRef(0);
+  const solveStopTimeRef = useRef(0);
+  const debugStatsRef = useRef<{ solutionTimestamps: number[]; rateSamples: number[] }>({ solutionTimestamps: [], rateSamples: [] });
+  const progressNodesRef = useRef(0);
+  const progressDepthRef = useRef(0);
   const lineQueue = useRef<Promise<void>>(Promise.resolve());
   const outputIdleTimer = useRef<number | undefined>(undefined);
   const renderFrame = useRef<number | undefined>(undefined);
@@ -1094,6 +1121,7 @@ export default function App() {
   const [tableBusyMessage, setTableBusyMessage] = useState("");
   const [tableBusyTick, setTableBusyTick] = useState(0);
   const [outputToolsFaded, setOutputToolsFaded] = useState(false);
+  const [debugTick, setDebugTick] = useState(0);
   /* ============================================================================
    * TERMINAL / OUTPUT PANEL BEHAVIOR
    * ============================================================================
@@ -1361,6 +1389,22 @@ export default function App() {
     const id = window.setInterval(() => setTableBusyTick((value) => value + 1), 900);
     return () => window.clearInterval(id);
   }, [tableBusyMessage]);
+  useEffect(() => {
+    if (modal !== "debug") return;
+    const id = setInterval(() => {
+      if (!runningRef.current) return;
+      const stats = debugStatsRef.current;
+      const now = performance.now();
+      const elapsedTotal = (now - solveStartTimeRef.current) / 1000;
+      const windowDur = Math.min(60, Math.max(0, elapsedTotal));
+      const cutoff = now - windowDur * 1000;
+      stats.solutionTimestamps = stats.solutionTimestamps.filter(t => t > cutoff);
+      const rate = windowDur > 0 ? stats.solutionTimestamps.length / windowDur * 60 : 0;
+      stats.rateSamples.push(rate);
+      setDebugTick(t => t + 1);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [modal]);
   const armOutputToolFade = () => {
     if (outputIdleTimer.current !== undefined) window.clearTimeout(outputIdleTimer.current);
     outputIdleTimer.current = window.setTimeout(() => setOutputToolsFaded(true), 1500);
@@ -1556,6 +1600,7 @@ export default function App() {
   const addSolution = (row: Solution) => {
     solutionsRef.current = [...solutionsRef.current, row];
     scheduleSolutionFlush();
+    debugStatsRef.current.solutionTimestamps.push(performance.now());
   };
   const setSolutionRows = (rows: Solution[]) => {
     solutionsRef.current = rows;
@@ -1564,6 +1609,12 @@ export default function App() {
   const receiveSolverLine = async (line: string, startPosition: string, runId: number) => {
     if (stopped.current) return;
     if (runId !== solveRunId.current) return;
+    if (line.startsWith("__PROGRESS__")) {
+      const nm = line.match(/nodes=(\d+)/), dm = line.match(/depth=(\d+)/);
+      if (nm) progressNodesRef.current = parseInt(nm[1], 10);
+      if (dm) progressDepthRef.current = parseInt(dm[1], 10);
+      return;
+    }
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
     if (lb < 0 || rb < 0) {
       if (debugOutput || !seenRaw.current.size) addOutputLine({ raw: line, karn: line, isSolution: false });
@@ -1645,6 +1696,11 @@ export default function App() {
     seenDisplay.current.clear();
     lineQueue.current = Promise.resolve();
     firstSolutionAt.current = 0;
+    solveStartTimeRef.current = performance.now();
+    solveStopTimeRef.current = 0;
+    debugStatsRef.current = { solutionTimestamps: [], rateSamples: [] };
+    progressNodesRef.current = 0;
+    progressDepthRef.current = 0;
     followTerminalRef.current = true;
     lastSolveCubeShape.current = cubeShape;
     firstTableSwitchAfterSolveRef.current = true;
@@ -1709,7 +1765,7 @@ export default function App() {
       setTableBusyMessage("");
       setStatusLines((lines) => [...lines, "ERROR: " + String(error)].slice(-8));
     } finally {
-      if (runId === solveRunId.current) setRunningState(false);
+      if (runId === solveRunId.current) { solveStopTimeRef.current = performance.now(); setRunningState(false); }
     }
   };
   useEffect(() => {
@@ -1991,6 +2047,24 @@ export default function App() {
       </div>
     </div>
   );
+  const computeDebugStats = () => {
+    const stats = debugStatsRef.current;
+    const now = performance.now();
+    const start = solveStartTimeRef.current;
+    if (!start) return { elapsed: "—", solutionCount: 0, rollingRate: 0, avgRate: 0, stddevRate: 0 };
+    const end = runningRef.current ? now : (solveStopTimeRef.current || now);
+    const elapsed = ((end - start) / 1000).toFixed(1);
+    const solutionCount = solutionsRef.current.length;
+    const elapsedTotal = (end - start) / 1000;
+    const windowDur = Math.min(60, Math.max(0, elapsedTotal));
+    const cutoff = end - windowDur * 1000;
+    const recent = stats.solutionTimestamps.filter(t => t > cutoff);
+    const rollingRate = windowDur > 0 ? recent.length / windowDur * 60 : 0;
+    const samples = stats.rateSamples;
+    const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+    const stddev = samples.length > 1 ? Math.sqrt(samples.reduce((sum, v) => sum + (v - avg) ** 2, 0) / samples.length) : 0;
+    return { elapsed, solutionCount, rollingRate, avgRate: avg, stddevRate: stddev, nodesSearched: progressNodesRef.current, searchDepth: progressDepthRef.current };
+  };
   const renderOutputShell = () => (
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
       <div className="output-tools">
@@ -2001,6 +2075,7 @@ export default function App() {
           </select>
         </div>
         <div className="output-tools-right">
+          {debugOutput && <button title="Open debug stats" onClick={() => setModal("debug")}>⏱</button>}
           <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
           <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
           <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
@@ -2182,7 +2257,7 @@ export default function App() {
       {modal && <Modal type={modal} close={() => history.back()} settings={{
         smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal,
-      }} />}
+      }} debugStats={modal === "debug" ? computeDebugStats() : null} />}
       {favoritesOpen && <div className="modal-shade" onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
         const startOutside = !favShadeStartRef.current || !(favShadeStartRef.current as Element).closest(".favorites-modal");
         const endOutside = !favShadeEndRef.current || !(favShadeEndRef.current as Element).closest(".favorites-modal");

@@ -1363,6 +1363,7 @@ class PositionSolver {
 	bool m_cleanFound{false};
 	std::vector<std::string> m_dirtyBuf;
 	bool m_cubeshape{false};
+	clock_t m_lastProgressClock{0};
 
 	// Emit the held-back dirty solutions for a depth that produced no clean
 	// solution (internal U2/D2 was necessary).  Honors single-solution mode.
@@ -1555,6 +1556,13 @@ class PositionSolver {
 
 		// search for l more moves. previous move was lm.
 		(*nodes)++;
+		if (*nodes % 5000 == 0) {
+			clock_t now = clock();
+			if (now - m_lastProgressClock >= CLOCKS_PER_SEC / 2) {
+				m_lastProgressClock = now;
+				std::cout << "__PROGRESS__ nodes=" << *nodes << " depth=" << l << std::endl << std::flush;
+			}
+		}
 		if( l<0 ) return 0;
 
 		//prune based on transformation

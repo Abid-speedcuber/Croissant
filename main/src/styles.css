@@ -781,6 +781,19 @@ body {
 .modal-article a {
   color: #8db8ff;
 }
+.debug-stats-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  align-items: center;
+}
+.debug-stats-grid .debug-label {
+  color: #b0b8c4;
+}
+.debug-stats-grid .debug-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .modal-section-title {
   margin-top: 6px;
   color: #f1f5fb;
