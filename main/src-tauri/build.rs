@@ -10,6 +10,7 @@ fn main() {
         .std("c++17")
         .opt_level(3)
         .define("SQ1OPT_LIBRARY", None)
+        .define("SQ1OPT_NO_QT", None)
         .file("native/solver_bridge.cpp")
         .file("native/sq1opt.cpp")
         .include("native")

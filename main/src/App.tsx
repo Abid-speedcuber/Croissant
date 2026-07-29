@@ -1520,6 +1520,18 @@ export default function App() {
       karnDisplay: injectSliceIndicator(karnDisplay, sliceStart),
     };
   };
+  /*
+   * LIVE STREAMING — INTENTIONAL FEATURE (Abid)
+   *
+   * Solutions appear one-by-one in the terminal as the solver emits them, similar
+   * to how AI UIs stream tokens. This is THE magic of the app. It MUST NOT be
+   * traded away for raw speed — no batching, no hiding behind a spinner, no
+   * waiting for "all results" before showing anything. Every solution must be
+   * flushed to the terminal as soon as it is available.
+   *
+   * The only acceptable optimization is to defer EXPENSIVE post-processing
+   * (karnify, rating) while still showing the raw algorithm immediately.
+   */
   const addOutputLine = (line: OutputLine) => {
     outputLinesRef.current = [...outputLinesRef.current, line].slice(-1000);
     scheduleSolutionFlush();
@@ -1550,7 +1562,6 @@ export default function App() {
     scheduleSolutionFlush();
   };
   const receiveSolverLine = async (line: string, startPosition: string, runId: number) => {
-    // Early exit: don't process lines if stop was requested
     if (stopped.current) return;
     if (runId !== solveRunId.current) return;
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
@@ -1561,17 +1572,37 @@ export default function App() {
     const rawAlg = line.slice(0, lb).trim();
     if (seenRaw.current.has(rawAlg)) return;
     seenRaw.current.add(rawAlg);
+    const metricsPart = line.slice(lb, rb + 1);
+    const afterMetrics = line.slice(rb + 1).trim();
     let rating: RatingResult | undefined, sliceStart: string | undefined;
-    if (lastSolveCubeShape.current && tauri()?.core?.invoke) {
-      try {
-        rating = await tauri()!.core!.invoke<RatingResult>("rate_algorithm", { algorithm: rawAlg, initialTopA: /^[1-8XYZ]/i.test(startPosition) });
-        if (runId !== solveRunId.current) return;
-        if (rating.valid) sliceStart = ratingSliceStart(rating);
-      } catch { /* an unrated row remains available */ }
+    let rawDisplay: string, karnDisplay: string;
+    if (afterMetrics) {
+      const rateStart = afterMetrics.indexOf(" R{");
+      const karnEnd = rateStart >= 0 ? rateStart : afterMetrics.length;
+      const karnified = afterMetrics.slice(0, karnEnd).trim();
+      if (rateStart >= 0) {
+        try {
+          const raw = JSON.parse(afterMetrics.slice(rateStart + 2));
+          rating = { finalScore: raw.f, sliceStart: raw.ss, phase1: raw.p1, phase2: raw.p2, phase3: raw.p3, phase4: raw.p4, ergoUp: raw.eu, ergoDown: raw.ed, sliceCount: raw.sc, movement: raw.mv, bonus: raw.bn, valid: true };
+          if (rating.valid) sliceStart = ratingSliceStart(rating);
+        } catch { /* unrated */ }
+      }
+      rawDisplay = injectSliceIndicator(rawAlg + "  " + metricsPart, sliceStart);
+      karnDisplay = injectSliceIndicator(karnified + "  " + metricsPart, sliceStart);
+    } else {
+      // Legacy format (no extended data): use IPC fallback
+      if (lastSolveCubeShape.current && tauri()?.core?.invoke) {
+        try {
+          rating = await tauri()!.core!.invoke<RatingResult>("rate_algorithm", { algorithm: rawAlg, initialTopA: /^[1-8XYZ]/i.test(startPosition) });
+          if (runId !== solveRunId.current) return;
+          if (rating.valid) sliceStart = ratingSliceStart(rating);
+        } catch {}
+      }
+      const pair = await buildDisplayPair(line, startPosition, sliceStart);
+      if (runId !== solveRunId.current) return;
+      rawDisplay = pair.rawDisplay;
+      karnDisplay = pair.karnDisplay;
     }
-    // Always apply karnify, even for late solutions (FIXED: removed stopped.current check)
-    const { rawDisplay, karnDisplay } = await buildDisplayPair(line, startPosition, sliceStart);
-    if (runId !== solveRunId.current) return;
     const displayAlg = lineAlg(normalizeLine(karn ? karnDisplay : rawDisplay));
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
@@ -1580,7 +1611,8 @@ export default function App() {
       if (!debugOutput) replaceOutputLines(outputLinesRef.current.filter((entry) => entry.isSolution));
     }
     const counts = parseSolutionCounts(line);
-    const row: Solution = { raw: line, rawDisplay, karnDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart };
+    const cleanLine = rawAlg + "  " + metricsPart;
+    const row: Solution = { raw: cleanLine, rawDisplay, karnDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart };
     addSolution(row);
     addOutputLine({ raw: rawDisplay, karn: karnDisplay, isSolution: true, algRaw: rawAlg });
   };

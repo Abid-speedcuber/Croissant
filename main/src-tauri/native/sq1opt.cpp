@@ -54,6 +54,7 @@ const char* errors[]={
 };
 
 #include "karnotation.h"
+#include "sq1-logic.h"
 
 int verbosity = 5;
 bool generator=false;
@@ -75,6 +76,9 @@ static std::atomic_bool stopRequested{false};
 static bool s_hasInjectedPosition = false;
 static int  s_injectedPos[24];
 static int  s_injectedMiddle = 1;
+static bool g_extendedOutput = false;
+
+void sq1optSetExtendedOutput(bool val) { g_extendedOutput = val; }
 
 void sq1optSetTableDirectory(const std::string& dir)
 {
@@ -1358,6 +1362,7 @@ class PositionSolver {
 	bool m_banInternal{false};
 	bool m_cleanFound{false};
 	std::vector<std::string> m_dirtyBuf;
+	bool m_cubeshape{false};
 
 	// Emit the held-back dirty solutions for a depth that produced no clean
 	// solution (internal U2/D2 was necessary).  Honors single-solution mode.
@@ -1420,6 +1425,7 @@ class PositionSolver {
 		return r;
 	}
 	virtual int solve(int twoGen, int extraMoves, bool keepCubeShape){
+		m_cubeshape = keepCubeShape;
 		// Find the valid preadf D rotations for 2-gen / pseudo-2-gen (solve guard:
 		// if no compatible block exists the position can't be 2-genned).
 		// For twoGen==0 this always returns {0}.
@@ -1764,12 +1770,41 @@ class PositionSolver {
 			// extra to fold in here.
 		}
 		out += printmove(mu, md);
+		// Save raw algorithm before karnotation transform (for the bridge)
+		std::string rawAlg = out;
 		if (karnotation)
 			out = karnify(out);
 		std::string line = out + "  [" + std::to_string(tw);
-		if (metric != SLICE_METRIC) line += "|" + std::to_string(tu); // move
+		if (metric != SLICE_METRIC) line += "|" + std::to_string(tu);
 		if (metric == ANGLE_METRIC) line += "|" + std::to_string(angle);
-		line += "] \n";
+		line += "]";
+		if (g_extendedOutput) {
+			std::string karnified = karnify(rawAlg);
+			line += "  " + karnified;
+			if (m_cubeshape) {
+				bool initialTopA = (fp.pos[0] >= 8);
+				try {
+					AlgRating rating = rateAlg(rawAlg, initialTopA, 34, 100, 38, 10);
+					if (rating.valid) {
+						std::string safeSS = rating.sliceStart;
+						if (safeSS == "\\") safeSS = "\\\\";
+						else if (safeSS == "\"") safeSS = "\\\"";
+						line += "  R{\"f\":" + std::to_string(rating.FINAL)
+						     + ",\"ss\":\"" + safeSS + "\""
+						     + ",\"p1\":" + std::to_string(rating.PHASE1)
+						     + ",\"p2\":" + std::to_string(rating.PHASE2)
+						     + ",\"p3\":" + std::to_string(rating.PHASE3)
+						     + ",\"p4\":" + std::to_string(rating.PHASE4)
+						     + ",\"eu\":" + std::to_string(rating.ergo_up)
+						     + ",\"ed\":" + std::to_string(rating.ergo_down)
+						     + ",\"sc\":" + std::to_string(rating.sliceCount)
+						     + ",\"mv\":" + std::to_string(rating.movement)
+						     + ",\"bn\":" + std::to_string(rating.bonus) + "}";
+					}
+				} catch (...) { }
+			}
+		}
+		line += " \n";
 		if (metric != SLICE_METRIC) { std::cout << line << std::flush; return; }
 		if (m_internalBad > 0) {
 			// Dirty: hold it back. In single-solution mode one buffered dirty is
@@ -1833,6 +1868,7 @@ public:
 		return r;
 	}
 	int solve(int twoGen, int extraMoves, bool keepCubeShape) override {
+		m_cubeshape = keepCubeShape;
 		// Partial-aware preadf detection doubles as the 2-gen / p2g solve guard:
 		// twoGenPreadf understands U/V/W/X/Y/Z pieces, so it returns every rotation
 		// that can bring a (possibly partially-specified) solved block to the frozen

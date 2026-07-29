@@ -118,9 +118,11 @@ async function invoke(command: InvokeRequest & { type: "invoke" }): Promise<unkn
     return readJson<RatingResult>(api.rateAlgorithm(command.args.algorithm, command.args.initialTopA ? 1 : 0));
   }
   if (command.command === "two_gen_status") {
+    const pos = command.args.position;
+    if (!pos || !Array.isArray(pos)) throw new Error("Invalid position argument for two_gen_status");
     const ptr = mod._malloc(24 * 4);
     try {
-      mod.HEAP32.set(command.args.position.slice(0, 24), ptr >> 2);
+      mod.HEAP32.set(pos.slice(0, 24), ptr >> 2);
       return readJson<TwoGenStatus>(api.twoGenStatus(ptr));
     } finally {
       mod._free(ptr);

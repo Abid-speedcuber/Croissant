@@ -6,8 +6,14 @@
 #include <string>
 #include <vector>
 
+void sq1optSetExtendedOutput(bool val);
+
 std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool first_match_only);
 bool cornersAre2GenSolvable(const int pos[24], int two_gen);
+
+// Static initializer — enables extended output for the WASM bridge before main()
+struct EnableExtended { EnableExtended() { sq1optSetExtendedOutput(true); } };
+static EnableExtended s_enableExtended;
 
 namespace {
 char *copy_allocated(const std::string &value) {

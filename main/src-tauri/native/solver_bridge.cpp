@@ -7,6 +7,7 @@
 
 int sq1optMain(int argc, char *argv[]);
 void sq1optRequestStop();
+void sq1optSetExtendedOutput(bool val);
 void sq1optSetTableDirectory(const std::string &dir);
 std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool first_match_only);
 bool cornersAre2GenSolvable(const int pos[24], int two_gen);
@@ -65,6 +66,7 @@ extern "C" char *sq1_run_alloc(int argc, const char *const *input_argv,
     auto *old_error = std::cerr.rdbuf(&capture);
     int code = -1;
     try {
+        sq1optSetExtendedOutput(true);
         sq1optSetTableDirectory(table_directory ? table_directory : "");
         code = sq1optMain(argc, argv.data());
     } catch (const std::exception &error) {
