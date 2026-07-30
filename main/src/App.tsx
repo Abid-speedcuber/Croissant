@@ -1090,7 +1090,7 @@ export default function App() {
     [normalize, setNormalize] = useState("None"),
     [all, setAll] = useState(false),
     [generator, setGenerator] = useState(false),
-    [cubeShape, setCubeShape] = useState(false),
+    [cubeShapeMemory, setCubeShapeMemory] = useState(false),
     [ignoreMiddle, setIgnoreMiddle] = useState(false),
     [karn, setKarn] = useState(true),
     [outputLines, setOutputLines] = useState<OutputLine[]>([]),
@@ -1306,7 +1306,6 @@ export default function App() {
     stateRef.current = next;
     setCubeState(next);
     setIgnoreMiddle(next.middle === 0);
-    if (!inCubeshape(next)) setCubeShape(false);
   };
   useEffect(() => () => {
     if (sliceTimer.current !== undefined) window.clearTimeout(sliceTimer.current);
@@ -1447,7 +1446,7 @@ export default function App() {
     const depthFlag = flags.find((flag) => flag.startsWith("-d")); setDepths(depthFlag?.slice(2) || "");
     setGenerator(flags.includes("-g"));
     setTwo(flags.includes("-2") ? "2 Gen" : flags.includes("-p") ? "Pseudo 2 Gen" : "None");
-    setCubeShape(flags.includes("-c"));
+    setCubeShapeMemory(flags.includes("-c"));
     if (flags.includes("-m") !== ignoreMiddle) { ignoreHistory.current = true; toggleIgnoreMiddle(flags.includes("-m")); ignoreHistory.current = false; }
     setAngle(flags.includes("-nb") ? "Both" : flags.includes("-nu") ? "Top" : flags.includes("-nd") ? "Bottom" : "None");
     const setLimit = (prefix: string, setEnabled: (v: boolean) => void, setValue: (v: number) => void) => {
@@ -1825,7 +1824,7 @@ export default function App() {
       if (typeof value.suboptimal === "number") setSuboptimal(value.suboptimal);
       if (typeof value.depths === "string") setDepths(value.depths);
       if (typeof value.generator === "boolean") setGenerator(value.generator);
-      if (typeof value.cubeShape === "boolean") setCubeShape(value.cubeShape);
+      if (typeof value.cubeShape === "boolean") setCubeShapeMemory(value.cubeShape);
       if (typeof value.ignoreMiddle === "boolean") {
         setIgnoreMiddle(value.ignoreMiddle);
         if (value.ignoreMiddle) queueMicrotask(() => { ignoreHistory.current = true; toggleIgnoreMiddle(true); ignoreHistory.current = false; });
@@ -1844,10 +1843,10 @@ export default function App() {
     if (!settingsReady.current) return;
     void saveSettings({
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
-      metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle,
+      metric, two, angle, all, suboptimal, depths, generator, cubeShape: cubeShapeMemory, ignoreMiddle,
       maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom,
     });
-  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShape, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom]);
+  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom]);
   useEffect(() => {
     if (!solutions.length || running) return;
     let cancelled = false;
@@ -1882,10 +1881,12 @@ export default function App() {
     if (!favoritesReady.current) return;
     void saveFavorites(favorites);
   }, [favorites]);
-  const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
-    (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const cubeshapeBlockedBy2Gen = (two === "2 Gen" && !twoGenStatus.cornersTwo) ||
     (two === "Pseudo 2 Gen" && !twoGenStatus.cornersPseudo);
+  const cubeshapeForced = !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen;
+  const cubeShape = cubeShapeMemory && !cubeshapeForced;
+  const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
+    (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const cubeshapeDisableReason = cubeshapeBlockedBy2Gen
     ? "The cube\u2019s corners cannot be solved with 2 gen in cubeshape."
     : !inCubeshape(cubeState) ? (() => {
@@ -1897,9 +1898,6 @@ export default function App() {
       }
       return "Cube is not in cubeshape.";
     })() : null;
-  useEffect(() => {
-    if (cubeShape && cubeshapeBlockedBy2Gen) setCubeShape(false);
-  }, [cubeshapeBlockedBy2Gen]);
   const specificDepthsActive = depths.trim().length > 0;
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
   if (ignoreTransforms) commandFlags.push("-x");
@@ -2017,7 +2015,7 @@ export default function App() {
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
           </span>}
         </label>
-        <label title={cubeshapeDisableReason ?? tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShape(e.target.checked)} /> Stay in cubeshape</label>
+        <label title={cubeshapeDisableReason ?? tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShapeMemory(e.target.checked)} /> Stay in cubeshape</label>
       </div>
       <div className="limit-grid">
         <label title={tooltips.maxX}>Max top turn:
