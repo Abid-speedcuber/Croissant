@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <atomic>
 #include <stdexcept>
-#include <unordered_set>
+#include <array>
 #include <cstdint>
 
 #define NUMHALVES 13
@@ -1326,7 +1326,22 @@ public:
 // (12 - praw(printed)) % 12, where praw undoes the printed negative-notation
 // (praw(v) = v<0 ? v+12 : v). Getting this wrong silently mismatches every
 // entry whose second number isn't 0 or 6 (those happen to be self-negating).
-static const std::unordered_set<uint32_t> g_uselessSegPairs = {
+template <size_t NWords, size_t NKeys>
+static constexpr std::array<uint64_t, NWords> makeKeyBits(const std::array<uint32_t, NKeys>& keys) {
+	std::array<uint64_t, NWords> bits{};
+	for (uint32_t key : keys) bits[key >> 6] |= uint64_t{1} << (key & 63);
+	return bits;
+}
+
+template <size_t NWords>
+static inline bool keyBitSet(const std::array<uint64_t, NWords>& bits, uint32_t key) {
+	return (bits[key >> 6] & (uint64_t{1} << (key & 63))) != 0;
+}
+
+static constexpr int USELESS_SEG_PAIR_KEY_SPACE = 12*12*12*12;
+static constexpr int USELESS_SEG_TRIPLE_KEY_SPACE = 12*12*12*12*12*12;
+
+static constexpr std::array<uint32_t, 269> g_uselessSegPairKeys = {{
 	222, 366, 510, 654, 798, 1086, 1230, 1374,
 	1518, 1662, 1806, 2094, 2238, 2526, 2670, 2958,
 	3102, 3379, 3390, 3445, 3534, 3678, 3966, 4110,
@@ -1361,24 +1376,29 @@ static const std::unordered_set<uint32_t> g_uselessSegPairs = {
 	17214, 17358, 17602, 17646, 17668, 17790, 18078, 18222,
 	18510, 18654, 18942, 19086, 19175, 19230, 19241, 19518,
 	19662, 19950, 20094, 20382, 20526
-};
+}};
 
-static const std::unordered_set<uint32_t> g_uselessSegTriples = {
+static constexpr std::array<uint32_t, 40> g_uselessSegTripleKeys = {{
 	362183, 362249, 371687, 371753, 588706, 588772, 598210, 598276,
 	815229, 815295, 824733, 824799, 1041752, 1041818, 1051256, 1051322,
 	1268275, 1268341, 1277779, 1277845, 1979591, 1979657, 1989095, 1989161,
 	2206114, 2206180, 2215618, 2215684, 2432637, 2432703, 2442141, 2442207,
 	2659160, 2659226, 2668664, 2668730, 2885683, 2885749, 2895187, 2895253
-};
+}};
+
+static constexpr auto g_uselessSegPairBits =
+	makeKeyBits<(USELESS_SEG_PAIR_KEY_SPACE + 63) / 64>(g_uselessSegPairKeys);
+static constexpr auto g_uselessSegTripleBits =
+	makeKeyBits<(USELESS_SEG_TRIPLE_KEY_SPACE + 63) / 64>(g_uselessSegTripleKeys);
 
 static inline bool isUselessSegPair(int c, int d, int e, int f) {
 	uint32_t key = (uint32_t)(((c*12+d)*12+e)*12+f);
-	return g_uselessSegPairs.find(key) != g_uselessSegPairs.end();
+	return keyBitSet(g_uselessSegPairBits, key);
 }
 
 static inline bool isUselessSegTriple(int c, int d, int e, int f, int g, int h) {
 	uint32_t key = (uint32_t)(((((c*12+d)*12+e)*12+f)*12+g)*12+h);
-	return g_uselessSegTriples.find(key) != g_uselessSegTriples.end();
+	return keyBitSet(g_uselessSegTripleBits, key);
 }
 
 // PositionSolver holds position encoded by colourings
@@ -1742,12 +1762,16 @@ class PositionSolver {
 				twoGenBlock = disallowedD && !isSolved();
 			}
 			// make sure that the useless pair/triple has a leading slash (i.e. is not preabf)
-			bool uselessPair = (m_slicesDone >= 2) &&
-				isUselessSegPair(lastTurns[2], lastTurns[3], lastTurns[4], lastTurns[5]);
-			bool uselessTriple = (m_slicesDone >= 3) &&
-				isUselessSegTriple(lastTurns[0], lastTurns[1], lastTurns[2], lastTurns[3], lastTurns[4], lastTurns[5]);
-			if (uselessPair || uselessTriple) fprintf(stderr, "pruned at slicesDone=%d\n", m_slicesDone);
-			if (!block60 && !twoGenBlock && !uselessPair && !uselessTriple) {
+			bool uselessSeg = false;
+			if (!block60 && !twoGenBlock) {
+				uselessSeg = (m_slicesDone >= 2) &&
+					isUselessSegPair(lastTurns[2], lastTurns[3], lastTurns[4], lastTurns[5]);
+				if (!uselessSeg) {
+					uselessSeg = (m_slicesDone >= 3) &&
+						isUselessSegTriple(lastTurns[0], lastTurns[1], lastTurns[2], lastTurns[3], lastTurns[4], lastTurns[5]);
+				}
+			}
+			if (!block60 && !twoGenBlock && !uselessSeg) {
 			int lt0=lastTurns[0], lt1=lastTurns[1];
 			lastTurns[0]=lastTurns[2];
 			lastTurns[1]=lastTurns[3];
