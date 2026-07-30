@@ -520,6 +520,9 @@ export default function App() {
   const [favoritesOpen, setFavoritesOpen] = useState(false),
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
     [pendingDeletes, setPendingDeletes] = useState<Record<string, number>>({});
+  const [favoritesClosing, setFavoritesClosing] = useState(false);
+  const favModalRef = useRef<HTMLDivElement>(null);
+  const favClosingOriginRef = useRef({ x: 50, y: 50 });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; alg: string } | null>(null);
   const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 0, cornersTwo: false, cornersPseudo: false });
   const [followTerminal, setFollowTerminal] = useState(true);
@@ -528,6 +531,26 @@ export default function App() {
   const [tableBusyTick, setTableBusyTick] = useState(0);
   const [outputToolsFaded, setOutputToolsFaded] = useState(false);
   const [debugTick, setDebugTick] = useState(0);
+  const beginCloseFavorites = () => {
+    if (favoritesClosing) return;
+    const heartBtn = document.querySelector<HTMLElement>('.top-favorites-button');
+    const modalEl = favModalRef.current;
+    if (heartBtn && modalEl) {
+      const hr = heartBtn.getBoundingClientRect();
+      const mr = modalEl.getBoundingClientRect();
+      favClosingOriginRef.current = {
+        x: ((hr.left + hr.width / 2 - mr.left) / mr.width) * 100,
+        y: ((hr.top + hr.height / 2 - mr.top) / mr.height) * 100,
+      };
+    }
+    setFavoritesClosing(true);
+  };
+  const onFavCloseAnimEnd = (e: React.AnimationEvent) => {
+    if (e.animationName !== "fav-modal-out") return;
+    setFavoritesOpen(false);
+    setFavoritesClosing(false);
+    history.back();
+  };
   /* ============================================================================
    * TERMINAL / OUTPUT PANEL BEHAVIOR
    * ============================================================================
@@ -663,6 +686,7 @@ export default function App() {
     const onPop = () => {
       setModal(null);
       setFavoritesOpen(false);
+      setFavoritesClosing(false);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -1633,15 +1657,15 @@ export default function App() {
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
         setLanguage: (code) => { setLang(code); setLangState(code); },
       }} debugStats={modal === "debug" ? computeDebugStats() : null} />}
-      {favoritesOpen && <div className="modal-shade" onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
+      {(favoritesOpen || favoritesClosing) && <div className={"modal-shade" + (favoritesClosing ? " closing" : "")} style={favoritesClosing ? { background: "transparent", pointerEvents: "none" } : {}} onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
         const startOutside = !favShadeStartRef.current || !(favShadeStartRef.current as Element).closest(".favorites-modal");
         const endOutside = !favShadeEndRef.current || !(favShadeEndRef.current as Element).closest(".favorites-modal");
-        if (startOutside && endOutside) history.back();
+        if (startOutside && endOutside) beginCloseFavorites();
         favShadeStartRef.current = null;
         favShadeEndRef.current = null;
       }}>
-        <div className="modal favorites-modal" onClick={(event) => event.stopPropagation()}>
-          <button className="modal-close" onClick={() => history.back()}>✕</button>
+        <div ref={favModalRef} className={"modal favorites-modal" + (favoritesClosing ? " closing" : "")} style={favoritesClosing ? { transformOrigin: `${favClosingOriginRef.current.x}% ${favClosingOriginRef.current.y}%` } : undefined} onAnimationEnd={onFavCloseAnimEnd} onClick={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={beginCloseFavorites}>✕</button>
           <h2>{t('favorites.heading')}</h2>
           {!!solutions.length && <button className="favorite-save" onClick={() => {
             const key = currentRunKey();

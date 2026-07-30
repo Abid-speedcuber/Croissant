@@ -1451,6 +1451,18 @@ body {
 .favorites-modal {
   width: min(720px, calc(100vw - 30px));
 }
+.favorites-modal.closing {
+  animation: fav-modal-out .4s steps(5,end) forwards;
+  pointer-events: none;
+}
+@keyframes fav-modal-out {
+  0% { transform: scale(1); }
+  20% { transform: scale(0.55); }
+  40% { transform: scale(0.25); }
+  60% { transform: scale(0.08); }
+  80% { transform: scale(0.02); }
+  100% { transform: scale(0.003); }
+}
 .favorite-save {
   display: block;
   width: 100%;

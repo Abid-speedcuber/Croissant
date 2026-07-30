@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { t, LANGUAGES, LangCode } from "../i18n";
-import { Modal } from "../utils";
+import type { Modal } from "../utils";
 
 export function Modal({
   type,
