@@ -1,7 +1,8 @@
 /*
- * SQUARE-1 OPTIMISER version 2.1
- * by Jaap Scherphuis, jaapsch@yahoo.com, copyright 2003-2011
- * and Michael Gottlieb, qqwref@gmail.com, copyright 2023-2024
+ * SQUARE-1 OPTIMIZER version 3.0
+ * by Jaap Scherphuis, jaapsch@yahoo.com, copyright 2003-2011 (v1)
+ * Michael Gottlieb, qqwref@gmail.com, copyright 2023-2024 (v2)
+ * Abid ibn Ashraf and Matt Mao, squango.support@gmail.com, copyleft 2026 :)
  */
 
 #include <fstream>
@@ -13,6 +14,8 @@
 #include <algorithm>
 #include <atomic>
 #include <stdexcept>
+#include <unordered_set>
+#include <cstdint>
 
 #define NUMHALVES 13
 #define NUMLAYERS 158
@@ -1313,6 +1316,70 @@ public:
 	}
 };
 
+// Encoded "useless" segment sequences: identity move sequences
+// branch killed if matched.
+// Values are packed using base 12. e.g. 1,2 → 1*12+2
+// IMPORTANT: printsol() prints top-layer numbers as the raw
+// value directly, but bottom-layer numbers as the NEGATION of the raw value
+// (md accumulates via subtraction, mu via addition). So converting a printed
+// pair back to raw is asymmetric: top = praw(printed), bottom =
+// (12 - praw(printed)) % 12, where praw undoes the printed negative-notation
+// (praw(v) = v<0 ? v+12 : v). Getting this wrong silently mismatches every
+// entry whose second number isn't 0 or 6 (those happen to be self-negating).
+static const std::unordered_set<uint32_t> g_uselessSegPairs = {
+	222, 366, 510, 654, 798, 1086, 1230, 1374,
+	1518, 1662, 1806, 2094, 2238, 2526, 2670, 2958,
+	3102, 3379, 3390, 3445, 3534, 3678, 3966, 4110,
+	4398, 4542, 4830, 4952, 4974, 5018, 5262, 5406,
+	5550, 5694, 5838, 5982, 6126, 6270, 6414, 6525,
+	6558, 6591, 6702, 6846, 6990, 7278, 7422, 7710,
+	7854, 8098, 8142, 8164, 8286, 8574, 8718, 8862,
+	9150, 9294, 9582, 9671, 9726, 9737, 10014, 10158,
+	10590, 10734, 10878, 11022, 11166, 11233, 11234, 11235,
+	11236, 11237, 11239, 11240, 11241, 11242, 11243, 11244,
+	11245, 11246, 11247, 11248, 11249, 11250, 11251, 11252,
+	11253, 11254, 11255, 11256, 11257, 11258, 11259, 11260,
+	11261, 11262, 11263, 11264, 11265, 11266, 11267, 11268,
+	11269, 11270, 11271, 11272, 11273, 11274, 11275, 11276,
+	11277, 11278, 11279, 11280, 11281, 11282, 11283, 11284,
+	11285, 11286, 11287, 11288, 11289, 11290, 11291, 11292,
+	11293, 11294, 11295, 11296, 11297, 11298, 11299, 11300,
+	11301, 11302, 11303, 11305, 11306, 11307, 11308, 11309,
+	11310, 11311, 11312, 11313, 11314, 11315, 11316, 11317,
+	11318, 11319, 11320, 11321, 11322, 11323, 11324, 11325,
+	11326, 11327, 11328, 11329, 11330, 11331, 11332, 11333,
+	11334, 11335, 11336, 11337, 11338, 11339, 11340, 11341,
+	11342, 11343, 11344, 11345, 11346, 11347, 11348, 11349,
+	11350, 11351, 11352, 11353, 11354, 11355, 11356, 11357,
+	11358, 11359, 11360, 11361, 11362, 11363, 11364, 11365,
+	11366, 11367, 11368, 11369, 11370, 11371, 11372, 11373,
+	11374, 11375, 11454, 11598, 11742, 11886, 12030, 12174,
+	12462, 12606, 12883, 12894, 12949, 13038, 13326, 13470,
+	13758, 13902, 14046, 14334, 14456, 14478, 14522, 14766,
+	14910, 15198, 15342, 15630, 15774, 15918, 16029, 16062,
+	16095, 16206, 16350, 16494, 16638, 16782, 16926, 17070,
+	17214, 17358, 17602, 17646, 17668, 17790, 18078, 18222,
+	18510, 18654, 18942, 19086, 19175, 19230, 19241, 19518,
+	19662, 19950, 20094, 20382, 20526
+};
+
+static const std::unordered_set<uint32_t> g_uselessSegTriples = {
+	362183, 362249, 371687, 371753, 588706, 588772, 598210, 598276,
+	815229, 815295, 824733, 824799, 1041752, 1041818, 1051256, 1051322,
+	1268275, 1268341, 1277779, 1277845, 1979591, 1979657, 1989095, 1989161,
+	2206114, 2206180, 2215618, 2215684, 2432637, 2432703, 2442141, 2442207,
+	2659160, 2659226, 2668664, 2668730, 2885683, 2885749, 2895187, 2895253
+};
+
+static inline bool isUselessSegPair(int c, int d, int e, int f) {
+	uint32_t key = (uint32_t)(((c*12+d)*12+e)*12+f);
+	return g_uselessSegPairs.find(key) != g_uselessSegPairs.end();
+}
+
+static inline bool isUselessSegTriple(int c, int d, int e, int f, int g, int h) {
+	uint32_t key = (uint32_t)(((((c*12+d)*12+e)*12+f)*12+g)*12+h);
+	return g_uselessSegTriples.find(key) != g_uselessSegTriples.end();
+}
 
 // PositionSolver holds position encoded by colourings
 class PositionSolver {
@@ -1674,7 +1741,13 @@ class PositionSolver {
 				bool disallowedD = (twoGen == 2) ? (d != 0) : (absD > 1);
 				twoGenBlock = disallowedD && !isSolved();
 			}
-			if (!block60 && !twoGenBlock) {
+			// make sure that the useless pair/triple has a leading slash (i.e. is not preabf)
+			bool uselessPair = (m_slicesDone >= 2) &&
+				isUselessSegPair(lastTurns[2], lastTurns[3], lastTurns[4], lastTurns[5]);
+			bool uselessTriple = (m_slicesDone >= 3) &&
+				isUselessSegTriple(lastTurns[0], lastTurns[1], lastTurns[2], lastTurns[3], lastTurns[4], lastTurns[5]);
+			if (uselessPair || uselessTriple) fprintf(stderr, "pruned at slicesDone=%d\n", m_slicesDone);
+			if (!block60 && !twoGenBlock && !uselessPair && !uselessTriple) {
 			int lt0=lastTurns[0], lt1=lastTurns[1];
 			lastTurns[0]=lastTurns[2];
 			lastTurns[1]=lastTurns[3];
