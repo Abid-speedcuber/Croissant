@@ -1,6 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadSettings, saveSettings, loadFavorites, saveFavorites } from "./storage";
+import {
+  CubeState, Modal as ModalType, FavoriteBin, Solution, OutputLine, RatingResult, TwoGenStatus,
+  DisplaySolution, DropdownProps, CubeActions, TauriGlobal,
+  twistable, getLayerR, getParityOdd, inCubeshape, doMove, tauri, validDepths, solverFlags,
+  positionString, rawPosition, parsePosition, invertScramble, addCommas, applyNumericAlgorithm,
+  abidify, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
+  ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips,
+} from "./utils";
+import { Modal } from './components/Modal';
+import { t, LangCode, getLang, setLang } from './i18n';
 
 const solved = [
   0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7,
@@ -24,59 +34,6 @@ const side = [
   [3],
 ];
 const colors = ["#333", "#fff", "#f00", "#00f", "#ff8600", "#0f0", "#888"];
-type CubeState = {
-  position: number[];
-  partial: number[];
-  middle: number;
-  middlePartial: number;
-};
-type Modal = "settings" | "how" | "about" | "debug" | null;
-type FavoriteBin = { name: string; algorithms: string[] };
-type Solution = {
-  raw: string;
-  rawDisplay: string;
-  karnDisplay: string;
-  algRaw: string;
-  slices: number;
-  moves: number;
-  angle: number;
-  ergoRaw?: number;
-  ergo?: number;
-  sliceStart?: string;
-};
-type OutputLine = { raw: string; karn: string; isSolution: boolean; algRaw?: string };
-type RatingResult = {
-  finalScore?: number;
-  final_score?: number;
-  phase1?: number;
-  phase2?: number;
-  phase3?: number;
-  phase4?: number;
-  ergoUp?: number;
-  ergo_up?: number;
-  ergoDown?: number;
-  ergo_down?: number;
-  sliceCount?: number;
-  slice_count?: number;
-  movement?: number;
-  bonus?: number;
-  valid?: boolean;
-  sliceStart?: number | string;
-  slice_start?: number | string;
-};
-type TwoGenStatus = { compatibility: number; cornersTwo: boolean; cornersPseudo: boolean };
-type DisplaySolution = Solution & { display: string; alg: string };
-type DropdownProps = {
-  id: string;
-  label: string;
-  title: string;
-  value: string;
-  options: string[];
-  disabled?: boolean;
-  open: boolean;
-  setOpen: (id: string | null) => void;
-  onChange: (value: string) => void;
-};
 
 function OptionDropdown({ id, label, title, value, options, disabled, open, setOpen, onChange }: DropdownProps) {
   return (
@@ -119,331 +76,7 @@ function OptionDropdown({ id, label, title, value, options, disabled, open, setO
   );
 }
 
-function twistable(p: number[]) {
-  return p[0] !== p[11] && p[5] !== p[6] && p[12] !== p[23] && p[17] !== p[18];
-}
-function getLayerR(pos: number[], base: number): number {
-  for (let r = 0; r < 3; r++) {
-    let ok = true;
-    for (let i = 0; i < 12; i++) {
-      if ((i % 3 === r) !== (pos[base + i] >= 8)) { ok = false; break; }
-    }
-    if (ok) return r;
-  }
-  return -1;
-}
-function getParityOdd(pos: number[]): boolean {
-  let p = false;
-  for (let i = 0; i < 24; i++) {
-    for (let j = i; j < 24; j++) {
-      if (pos[j] < pos[i]) p = !p;
-      if (pos[j] < 8) j++;
-    }
-    if (pos[i] < 8) i++;
-  }
-  return p;
-}
-function inCubeshape(state: CubeState) {
-  const rTop = getLayerR(state.position, 0);
-  if (rTop < 0) return false;
-  const rBot = getLayerR(state.position, 12);
-  if (rBot < 0) return false;
-  if (rTop === 1 || rBot === 1) return false;
-  if (state.partial.some((v) => v !== 0)) return true;
-  const odd = getParityOdd(state.position);
-  return (rTop === rBot) === odd;
-}
-function turn(
-  p: number[],
-  q: number[],
-  start: number,
-  end: number,
-  dir: number,
-) {
-  for (let n = 0; n < 12; n++) {
-    const c = dir > 0 ? p[end - 1] : p[start],
-      d = dir > 0 ? q[end - 1] : q[start];
-    if (dir > 0) {
-      for (let i = end - 1; i > start; i--) {
-        p[i] = p[i - 1];
-        q[i] = q[i - 1];
-      }
-    } else {
-      for (let i = start; i < end - 1; i++) {
-        p[i] = p[i + 1];
-        q[i] = q[i + 1];
-      }
-    }
-    p[dir > 0 ? start : end - 1] = c;
-    q[dir > 0 ? start : end - 1] = d;
-    if (twistable(p)) break;
-  }
-}
-function doMove(s: CubeState, key: string): CubeState {
-  const p = [...s.position],
-    q = [...s.partial];
-  if (key === "u") turn(p, q, 0, 12, 1);
-  if (key === "up") turn(p, q, 0, 12, -1);
-  if (key === "d") turn(p, q, 12, 24, 1);
-  if (key === "dp") turn(p, q, 12, 24, -1);
-  if (key === "slice" && twistable(p)) {
-    for (let i = 6; i < 12; i++) {
-      [p[i], p[i + 6]] = [p[i + 6], p[i]];
-      [q[i], q[i + 6]] = [q[i + 6], q[i]];
-    }
-    return { ...s, position: p, partial: q, middle: -s.middle };
-  }
-  return { ...s, position: p, partial: q };
-}
 
-type CubeActions = {
-  u: () => void;
-  up: () => void;
-  d: () => void;
-  dp: () => void;
-  slice: () => void;
-  reset: () => void;
-  set: (state: CubeState) => void;
-};
-
-type TauriGlobal = {
-  core?: { invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T> };
-  event?: { listen: (name: string, handler: (event: { payload: unknown }) => void) => Promise<() => void> };
-  Channel?: new <T>() => { onmessage: (message: T) => void };
-};
-function tauri(): TauriGlobal | undefined {
-  const nativeWindow = window as Window & { __SQ1_NATIVE__?: TauriGlobal; __TAURI__?: TauriGlobal };
-  return nativeWindow.__SQ1_NATIVE__ ?? nativeWindow.__TAURI__;
-}
-function validDepths(value: string) { return /^\d+(?:,\d+)*$/.test(value.replace(/\s/g, "")); }
-function solverFlags(options: {
-  metric: string; all: boolean; suboptimal: number; depths: string; generator: boolean; two: string;
-  cubeshape: boolean; ignoreEquator: boolean; angle: string; maxX: boolean; maxXValue: number;
-  maxY: boolean; maxYValue: number; maxTotal: boolean; maxTotalValue: number;
-}) {
-  const flags: string[] = [];
-  if (options.metric === "Slice") flags.push("-es");
-  if (options.metric === "Angle") flags.push("-ea");
-  if (options.all) flags.push(options.suboptimal && !validDepths(options.depths) ? "-a" + options.suboptimal : "-a");
-  if (validDepths(options.depths)) flags.push("-d" + options.depths.replace(/\s/g, ""));
-  if (options.generator) flags.push("-g");
-  if (options.two === "2 Gen") flags.push("-2");
-  if (options.two === "Pseudo 2 Gen") flags.push("-p");
-  if (options.cubeshape) flags.push("-c");
-  if (options.ignoreEquator) flags.push("-m");
-  if (options.angle === "Both") flags.push("-nb");
-  if (options.angle === "Top") flags.push("-nu");
-  if (options.angle === "Bottom") flags.push("-nd");
-  if (options.maxX) flags.push("-X" + options.maxXValue);
-  if (options.maxY) flags.push("-Y" + options.maxYValue);
-  if (options.maxTotal) flags.push("-Z" + options.maxTotalValue);
-  return flags;
-}
-function positionString(state: CubeState) {
-  let result = "", nextPartialCorner = -3, nextPartialEdge = 18;
-  for (let i = 0; i < 24; i++) {
-    const value = state.position[i], partial = state.partial[i];
-    let encoded = value;
-    if (partial && value < 8) {
-      encoded = nextPartialCorner + (partial === 2 ? 2 : value < 4 ? 0 : 1);
-      nextPartialCorner -= 3;
-    } else if (partial) {
-      encoded = nextPartialEdge + (partial === 2 ? 2 : value < 12 ? 0 : 1);
-      nextPartialEdge += 3;
-    }
-    result += encoded >= 0 && encoded <= 15
-      ? "ABCDEFGH12345678"[encoded]
-      : encoded < 0 ? encoded % 3 === 0 ? "U" : encoded % 3 === -2 ? "V" : "W"
-        : encoded % 3 === 0 ? "X" : encoded % 3 === 1 ? "Y" : "Z";
-    if (value < 8) i++;
-  }
-  return result + (state.middle === 1 ? "-" : state.middle === -1 ? "/" : "");
-}
-function rawPosition(state: CubeState) {
-  const result = Array(24).fill(0);
-  let nextPartialCorner = -3, nextPartialEdge = 18;
-  for (let i = 0; i < 24; i++) {
-    const value = state.position[i], partial = state.partial[i], corner = value < 8;
-    let encoded = value;
-    if (partial && corner) {
-      encoded = nextPartialCorner + (partial === 2 ? 2 : value < 4 ? 0 : 1);
-      nextPartialCorner -= 3;
-    } else if (partial) {
-      encoded = nextPartialEdge + (partial === 2 ? 2 : value < 12 ? 0 : 1);
-      nextPartialEdge += 3;
-    }
-    result[i] = encoded;
-    if (corner && i + 1 < 24) result[++i] = encoded;
-  }
-  return result;
-}
-function parsePosition(text: string): CubeState | undefined {
-  const input = text.trim().toUpperCase();
-  if (input.length < 15 || input.length > 17) return;
-  const encoded: number[] = [], partial: number[] = [], counts = Array(16).fill(0);
-  let nextPartialCorner = -3, nextPartialEdge = 18;
-  let topPartialCorners = 0, bottomPartialCorners = 0, topPartialEdges = 0, bottomPartialEdges = 0;
-  for (let i = 0; i < 16 && encoded.length < 24; i++) {
-    const token = input[i];
-    let value = "ABCDEFGH".indexOf(token), definition = 0;
-    if (value < 0 && token >= "1" && token <= "8") value = Number(token) + 7;
-    else if (value < 0 && token === "U") { topPartialCorners++; value = nextPartialCorner; nextPartialCorner -= 3; definition = 1; }
-    else if (value < 0 && token === "V") { bottomPartialCorners++; value = nextPartialCorner + 1; nextPartialCorner -= 3; definition = 1; }
-    else if (value < 0 && token === "W") { value = nextPartialCorner + 2; nextPartialCorner -= 3; definition = 2; }
-    else if (value < 0 && token === "X") { topPartialEdges++; value = nextPartialEdge; nextPartialEdge += 3; definition = 1; }
-    else if (value < 0 && token === "Y") { bottomPartialEdges++; value = nextPartialEdge + 1; nextPartialEdge += 3; definition = 1; }
-    else if (value < 0 && token === "Z") { value = nextPartialEdge + 2; nextPartialEdge += 3; definition = 2; }
-    else if (value < 0) return;
-    if (value >= 0 && value <= 15 && ++counts[value] > 1) return;
-    const corner = value < 8;
-    encoded.push(value); partial.push(definition);
-    if (corner) { if (encoded.length >= 24) return; encoded.push(value); partial.push(definition); }
-  }
-  if (encoded.length !== 24) return;
-  const sum = (start: number) => counts.slice(start, start + 4).filter(Boolean).length;
-  if (sum(0) + topPartialCorners > 4 || sum(4) + bottomPartialCorners > 4 ||
-      sum(8) + topPartialEdges > 4 || sum(12) + bottomPartialEdges > 4) return;
-  const pools = {
-    topC: [0, 1, 2, 3].filter((x) => !counts[x]), botC: [4, 5, 6, 7].filter((x) => !counts[x]),
-    topE: [8, 9, 10, 11].filter((x) => !counts[x]), botE: [12, 13, 14, 15].filter((x) => !counts[x]),
-  };
-  const take = (pool: number[]) => pool.pop()!;
-  for (let i = 0; i < 24; i++) {
-    const corner = encoded[i] < 8;
-    if (partial[i] === 1) {
-      const top = encoded[i] % 3 === 0;
-      encoded[i] = take(corner ? top ? pools.topC : pools.botC : top ? pools.topE : pools.botE);
-      if (corner) encoded[i + 1] = encoded[i];
-    }
-    if (corner) i++;
-  }
-  const freeC = [...pools.botC, ...pools.topC], freeE = [...pools.botE, ...pools.topE];
-  for (let i = 0; i < 24; i++) {
-    const corner = encoded[i] < 8;
-    if (partial[i] === 2) { encoded[i] = take(corner ? freeC : freeE); if (corner) encoded[i + 1] = encoded[i]; }
-    if (corner) i++;
-  }
-  const middle = input.length === 16 ? 0 : input[16] === "-" ? 1 : input[16] === "/" ? -1 : 0;
-  return { position: encoded, partial, middle, middlePartial: 0 };
-}
-function invertScramble(text: string) {
-  return text.trim().split("/").reverse().map((part) => {
-    const raw = part.trim().replace(/[()]/g, "");
-    const values = raw.split(",").map((x) => Number(x.trim()));
-    if (values.length === 2 && values.every(Number.isFinite)) return `${-values[0]},${-values[1]}`;
-    if (values.length === 1 && raw && Number.isFinite(values[0])) return String(-values[0]);
-    return part;
-  }).join("/");
-}
-function addCommas(text: string) {
-  return text.replace(/[\\/]/g, " ").trim().split(/\s+/).filter(Boolean).map((token) => {
-    const bare = token.replace(/[()]/g, "");
-    if (!bare || bare.includes(",") || !/^-?\d+$/.test(bare)) return token;
-    if (bare.length === 1 || (bare.length === 2 && bare.startsWith("-"))) return `${bare},0`;
-    if (bare.length === 2) return `${bare[0]},${bare[1]}`;
-    if (bare.length === 3) return bare.startsWith("-") ? `${bare.slice(0, 2)},${bare[2]}` : `${bare[0]},${bare.slice(1)}`;
-    if (bare.length === 4) return `${bare.slice(0, 2)},${bare.slice(2)}`;
-    return token;
-  }).join(" ");
-}
-function applyNumericAlgorithm(state: CubeState, text: string): CubeState | undefined {
-  const steps: ({ slice: true } | { slice: false; top: number; bottom: number })[] = [];
-  for (const [index, piece] of text.replace(/\\/g, "/").split("/").entries()) {
-    if (index) steps.push({ slice: true });
-    const value = piece.trim();
-    if (!value) continue;
-    const pair = value.replace(/[()]/g, "").match(/^(-?\d+)(?:\s*,\s*(-?\d+))?$/);
-    if (!pair) return;
-    steps.push({ slice: false, top: Number(pair[1]), bottom: Number(pair[2] ?? 0) });
-  }
-  if (!steps.length) return;
-  let current = state;
-  for (const step of steps) {
-    if (step.slice) {
-      if (!twistable(current.position)) return;
-      current = doMove(current, "slice");
-      continue;
-    }
-    const position = [...current.position], partial = [...current.partial];
-    const rotate = (amount: number, start: number, end: number) => {
-      const normalized = ((amount % 12) + 12) % 12;
-      for (let n = 0; n < normalized; n++) {
-        const p = position[end - 1], q = partial[end - 1];
-        for (let i = end - 1; i > start; i--) { position[i] = position[i - 1]; partial[i] = partial[i - 1]; }
-        position[start] = p; partial[start] = q;
-      }
-    };
-    rotate(step.top, 0, 12); rotate(step.bottom, 12, 24);
-    current = { ...current, position, partial };
-  }
-  return twistable(current.position) ? current : undefined;
-}
-function abidify(text: string) {
-  const normal = (digit: number) => String.fromCodePoint(0xe000 + digit);
-  const single = (digit: number) => String.fromCodePoint(0xe006 + digit);
-  const right = (digit: number) => String.fromCodePoint(0xe00b + digit);
-  const left = (digit: number) => String.fromCodePoint(0xe010 + digit);
-  if (text.includes(",")) return text.replace(/(-?\d+),(-?\d+)/g, (_, first, second) => {
-    const a = Number(first), b = Number(second);
-    const map = (value: number, fn: (n: number) => string) => String(Math.abs(value)).split("").map((x) => fn(Number(x))).join("");
-    if (a < 0 && b < 0) return map(a, right) + map(b, left);
-    return map(a, a < 0 ? single : normal) + map(b, b < 0 ? single : normal);
-  });
-  let result = "";
-  for (let i = 0; i < text.length;) {
-    if (text[i] === "-" && /\d/.test(text[i + 1] || "")) {
-      if (text[i + 2] === "-" && /\d/.test(text[i + 3] || "")) {
-        result += right(Number(text[i + 1])) + left(Number(text[i + 3])); i += 4;
-      } else { result += single(Number(text[i + 1])); i += 2; }
-    } else if (/\d/.test(text[i])) { result += normal(Number(text[i++])); }
-    else result += text[i++];
-  }
-  return result;
-}
-function injectSliceIndicator(line: string, indicator?: string) {
-  if (!indicator) return line;
-  const separator = line.search(/[\/\\|]/);
-  if (separator >= 0) return line.slice(0, separator) + indicator + line.slice(separator + 1);
-  const space = line.indexOf(" ");
-  return space >= 0 ? line.slice(0, space) + indicator + line.slice(space + 1) : line;
-}
-function lineAlg(line: string) {
-  const lb = line.lastIndexOf("[");
-  return (lb > 0 ? line.slice(0, lb) : line).trim();
-}
-function lineWithoutBracket(line: string) {
-  return lineAlg(line);
-}
-function parseSolutionCounts(line: string) {
-  const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
-  const counts = lb >= 0 && rb > lb ? line.slice(lb + 1, rb).split("|").map((x) => Number(x.trim()) || 0) : [];
-  return { slices: counts[0] || 0, moves: counts[1] || 0, angle: counts[2] || 0 };
-}
-function ratingScore(rating?: RatingResult) {
-  const value = rating?.finalScore ?? rating?.final_score;
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-function ratingSliceStart(rating?: RatingResult) {
-  const value = rating?.sliceStart ?? rating?.slice_start;
-  if (typeof value === "number") return value ? String.fromCharCode(value) : undefined;
-  return value || undefined;
-}
-function solutionErgo(solution: Solution) {
-  return solution.ergo;
-}
-function medianNormalize(rows: Solution[]) {
-  const valid = rows.map((row) => row.ergoRaw).filter((score): score is number => Number.isFinite(score)).sort((a, b) => a - b);
-  const middle = Math.floor(valid.length / 2);
-  const median = !valid.length ? 0 : valid.length % 2 ? valid[middle] : (valid[middle - 1] + valid[middle]) / 2;
-  return rows.map((row) => ({ ...row, ergo: row.ergoRaw === undefined ? undefined : row.ergoRaw - median }))
-    .sort((a, b) => {
-      const aNan = a.ergo === undefined, bNan = b.ergo === undefined;
-      if (aNan && bNan) return 0;
-      if (aNan) return 1;
-      if (bNan) return -1;
-      return (b.ergo ?? 0) - (a.ergo ?? 0);
-    });
-}
 function Cube({
   onChange,
   actionsRef,
@@ -819,236 +452,6 @@ function Pill({
     </div>
   );
 }
-function Modal({
-  type,
-  close,
-  settings,
-  debugStats,
-}: {
-  type: Exclude<Modal, null>;
-  close: () => void;
-  settings?: {
-    smartKarn: boolean; setSmartKarn: (value: boolean) => void;
-    abidNotation: boolean; setAbidNotation: (value: boolean) => void;
-    ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
-    debugOutput: boolean; setDebugOutput: (value: boolean) => void;
-    zoom: number; setZoom: (value: number) => void;
-    disabled: boolean;
-    hasMaxTurn: boolean;
-  };
-  debugStats?: { elapsed: string; solutionCount: number; rollingRate: number; avgRate: number; stddevRate: number; nodesSearched: number; searchDepth: number; nodeRate: number } | null;
-}) {
-  const content =
-    type === "settings" ? (
-      <div className="modal-article">
-        <h2>Settings</h2>
-        <div className="settings-list">
-          <label className="modal-check">
-            <input type="checkbox" checked={settings?.smartKarn ?? true} disabled={settings?.disabled} onChange={(e) => settings?.setSmartKarn(e.target.checked)} />
-            <span>Use smarter karn</span>
-          </label>
-          <label className="modal-check">
-            <input type="checkbox" checked={settings?.abidNotation ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setAbidNotation(e.target.checked)} />
-            <span>Abid's notation</span>
-          </label>
-          <label className="modal-check">
-            <input type="checkbox" checked={(settings?.ignoreTransforms || settings?.hasMaxTurn) ?? false} disabled={settings?.disabled || settings?.hasMaxTurn} onChange={(e) => settings?.setIgnoreTransforms(e.target.checked)} />
-            <span>Ignore move equivalences</span>
-          </label>
-          <label className="modal-check">
-            <input type="checkbox" checked={settings?.debugOutput ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setDebugOutput(e.target.checked)} />
-            <span>Debug output</span>
-          </label>
-        </div>
-        <div className="settings-slider">
-          <span className="settings-slider-label">UI scale</span>
-          <input type="range" min="0.5" max="2" step="0.1" value={settings?.zoom ?? 1} disabled={settings?.disabled} onChange={(e) => settings?.setZoom(Number(e.target.value))} />
-          <span className="settings-slider-value">{Math.round((settings?.zoom ?? 1) * 100)}%</span>
-          {(settings?.zoom ?? 1) !== 1 && <button className="settings-slider-reset" disabled={settings?.disabled} onClick={() => settings?.setZoom(1)}>Reset</button>}
-        </div>
-      </div>
-    ) : type === "debug" ? (
-      <div className="modal-article">
-        <h2>Debug Stats</h2>
-        <div className="debug-stats-grid">
-          <span className="debug-label">Elapsed</span>
-          <span className="debug-value">{debugStats?.elapsed ?? "—"}s</span>
-          <span className="debug-label">Solutions</span>
-          <span className="debug-value">{debugStats?.solutionCount ?? "—"}</span>
-          <span className="debug-label">Solutions/min</span>
-          <span className="debug-value">{debugStats?.rollingRate != null ? debugStats.rollingRate.toFixed(1) : "—"}</span>
-          <span className="debug-label">Avg rate</span>
-          <span className="debug-value">{debugStats?.avgRate != null ? debugStats.avgRate.toFixed(1) : "—"}</span>
-          <span className="debug-label">Stddev rate</span>
-          <span className="debug-value">{debugStats?.stddevRate != null ? debugStats.stddevRate.toFixed(1) : "—"}</span>
-          <span className="debug-label">Nodes searched</span>
-          <span className="debug-value">{debugStats?.nodesSearched != null ? debugStats.nodesSearched.toLocaleString() : "—"}</span>
-          <span className="debug-label">Depth</span>
-          <span className="debug-value">{debugStats?.searchDepth ?? "—"}</span>
-          <span className="debug-label">Nodes/s</span>
-          <span className="debug-value">{debugStats?.nodeRate != null ? Math.round(debugStats.nodeRate).toLocaleString() : "—"}</span>
-        </div>
-      </div>
-    ) : type === "about" ? (
-      <div className="modal-article">
-        <h2>About Croissant</h2>
-        <p>
-          This program stemmed from the optimal Square-1 solver by <a href="https://www.jaapsch.net/puzzles/" target="_blank" rel="noreferrer">Jaap Scherphuis</a>.
-        </p>
-        <p>
-          v2 was created by Michael Gottlieb (<a href="https://github.com/qqwref" target="_blank" rel="noreferrer">GitHub</a>, <a href="https://www.worldcubeassociation.org/persons/2006GOTT01" target="_blank" rel="noreferrer">WCA</a>), who rewrote the solver with significant improvements and optimisations.
-        </p>
-        <p>
-          Read the old documentations <a href="https://github.com/abid/croissant/blob/main/docs/sq1opt_old.txt" target="_blank" rel="noreferrer">here</a>. Note that it is largely not applicable within v3.
-        </p>
-        <p>
-          This is the official <strong>v3</strong>. New in v3:
-        </p>
-        <ul>
-          <li>Actual graphical UI</li>
-          <li>Ability to generate a solution from a specific angle</li>
-          <li>Improved karnotation support</li>
-          <li>Algorithm ergonomics rater</li>
-        </ul>
-        <p>
-          v3 is created by <a href="https://www.worldcubeassociation.org/persons/2024ASHR02" target="_blank" rel="noreferrer">Abid Ibn Ashraf</a> and <a href="https://www.worldcubeassociation.org/persons/2023MAOS01" target="_blank" rel="noreferrer">Matt Mao</a>.
-        </p>
-      </div>
-    ) : (
-      <div className="modal-article how-to-use">
-        <h2>How to Use</h2>
-        <div className="modal-section-title">Keyboard shortcuts:</div>
-        <ul>
-          <li><strong>Z</strong> = Undo &nbsp; <strong>Y</strong> = Redo</li>
-          <li><strong>Esc</strong> = Reset the cube to solved</li>
-          <li><strong>Ctrl + Enter</strong> = Start or stop the solver</li>
-          <li><strong>Ctrl + Z</strong> = Undo state change &nbsp; <strong>Ctrl + Y</strong> = Redo state change</li>
-          <li><strong>Ctrl + =</strong> = Zoom in &nbsp; <strong>Ctrl + -</strong> = Zoom out</li>
-          <li><strong>Ctrl + 0</strong> = Reset zoom level</li>
-        </ul>
-        <p>
-          Click on two pieces to <strong>swap</strong> them. Or use the below shortcuts (identical to cstimer):
-        </p>
-        <ul>
-          <li><strong>J</strong> = U, only by one piece &nbsp; <strong>F</strong> = U′, only by one piece</li>
-          <li><strong>S</strong> = D, only by one piece &nbsp; <strong>L</strong> = D′, only by one piece</li>
-          <li><strong>I</strong> or <strong>K</strong> = Slice</li>
-          <li><strong>H</strong> = U, by two pieces &nbsp; <strong>G</strong> = U′, by two pieces</li>
-          <li><strong>W</strong> = D, by two pieces &nbsp; <strong>O</strong> = D′, by two pieces</li>
-        </ul>
-        <div className="modal-section-title">Scramble / Alg Input</div>
-        <p>
-          Type some moves and hit <strong>Apply</strong>. Karn will be parsed correctly.
-        </p>
-        <p>
-          Use the mode button (to the left of the input) to switch between three modes:
-        </p>
-        <ul>
-          <li><strong>Scram</strong>: applies moves forward as a scramble</li>
-          <li><strong>Alg</strong>: inverts before applying, useful for testing algs</li>
-          <li><strong>Pos</strong>: interprets the input as a string of the raw state (e.g. A1B2C4D38E6F7G5H)</li>
-        </ul>
-        <p>
-          For the first two modes, use <strong>Enter</strong> to apply the moves from the current state, or <strong>Shift + Enter</strong> to first reset the cube to solved state before applying.
-        </p>
-        <div className="modal-section-title">Options</div>
-        <p>
-          Hover over any option to read its description. Quick reference:
-        </p>
-        <ul>
-          <li><strong>Output</strong>: toggle between <em>Solution</em> (solve from current state) and <em>Scramble</em> (generate a scramble that leads to the current state).</li>
-          <li><strong>Metric</strong>: how move length is counted — <strong>Slice</strong> (only slices), <strong>Move</strong> (layer turns too), or <strong>Angle</strong>.</li>
-          <li><strong>2 Gen / Pseudo 2 Gen</strong>: restrict moves to top-layer turns and slices (or a pseudo variant).</li>
-          <li><strong>Generate All Solutions</strong>: find every shortest solution, not just the first one found. Use the <strong>−</strong>/<strong>+</strong> stepper to also return solutions up to N moves beyond optimal.</li>
-          <li><strong>Specific depths</strong>: search only the listed move counts (comma-separated, e.g. "8,9").</li>
-          <li><strong>Stay in cubeshape</strong>: restrict to algs that keep the puzzle in cubeshape throughout. Automatically disabled when the position is incompatible.</li>
-          <li><strong>Lock layer angle on Pre-ABF</strong>: constrain the pre-ABF move to ±1 or 0 on either/both layers.</li>
-          <li><strong>Normalize ABF</strong>: simplify ABF moves in the output (e.g. 3-1 → 0-1, 43 → 10).</li>
-          <li><strong>Max top / bottom / total turns</strong>: cap how large layer turns can be.</li>
-        </ul>
-        <div className="modal-section-title">Settings</div>
-        <p>
-          Opened from the <strong>⋮</strong> menu in the top bar. Options:
-        </p>
-        <ul>
-          <li><strong>Use smarter karn</strong>: don't karnify things like T when the alg goes out of CS.</li>
-          <li><strong>Abid's notation</strong>: use barred numbers for negatives. This is just a display setting.</li>
-          <li><strong>Ignore move equivalences</strong>: generate all possible algs, even with y2 algs.</li>
-          <li><strong>Debug output</strong>: outputs internal solver states.</li>
-          <li><strong>UI scale</strong>: adjust the interface size (50%–200%).</li>
-        </ul>
-        <div className="modal-section-title">Output</div>
-        <p>
-          Solutions appear in the terminal as they are found. The output area has two views:
-        </p>
-        <ul>
-          <li><strong>Terminal view</strong>: solutions stream in as they are found, like a log.</li>
-          <li><strong>Table view</strong>: a sorted, comparable list of all solutions with move counts and ergonomics. Auto-enabled when 2 or more solutions are found.</li>
-        </ul>
-        <p>
-          Right-click (or left-click in table view) on any solution to open a context menu:
-        </p>
-        <ul>
-          <li><strong>⧉ Copy alg</strong> — copies the alg itself</li>
-          <li><strong>♥ Add to Favorites Bin</strong> — saves the alg to a bin</li>
-        </ul>
-        <p>
-          Other buttons in the terminal area:
-        </p>
-        <ul>
-          <li><strong>Normal</strong> / <strong>Karn</strong> dropdown — switch between WCA and karnotation display.</li>
-          <li><strong>⧉</strong> — copy all algs in the terminal to the clipboard.</li>
-          <li><strong>⊞</strong> / <strong>▤</strong> — switch between terminal and table view.</li>
-          <li><strong>⤢</strong> — expand the terminal to full screen.</li>
-        </ul>
-        <p>
-          If <strong>Stay in cubeshape</strong> was active, algs will be roughly sorted by their <strong>ergonomics</strong>. The numbers are relative and for reference only.
-        </p>
-        <div className="modal-section-title">Favorites</div>
-        <p>
-          Algs can be saved to bins for later reference. Open the Favorites Bin from the <strong>♥</strong> button in the top bar.
-        </p>
-        <p>
-          Right-click (or left-click in table view) on any solution to add it to a bin.
-        </p>
-        <p>
-          Bins are identified by the <strong>configurations</strong> of the solve, so algs from the same setup always land in the same bin regardless of when they were added.
-        </p>
-        <p>
-          Inside the Favorites Bin, you can:
-        </p>
-        <ul>
-          <li>Click <strong>Apply setup</strong> to re-apply a bin's configuration and clear the terminal.</li>
-          <li>Use <strong>✏</strong> to rename a bin.</li>
-          <li><strong>⧉</strong> to copy all its algs.</li>
-          <li><strong>🗑</strong> to delete the bin entirely.</li>
-          <li>Click <strong>✕</strong> next to any alg to remove it.</li>
-        </ul>
-        <p>
-          Favorited algs are stored on your device, unless you delete them.
-        </p>
-      </div>
-    );
-  const shadeStartRef = useRef<EventTarget | null>(null);
-  const shadeEndRef = useRef<EventTarget | null>(null);
-  return (
-    <div className="modal-shade" onPointerDown={(e) => { shadeStartRef.current = e.target; }} onPointerUp={(e) => { shadeEndRef.current = e.target; }} onClick={() => {
-      const startOutside = !shadeStartRef.current || !(shadeStartRef.current as Element).closest(".modal");
-      const endOutside = !shadeEndRef.current || !(shadeEndRef.current as Element).closest(".modal");
-      if (startOutside && endOutside) close();
-      shadeStartRef.current = null;
-      shadeEndRef.current = null;
-    }}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={close}>
-          ✕
-        </button>
-        {content}
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const cubeActions = useRef<CubeActions | undefined>(undefined);
   const modeControlRef = useRef<HTMLDivElement | null>(null);
@@ -1078,7 +481,8 @@ export default function App() {
   const favShadeStartRef = useRef<EventTarget | null>(null);
   const favShadeEndRef = useRef<EventTarget | null>(null);
   const [menu, setMenu] = useState(false),
-    [modal, setModal] = useState<Modal>(null),
+    [lang, setLangState] = useState<LangCode>(getLang()),
+    [modal, setModal] = useState<ModalType>(null),
     [modeMenu, setModeMenu] = useState(false),
     [openDropdown, setOpenDropdown] = useState<string | null>(null),
     [input, setInput] = useState(""),
@@ -1523,29 +927,12 @@ export default function App() {
       next = applyNumericAlgorithm(base, raw);
     }
     if (!next) {
-      setInputError(mode === "POSITION" ? "Invalid position string." : "Invalid algorithm or blocked slice.");
+      setInputError(mode === "POSITION" ? t('errors.invalidPosition') : t('errors.invalidAlg'));
       return;
     }
     cubeActions.current?.set(next);
     setCubeState(next);
     setInputError("");
-  };
-  const normalizeLine = (line: string) => {
-    if (normalize === "None") return line;
-    const lb = line.lastIndexOf("["), alg = (lb > 0 ? line.slice(0, lb) : line).trim(), bracket = lb > 0 ? "  " + line.slice(lb).trim() : "";
-    const norm = (block: string) => block.replace(/(-?\d)(,?)(-?\d)/, (_, a, comma, b) => {
-      const n = (v: string) => { const x = ((Number(v) % 3) + 3) % 3; return x === 2 ? -1 : x; };
-      return `${n(a)}${comma}${n(b)}`;
-    });
-    const separators = [...alg.matchAll(/[\/\\|\s]/g)];
-    if (!separators.length) { const one = norm(alg); return one === "0,0" || one === "00" ? bracket.trimStart() : one + bracket; }
-    const firstAt = separators[0].index!, lastAt = separators[separators.length - 1].index!;
-    let first = alg.slice(0, firstAt), middle = alg.slice(firstAt, lastAt + 1), last = alg.slice(lastAt + 1);
-    if (normalize === "Both" || normalize === "PreABF") first = norm(first);
-    if (normalize === "Both" || normalize === "PostABF") last = norm(last);
-    if (first === "0,0" || first === "00") { first = ""; middle = middle.replace(/^\s/, ""); }
-    if (last === "0,0" || last === "00") { last = ""; middle = middle.replace(/\s$/, ""); }
-    return first + middle + last + bracket;
   };
   const buildDisplayPair = async (line: string, startPosition: string, sliceStart?: string) => {
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
@@ -1656,7 +1043,7 @@ export default function App() {
       rawDisplay = pair.rawDisplay;
       karnDisplay = pair.karnDisplay;
     }
-    const displayAlg = lineAlg(normalizeLine(karn ? karnDisplay : rawDisplay));
+    const displayAlg = lineAlg(normalizeLine(karn ? karnDisplay : rawDisplay, normalize));
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
     if (seenRaw.current.size === 1) {
@@ -1673,7 +1060,8 @@ export default function App() {
   const solve = async () => {
     const native = tauri();
     if (!native?.core?.invoke) {
-      const fallback = { raw: "Native solving is available from the Tauri desktop app, not the browser preview.", karn: "Native solving is available from the Tauri desktop app, not the browser preview.", isSolution: false };
+      const nativeMsg = t('status.nativeUnavailable');
+      const fallback = { raw: nativeMsg, karn: nativeMsg, isSolution: false };
       outputLinesRef.current = [fallback];
       setOutputLines([fallback]);
       openMobileOutput();
@@ -1681,8 +1069,9 @@ export default function App() {
     }
     if (runningRef.current) {
       stopped.current = true;
-      addOutputLine({ raw: "Stop requested. The integrated solver will stop when the current solve returns.", karn: "Stop requested. The integrated solver will stop when the current solve returns.", isSolution: false });
-      setStatusLines((lines) => [...lines, "Stop requested. Ready for the next solve."].slice(-8));
+      const stopMsg = t('status.stopRequested');
+      addOutputLine({ raw: stopMsg, karn: stopMsg, isSolution: false });
+      setStatusLines((lines) => [...lines, t('status.stopReady')].slice(-8));
       setRunningState(false);
       void native.core.invoke("stop_solver").catch(() => undefined);
       return;
@@ -1711,8 +1100,9 @@ export default function App() {
     terminalScrollPositionRef.current = 0;
     tableScrollPositionRef.current = 0;
     setRunCubeShape(cubeShape);
-    setOutputLines([{ raw: "Solving…", karn: "Solving…", isSolution: false }]);
-    outputLinesRef.current = [{ raw: "Solving…", karn: "Solving…", isSolution: false }];
+    const solvingMsg = t('status.solving');
+    setOutputLines([{ raw: solvingMsg, karn: solvingMsg, isSolution: false }]);
+    outputLinesRef.current = [{ raw: solvingMsg, karn: solvingMsg, isSolution: false }];
     setStatusLines([]);
     setSolutions([]);
     setFollowTerminal(true);
@@ -1724,7 +1114,7 @@ export default function App() {
     const start = positionString(cubeState), startedAt = performance.now();
     lastSolvePosition.current = start;
     try {
-      if (!native.Channel) throw new Error("The native solver channel is unavailable.");
+      if (!native.Channel) throw new Error(t('status.channelUnavailable'));
       const onLine = new native.Channel<string>();
       onLine.onmessage = async (line) => {
         if (runId !== solveRunId.current) return;
@@ -1737,22 +1127,22 @@ export default function App() {
       // 2+ solutions, since table view is only useful for comparing/organizing output.
       if (shouldAutoTable && solutionsRef.current.length >= 2) {
         switchToTableMode();
-        setTableBusyMessage("Resolving latest solutions");
+        setTableBusyMessage(t('table.busyResolving'));
       }
       await lineQueue.current;
-      if (shouldAutoTable) setTableBusyMessage("Rating algs");
+      if (shouldAutoTable) setTableBusyMessage(t('table.busyRating'));
       for (const line of `${result.stderr || ""}`.split(/\r?\n/).filter(Boolean))
         await receiveSolverLine(line, start, runId);
       if (runId !== solveRunId.current) return;
       if (lastSolveCubeShape.current) {
-        if (shouldAutoTable && solutionsRef.current.length) setTableBusyMessage("Normalizing rating");
+        if (shouldAutoTable && solutionsRef.current.length) setTableBusyMessage(t('table.busyNormalizing'));
         setSolutionRows(medianNormalize(solutionsRef.current));
       }
-      if (shouldAutoTable) setTableBusyMessage("Building the table");
+      if (shouldAutoTable) setTableBusyMessage(t('table.busyBuilding'));
       flushSolutionState();
       const count = solutionsRef.current.length;
-      const status = `${stopped.current ? "Stopped" : result.code === 0 ? "Done" : "Error"} — ${count} solution${count === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`;
-      setStatusLines(lastSolveCubeShape.current && count ? [`Ranked ${count} algs by ergonomics.`] : [status]);
+      const status = `${stopped.current ? t('status.stopped') : result.code === 0 ? t('status.done') : t('status.error')} — ${count} solution${count === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`;
+      setStatusLines(lastSolveCubeShape.current && count ? [t('status.ranked').replace('{{count}}', String(count))] : [status]);
       // Intentional feature by Abid: only auto-switch to table view when 2+ solutions
       // exist, since table view is only useful for comparing/organizing output.
       if (shouldAutoTable && count >= 2) {
@@ -1766,7 +1156,7 @@ export default function App() {
       }
     } catch (error) {
       setTableBusyMessage("");
-      setStatusLines((lines) => [...lines, "ERROR: " + String(error)].slice(-8));
+      setStatusLines((lines) => [...lines, t('status.errorPrefix') + String(error)].slice(-8));
     } finally {
       if (runId === solveRunId.current) { solveStopTimeRef.current = performance.now(); setRunningState(false); }
     }
@@ -1888,15 +1278,15 @@ export default function App() {
   const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const cubeshapeDisableReason = cubeshapeBlockedBy2Gen
-    ? "The cube\u2019s corners cannot be solved with 2 gen in cubeshape."
+    ? t('errors.no2GenCorners')
     : !inCubeshape(cubeState) ? (() => {
       const rTop = getLayerR(cubeState.position, 0), rBot = getLayerR(cubeState.position, 12);
-      if (rTop < 0 || rBot < 0 || rTop === 1 || rBot === 1) return "Cube is not in cubeshape.";
+      if (rTop < 0 || rBot < 0 || rTop === 1 || rBot === 1) return t('errors.notCubeshape');
       if (cubeState.partial.every((v) => v === 0)) {
         const odd = getParityOdd(cubeState.position);
-        if ((rTop === rBot) !== odd) return "Current parity cannot be solved from within cubeshape.";
+        if ((rTop === rBot) !== odd) return t('errors.badParity');
       }
-      return "Cube is not in cubeshape.";
+      return t('errors.notCubeshape');
     })() : null;
   const specificDepthsActive = depths.trim().length > 0;
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
@@ -1904,7 +1294,7 @@ export default function App() {
   const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   const showErgo = runCubeShape;
   const displaySolution = (solution: Solution): DisplaySolution => {
-    const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay);
+    const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
     return { ...solution, display, alg: lineAlg(display) };
   };
   const visibleSolutions = (() => {
@@ -1944,7 +1334,7 @@ export default function App() {
   const copyTerminalText = () => {
     const lines = outputLines.map((entry) => karn ? entry.karn : entry.raw);
     void navigator.clipboard.writeText(lines.join("\n"));
-    setStatusLines((old) => [...old, "Terminal copied to clipboard!"].slice(-8));
+    setStatusLines((old) => [...old, t('terminal.copied')].slice(-8));
   };
   const renderSolutionText = (text: string) => {
     if (!abidNotation) return text;
@@ -1954,10 +1344,10 @@ export default function App() {
   };
   const tableBusyMessages = [
     tableBusyMessage,
-    "Resolving latest solutions",
-    "Rating algs",
-    "Normalizing rating",
-    "Building the table",
+    t('table.busyResolving'),
+    t('table.busyRating'),
+    t('table.busyNormalizing'),
+    t('table.busyBuilding'),
   ].filter((message, index, all) => message && all.indexOf(message) === index);
   const tableBusyText = tableBusyMessages[tableBusyTick % tableBusyMessages.length] || tableBusyMessage;
   const updateOptionalLimit = (raw: string, min: number, max: number, setEnabled: (value: boolean) => void, setValue: (value: number) => void) => {
@@ -1970,55 +1360,34 @@ export default function App() {
     setEnabled(true);
     setValue(Math.min(max, Math.max(min, Math.trunc(parsed))));
   };
-  const tooltips = {
-    menu: "Menu",
-    inputMode: "Switch input mode: Scramble, Alg, or Position.",
-    modeMenu: "Choose input mode.",
-    apply: "Apply the input. Shift+Enter first resets the cube to solved.",
-    reset: "Reset  [Esc]",
-    metric: "Choose how move length is counted: Slice, Move, or Angle metric.",
-    twoGen: "Restrict solving to 2 Gen or Pseudo 2 Gen move sets.",
-    angle: "Lock the pre-ABF angle move to +/-1 or 0.",
-    normalize: "Control which ABF moves are normalized in the output.",
-    all: "Find all optimal solutions, or optimal plus extra depths.",
-    suboptimal: "Extra moves beyond optimal to also find.",
-    generator: "Output algs that set up the case from solved instead of solving it.",
-    cubeshape: "Only generate algs that keep the puzzle in cubeshape throughout.",
-    ignoreEquator: "Ignore equator states. Equivalent to clicking the middle bar until it is gray.",
-    karn: "Display solutions in karnotation instead of WCA notation.",
-    maxX: "Limit the maximum top-layer turn in either direction (0-6).",
-    maxY: "Limit the maximum bottom-layer turn in either direction (0-6).",
-    maxTotal: "Limit the maximum combined |top|+|bottom| turn per move pair (1-12).",
-    depths: "Comma-separated list of depths to search, e.g. 8,9.",
-  };
   const renderOptionsPanel = () => (
     <div className="options-panel">
       <div className="mobile-modal-head">
-        <b>Options</b>
-        <button aria-label="Close options" onClick={() => setMobileOptionsOpen(false)}>✕</button>
+        <b>{t('options.heading')}</b>
+        <button aria-label={t('btn.closeOptions')} onClick={() => setMobileOptionsOpen(false)}>✕</button>
       </div>
-      <h2>Options</h2>
+      <h2>{t('options.heading')}</h2>
       <div className="select-grid">
-        <OptionDropdown id="metric" label="Metric" title={tooltips.metric} value={metric} options={["Slice", "Move", "Angle"]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
-        <OptionDropdown id="two" label="2 Gen" title={tooltips.twoGen} value={two} options={["None", "Pseudo 2 Gen", "2 Gen"]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
-        <OptionDropdown id="angle" label="Lock layer (preABF)" title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
-        <OptionDropdown id="normalize" label="Normalize ABF" title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
+        <OptionDropdown id="metric" label={t('options.metric')} title={tooltips.metric} value={metric} options={["Slice", "Move", "Angle"]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
+        <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={["None", "Pseudo 2 Gen", "2 Gen"]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
+        <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+        <OptionDropdown id="normalize" label={t('options.normalizeABF')} title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">
-        <span className="generator-toggle" title={tooltips.generator} onClick={() => !running && setGenerator((g) => !g)}>Output: <span className="generator-toggle-value">{generator ? "Scramble" : "Solution"}</span></span>
+        <span className="generator-toggle" title={tooltips.generator} onClick={() => !running && setGenerator((g) => !g)}>{t('options.output')} <span className="generator-toggle-value">{generator ? t('options.outputValueScramble') : t('options.outputValueSolution')}</span></span>
         <label className="inline-all-optimal" title={tooltips.all}>
           <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
-          <span>Generate All Solutions:</span>
-          <span className="all-optimal-label">{suboptimal && !specificDepthsActive ? `Optimal+${suboptimal}` : "Optimal"}</span>
+          <span>{t('options.generateAll')}</span>
+          <span className="all-optimal-label">{suboptimal && !specificDepthsActive ? `${t('options.optimal')}+${suboptimal}` : t('options.optimal')}</span>
           {!specificDepthsActive && <span className="stepper-group">
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => Math.max(0, value - 1))}>−</button>
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
           </span>}
         </label>
-        <label title={cubeshapeDisableReason ?? tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShapeMemory(e.target.checked)} /> Stay in cubeshape</label>
+        <label title={cubeshapeDisableReason ?? tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShapeMemory(e.target.checked)} /> {t('options.stayInCS')}</label>
       </div>
       <div className="limit-grid">
-        <label title={tooltips.maxX}>Max top turn:
+        <label title={tooltips.maxX}>{t('options.maxTop')}
           <div className="number-input-wrap">
             <input type="number" min="0" max="6" value={maxX ? maxXValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxX, setMaxXValue)} />
             <div className="number-stepper">
@@ -2027,7 +1396,7 @@ export default function App() {
             </div>
           </div>
         </label>
-        <label title={tooltips.maxY}>Max bottom turn:
+        <label title={tooltips.maxY}>{t('options.maxBottom')}
           <div className="number-input-wrap">
             <input type="number" min="0" max="6" value={maxY ? maxYValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxY, setMaxYValue)} />
             <div className="number-stepper">
@@ -2036,7 +1405,7 @@ export default function App() {
             </div>
           </div>
         </label>
-        <label title={tooltips.maxTotal}>Max total turn:
+        <label title={tooltips.maxTotal}>{t('options.maxTotal')}
           <div className="number-input-wrap">
             <input type="number" min="1" max="12" value={maxTotal ? maxTotalValue : ""} placeholder="12" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 1, 12, setMaxTotal, setMaxTotalValue)} />
             <div className="number-stepper">
@@ -2045,7 +1414,7 @@ export default function App() {
             </div>
           </div>
         </label>
-        <label title={tooltips.depths}>Specific depths:<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder="e.g. 8,9" /></label>
+        <label title={tooltips.depths}>{t('options.specificDepths')}<input type="text" value={depths} disabled={running} onChange={(e) => /^\s*\d*(?:\s*,\s*\d*)*\s*$/.test(e.target.value) && setDepths(e.target.value)} placeholder={t('options.placeholderDepth')} /></label>
       </div>
     </div>
   );
@@ -2075,31 +1444,31 @@ export default function App() {
       <div className="output-tools">
         <div className="output-tools-left">
           <select className="karn-select" title={tooltips.karn} value={karn ? "karn" : "normal"} disabled={running} onChange={(e) => setKarn(e.target.value === "karn")}>
-            <option value="normal">Normal</option>
-            <option value="karn">Karn</option>
+            <option value="normal">{t('karnSelect.normal')}</option>
+            <option value="karn">{t('karnSelect.karn')}</option>
           </select>
         </div>
         <div className="output-tools-right">
-          {debugOutput && <button title="Open debug stats" onClick={() => setModal("debug")}>⏱</button>}
-          <button title="Copy all algs in terminal" disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
-          <button title={tableView ? "Switch to terminal view" : "Switch to table view"} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
-          <button className="mobile-output-close" title="Close output" aria-label="Close output" onClick={() => setMobileOutputOpen(false)}>×</button>
-          <button className="expand-output" title={expanded ? "Shrink terminal" : "Expand terminal"} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
+          {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}>⏱</button>}
+          <button title={t('btn.copyAll')} disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
+          <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
+          <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}>×</button>
+          <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
         </div>
       </div>
-      {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title="Switch to table view" onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
-      {!followTerminal && !tableView && running && <button className="terminal-follow-button" title="Scroll to bottom and resume auto-scroll" onClick={scrollTerminalToBottom}>⌄</button>}
-      {running && <button className="mobile-floating-stop" onClick={() => void solve()}>Stop</button>}
+      {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
+      {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}>⌄</button>}
+      {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
       {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll}>
-        <div className="terminal-head"><span>#</span><b>Solution</b>{tableMetricRef.current === "Angle" && <span>Angle</span>}{tableMetricRef.current !== "Slice" && <span>Moves</span>}<span>Slices</span>{showErgo && <span>Ergo</span>}</div>
+        <div className="terminal-head"><span>{t('table.hash')}</span><b>{t('table.solution')}</b>{tableMetricRef.current === "Angle" && <span>{t('table.angle')}</span>}{tableMetricRef.current !== "Slice" && <span>{t('table.moves')}</span>}<span>{t('table.slices')}</span>{showErgo && <span>{t('table.ergo')}</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
           return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
-        {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">{generator ? "scramble will be displayed here..." : "solution will be displayed here..."}</span>}
+        {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: line.solution.display }); }}>{renderSolutionText(line.text)}</span>)}
         {statusLines.map((line, index) => <span key={`status-${index}-${line}`} className="terminal-line terminal-line-final">{line}</span>)}
@@ -2111,11 +1480,11 @@ export default function App() {
       <header>
         <img className="app-icon" src="/icon-web.png" alt="" />
         <div className="brand">
-          <b>CROISSANT</b><sub> &nbsp; &nbsp; by Abid and Matt</sub>
+          <b>{t('app.brand')}</b><sub> &nbsp; &nbsp; {t('app.byline')}</sub>
         </div>
         <div className="top-menu-wrap">
-          <button className="top-favorites-button" title="Open the favorites bin" onClick={() => setFavoritesOpen(true)}>♥</button>
-          <button className="top-menu-button" aria-label="Open menu" aria-expanded={menu} title={tooltips.menu} onMouseDown={(event) => event.preventDefault()} onClick={() => setMenu((value) => !value)}>
+          <button className="top-favorites-button" title={t('btn.favorites')} onClick={() => setFavoritesOpen(true)}>♥</button>
+          <button className="top-menu-button" aria-label={t('btn.openMenu')} aria-expanded={menu} title={tooltips.menu} onMouseDown={(event) => event.preventDefault()} onClick={() => setMenu((value) => !value)}>
             ⋮
           </button>
           {menu && (
@@ -2126,7 +1495,7 @@ export default function App() {
                   setMenu(false);
                 }}
               >
-                Settings
+                {t('btn.settings')}
               </button>
               <button
                 onClick={() => {
@@ -2134,7 +1503,7 @@ export default function App() {
                   setMenu(false);
                 }}
               >
-                How to Use
+                {t('btn.howToUse')}
               </button>
               <button
                 onClick={() => {
@@ -2142,7 +1511,7 @@ export default function App() {
                   setMenu(false);
                 }}
               >
-                About
+                {t('btn.about')}
               </button>
             </div>
           )}
@@ -2155,7 +1524,7 @@ export default function App() {
           </button>
           <button
             className="arrow"
-            aria-label="Choose input mode"
+            aria-label={t('tooltips.modeMenu')}
             title={tooltips.modeMenu}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
@@ -2172,21 +1541,21 @@ export default function App() {
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseMode("SCRAMBLE")}
               >
-                Scramble
+                {t('input.scramble')}
               </button>
               <button
                 className={mode === "ALG" ? "selected" : ""}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseMode("ALG")}
               >
-                Alg
+                {t('input.alg')}
               </button>
               <button
                 className={mode === "POSITION" ? "selected" : ""}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseMode("POSITION")}
               >
-                Position
+                {t('input.position')}
               </button>
             </div>
           )}
@@ -2206,12 +1575,12 @@ export default function App() {
             }}
             placeholder={
               mode === "POSITION"
-                ? "ABCDEFGH12345678-"
-                : "1,0 / 3,3 / 0,-3 / ...  (supports karn)"
+                ? t('input.placeholderPosition')
+                : t('input.placeholderMoves')
             }
           />
           <button className="apply" title={tooltips.apply} onClick={() => void apply()}>
-            Apply
+            {t('btn.apply')}
           </button>
           {inputError && <span className="input-error">{inputError}</span>}
         </div>
@@ -2224,30 +1593,30 @@ export default function App() {
             onOptions={() => setMobileOptionsOpen(true)}
           />
           <div className="moves">
-            <button title="Turn top layer counterclockwise." onClick={() => cubeActions.current?.up()}>U′</button>
+            <button title={t('cube.titleUp')} onClick={() => cubeActions.current?.up()}>U′</button>
             <button
               className="slice"
-              title="Slice  [I/K]"
+              title={t('cube.titleSlice')}
               onClick={() => cubeActions.current?.slice()}
             >
-              Slice [I/K]
+              {t('btn.slice')}
             </button>
-            <button title="Turn top layer clockwise." onClick={() => cubeActions.current?.u()}>U</button>
-            <button title="Turn bottom layer clockwise." onClick={() => cubeActions.current?.d()}>D</button>
-            <button title="Turn bottom layer counterclockwise." onClick={() => cubeActions.current?.dp()}>D′</button>
+            <button title={t('cube.titleU')} onClick={() => cubeActions.current?.u()}>U</button>
+            <button title={t('cube.titleD')} onClick={() => cubeActions.current?.d()}>D</button>
+            <button title={t('cube.titleDp')} onClick={() => cubeActions.current?.dp()}>D′</button>
           </div>
           <div className="undo">
-            <button title="Undo  [Ctrl+Z]" disabled={!undo.length || running} onClick={doUndo}>Undo (Ctrl+Z)</button>
-            <button title="Redo  [Ctrl+Y]" disabled={!redo.length || running} onClick={doRedo}>Redo (Ctrl+Y)</button>
+            <button title={t('cube.titleUndo')} disabled={!undo.length || running} onClick={doUndo}>{t('btn.undo')}</button>
+            <button title={t('cube.titleRedo')} disabled={!redo.length || running} onClick={doRedo}>{t('btn.redo')}</button>
           </div>
-          <button className={`solve ${running ? "is-running" : ""}`} disabled={!running && twoGenBlocked} title={running ? "Stop the current solve and make the UI ready for another solve." : twoGenBlocked ? "This position is not compatible with the selected 2-gen constraints." : commandPreview} onClick={() => void solve()}>{running ? "■ Stop [Ctrl+Enter]" : "▶ Solve [Ctrl+Enter]"}</button>
-          <button className="mobile-open-output" onClick={openMobileOutput}>Open Output Terminal / Table</button>
+          <button className={`solve ${running ? "is-running" : ""}`} disabled={!running && twoGenBlocked} title={running ? t('cube.titleSolve') : twoGenBlocked ? t('cube.titleSolveBlocked') : commandPreview} onClick={() => void solve()}>{running ? t('btn.stop') : t('btn.solve')}</button>
+          <button className="mobile-open-output" onClick={openMobileOutput}>{t('btn.openOutput')}</button>
         </aside>
         {renderOptionsPanel()}
         {renderOutputShell()}
       </div>
       {contextMenu && <div className="solution-context" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
-        <button onClick={() => { void navigator.clipboard.writeText(lineWithoutBracket(contextMenu.alg)); setContextMenu(null); }}>⧉  Copy alg</button>
+        <button onClick={() => { void navigator.clipboard.writeText(lineWithoutBracket(contextMenu.alg)); setContextMenu(null); }}>{t('btn.copyAlg')}</button>
         <button onClick={() => {
           const key = currentRunKey();
           setFavorites((old) => ({ ...old, [key]: {
@@ -2256,12 +1625,13 @@ export default function App() {
           } }));
           setContextMenu(null);
           setFavoritesOpen(true);
-        }}>♥  Add to Favorites Bin</button>
+        }}>{t('btn.addFavorite')}</button>
       </div>}
       {createPortal(<>
       {modal && <Modal type={modal} close={() => history.back()} settings={{
         smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
-        debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal,
+        debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
+        setLanguage: (code) => { setLang(code); setLangState(code); },
       }} debugStats={modal === "debug" ? computeDebugStats() : null} />}
       {favoritesOpen && <div className="modal-shade" onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
         const startOutside = !favShadeStartRef.current || !(favShadeStartRef.current as Element).closest(".favorites-modal");
@@ -2272,26 +1642,26 @@ export default function App() {
       }}>
         <div className="modal favorites-modal" onClick={(event) => event.stopPropagation()}>
           <button className="modal-close" onClick={() => history.back()}>✕</button>
-          <h2>Favorites</h2>
+          <h2>{t('favorites.heading')}</h2>
           {!!solutions.length && <button className="favorite-save" onClick={() => {
             const key = currentRunKey();
             setFavorites((old) => ({ ...old, [key]: {
               name: old[key]?.name || `Position ${Object.keys(old).length + 1}`,
               algorithms: Array.from(new Set([...(old[key]?.algorithms || []), ...visibleSolutions.map((solution) => solution.display)])),
             } }));
-          }}>Save current solutions</button>}
-          {!Object.keys(favorites).length && <p>No saved solution bins yet.</p>}
+          }}>{t('btn.saveSolutions')}</button>}
+          {!Object.keys(favorites).length && <p>{t('favorites.empty')}</p>}
           {Object.entries(favorites).map(([key, bin]) => {
             const binDeleteKey = `bin::${key}`;
             const isBinPending = binDeleteKey in pendingDeletes;
             return <section className={`favorite-bin${isBinPending ? " favorite-bin-deleted" : ""}`} key={key}>
             <div className="favorite-bin-head">
-              {isBinPending ? <><span>Bin deleted,</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[binDeleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[binDeleteKey]; return next; }); }}>undo</button>?</> : <>
+              {isBinPending ? <><span>{t('favorites.binDeleted')}</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[binDeleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[binDeleteKey]; return next; }); }}>{t('favorites.undo')}</button>?</> : <>
               <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
               <div className="favorite-actions">
-                <button title="Apply setup" onClick={() => applyRunConfig(key)}>Apply setup</button>
-                <button title="Copy all algs" onClick={() => void navigator.clipboard.writeText(bin.algorithms.map(lineWithoutBracket).join("\n"))}>⧉</button>
-                <button title="Delete bin" onClick={() => {
+                <button title={t('btn.applySetup')} onClick={() => applyRunConfig(key)}>{t('btn.applySetup')}</button>
+                <button title={t('btn.copyAllAlgs')} onClick={() => void navigator.clipboard.writeText(bin.algorithms.map(lineWithoutBracket).join("\n"))}>⧉</button>
+                <button title={t('btn.deleteBin')} onClick={() => {
                   const timer = window.setTimeout(() => {
                     setPendingDeletes((old) => { const next = { ...old }; delete next[binDeleteKey]; return next; });
                     setFavorites((old) => { const next = { ...old }; delete next[key]; return next; });
@@ -2306,10 +1676,10 @@ export default function App() {
                 const deleteKey = `${key}::${alg}`;
                 const isPending = deleteKey in pendingDeletes;
                 return <li key={`${alg}-${i}`} className={isPending ? "favorite-alg-deleted" : ""}>
-                  {isPending ? <><span>Successfully deleted,</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[deleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; }); }}>undo</button>?</> : <>
+                  {isPending ? <><span>{t('favorites.algDeleted')}</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[deleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; }); }}>{t('favorites.undo')}</button>?</> : <>
                     <code>{alg}</code>
-                    <button className="favorite-alg-copy" title="Copy alg" onClick={() => void navigator.clipboard.writeText(lineWithoutBracket(alg))}>⧉</button>
-                    <button className="favorite-alg-remove" title="Remove" onClick={() => {
+                    <button className="favorite-alg-copy" title={t('btn.copyAlgSmall')} onClick={() => void navigator.clipboard.writeText(lineWithoutBracket(alg))}>⧉</button>
+                    <button className="favorite-alg-remove" title={t('btn.remove')} onClick={() => {
                       const timer = window.setTimeout(() => {
                         setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; });
                         setFavorites((old) => {

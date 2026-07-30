@@ -889,6 +889,9 @@ body {
   background: #2a3444;
   color: #dce5f2;
 }
+.language-select {
+  display: none;
+}
 .modal-close {
   position: absolute;
   right: 12px;
