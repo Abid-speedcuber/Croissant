@@ -66,7 +66,7 @@ bool usebrackets=false;
 bool karnotation=false;
 bool specificAngleTop=false;
 bool specificAngleBot=false;
-int metric = TURN_METRIC;
+int metric = SLICE_METRIC;
 // 0=both  1=preABF  2=postABF  3=none (default — matches old solver-mode behaviour of
 // normalizing postABF, but the UI default is "none" so the user opts in explicitly)
 int maxX = 6;
@@ -2146,51 +2146,59 @@ int parseInteger(const char* s){
 }
 
 void help(){
-	std::cout<<"Square-1 Optimizer v2 Usage:"<<std::endl;
-	std::cout<<"  sq1opt <switches> <position>"<<std::endl;
-	std::cout<<"  sq1opt <switches> <movesequence>"<<std::endl;
-	std::cout<<"  sq1opt <switches>"<<std::endl;
+	std::cout<<"Croissant Usage:"<<std::endl;
+	std::cout<<"  croissant <flags> <state>"<<std::endl;
+	std::cout<<"  croissant <flags> <moves>"<<std::endl;
+	std::cout<<"  croissant <flags>"<<std::endl;
 	std::cout<<std::endl;
-	std::cout<<"<position> is a string encoding a particular position. For example"<<std::endl;
+	std::cout<<"<state> is a string encoding a particular cube state. For example"<<std::endl;
 	std::cout<<"   A1B2C3D45E6F7G8H- is the solved position. Letters represent corners, numbers"<<std::endl;
-	std::cout<<"   the edges, starting from the front seam clockwise around the top layer and"<<std::endl;
+	std::cout<<"   the edges, starting from the UFL corner (A) clockwise around the top layer and"<<std::endl;
 	std::cout<<"   then clockwise around the bottom layer. Optionally, the middle layer is"<<std::endl;
-	std::cout<<"   denoted by a - for a square and / for kite shape."<<std::endl;
+	std::cout<<"   denoted by a - if it's not flipped and / if it is."<<std::endl;
 	std::cout<<"   You can also partially define pieces:"<<std::endl;
 	std::cout<<"   U is a top corner, V is a bottom corner, W is any corner,"<<std::endl;
 	std::cout<<"   X is a top edge,   Y is a bottom edge,   Z is any edge."<<std::endl;
-	std::cout<<"<movesequence> is a string encoding a sequence of moves. Layer turns are"<<std::endl;
-	std::cout<<"   denoted by (x,y) where x and y are integers indicating that the top and"<<std::endl;
-	std::cout<<"   bottom layers are turned by x and y twelths of a full circle. Positive"<<std::endl;
-	std::cout<<"   numbers are clockwise turns, negative anti-clockwise."<<std::endl;
-	std::cout<<"<switches> are one of more of the following command line switches:"<<std::endl;
-	std::cout<<"   -es    Use slice metric (only slices count as moves)."<<std::endl;
-	std::cout<<"   -em    Use move/turn metric (layer turns count; this is the default)."<<std::endl;
-	std::cout<<"   -ea    Use angle metric."<<std::endl;
-	std::cout<<"   -a<n>  Generate all optimal sequences, not just the first one found."<<std::endl;
+	std::cout<<"<moves> is a string encoding a sequence of moves. WCA style (no karn!)."<<std::endl;
+	std::cout<<"   Parentheses are optional, but there must be no spaces inside the string."<<std::endl;
+	std::cout<<"   With the -g flag active, the target state is obtained by doing these moves"<<std::endl;
+	std::cout<<"   from the solved state. Without the flag active, doing the moves on the"<<std::endl;
+	std::cout<<"   target state should be able to solve the cube."<<std::endl;
+	std::cout<<"<flags> are one of more of the following command line flags:"<<std::endl;
+	std::cout<<"   -es    Use slice metric (only slices count as moves; this is the default)."<<std::endl;
+	std::cout<<"   -em    Use move/turn metric (layer turns count as well as slices)."<<std::endl;
+	std::cout<<"   -ea    Use angle metric (a 3,0 layer count as 3 moves)."<<std::endl;
+	std::cout<<"   -a<n>  Generate all optimal solutions, not just the first one found."<<std::endl;
 	std::cout<<"          If n is given, also find solutions with up to n extra moves."<<std::endl;
-	std::cout<<"   -x     Ignore the equivalence a,b/c,d/e,f = 6+a,6+b/d,c/6+e,6+f"<<std::endl;
-	std::cout<<"   -m     Ignore the middle layer shape."<<std::endl;
-	std::cout<<"   -b     Use brackets in output around layer turns"<<std::endl;
-	std::cout<<"   -r<n>  Solve n random positions, or infinitely many if n is 0 or missing."<<std::endl;
+	std::cout<<"   -d<n,> Search at a specific depth."<<std::endl;
+	std::cout<<"          Requires a comma-separated list of depths after -d."<<std::endl;
+	std::cout<<"          e.g. \"-d3,5\" under slice metric will search 3 and 5 slicers."<<std::endl;
+	std::cout<<"   -x     Ignore the equivalence a,b/c,d/e,f = 6+a,6+b/d,c/6+e,6+f."<<std::endl;
+	std::cout<<"          This will ACTUALLY generate all solutions: all the possible y2 algs."<<std::endl;
+	std::cout<<"   -m     Ignore the bar state."<<std::endl;
+	std::cout<<"   -b     Use parentheses when outputing layer turns."<<std::endl;
+	std::cout<<"   -r<n>  Solve n random states, or infinitely many if n is 0 or missing."<<std::endl;
 	std::cout<<"   -v<n>  Set verbosity, between 0 (minimal output) to 7 (full output)"<<std::endl;
-	std::cout<<"   -h     Show this help"<<std::endl;
-	std::cout<<"   -g     Input/Output generating move sequences rather than solutions."<<std::endl;
+	std::cout<<"   -h, --help  Show this help."<<std::endl;
+	std::cout<<"   -g     Generator mode. Input/Output go from the solved state from the target state."<<std::endl;
+	std::cout<<"          i.e. Non-generator mode outputs solutions, generator mode outputs setups."<<std::endl;
 	std::cout<<"   -i<fn> Use as input each line from the file with filename <fn>."<<std::endl;
 	std::cout<<"   -2     2gen - no bottom layer moves."<<std::endl;
 	std::cout<<"   -p     Pseudo 2gen - only allow bottom layer moves of 1, 0, -1."<<std::endl;
-	std::cout<<"   -c     Only generate algs that stay in a square/square cubeshape."<<std::endl;
-	std::cout<<"   -k     Output algs in Karnotation. Ignores ABF."<<std::endl;
-	std::cout<<"   -ob    Normalize AUF on both pre-ABF and post-ABF moves."<<std::endl;
-	std::cout<<"   -oe    Normalize AUF on the pre-ABF move only (before first slice)."<<std::endl;
-	std::cout<<"   -os    Normalize AUF on the post-ABF move only (after last slice)."<<std::endl;
+	std::cout<<"   -c     Stay in cubeshape."<<std::endl;
+	std::cout<<"   -k     Output algs in karnotation."<<std::endl;
+	std::cout<<"   -ob    Normalize ABF on both preABF and postABF."<<std::endl;
+	std::cout<<"   -oe    Normalize ABF on preABF only (the move before the first slice)."<<std::endl;
+	std::cout<<"   -os    Normalize ABF on postABF only (the move after the last slice)."<<std::endl;
 	std::cout<<"   -nb    Lock both layer angles on pre-ABF (top and bottom)."<<std::endl;
+	std::cout<<"          Useful for generating algs from a specific angle."<<std::endl;
 	std::cout<<"   -nu    Lock top layer angle on pre-ABF only."<<std::endl;
 	std::cout<<"   -nd    Lock bottom layer angle on pre-ABF only."<<std::endl;
+	std::cout<<"          The above two flags are useful for avoiding 4x solutions for PBLs like H and Q."<<std::endl;
 	std::cout<<"   -nn    No layer angle lock (default)."<<std::endl;
-	std::cout<<"   -X>n>  Only allow top layer turns of a maximum of n in either direction."<<std::endl;
-	std::cout<<"   -Y>n>  Only allow bottom layer turns of a maximum of n in either direction."<<std::endl;
-	std::cout<<"   -Z>n>  Only allow turns of a maximum of n total turn amount (abs(X) + abs(Y))."<<std::endl;
+	std::cout<<"   -X<n>  Only allow top layer turns of a maximum of n in either direction."<<std::endl;
+	std::cout<<"   -Y<n>  Only allow bottom layer turns of a maximum of n in either direction."<<std::endl;
+	std::cout<<"   -Z<n>  Only allow turns of a maximum of n total turn amount (abs(X) + abs(Y))."<<std::endl;
 }
 
 
@@ -2209,6 +2217,10 @@ int sq1optMain(int argc, char* argv[]){
 	bool keepCubeShape = false;
 	int parsedValue = 0;
 	for( int i=1; i<argc; i++){
+		if( std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0 || std::strcmp(argv[i], "-help") == 0 || std::strcmp(argv[i], "/?") == 0 ){
+			help();
+			return 0;
+		}
 		if( argv[i][0]=='-' ){
 			switch( argv[i][1] ){
 				case 'e':
