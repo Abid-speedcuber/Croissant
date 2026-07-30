@@ -2022,8 +2022,8 @@ export default function App() {
           <div className="number-input-wrap">
             <input type="number" min="0" max="6" value={maxX ? maxXValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxX, setMaxXValue)} />
             <div className="number-stepper">
-              <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.min(6, (maxX ? value : 0) + 1)); }}>▲</button>
-              <button type="button" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.max(0, (maxX ? value : 1) - 1)); }}>▼</button>
+              <button type="button" className="top-stepper" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.min(6, (maxX ? value : 0) + 1)); }}>▲</button>
+              <button type="button" className="bottom-stepper" title={tooltips.maxX} disabled={running} onClick={() => { setMaxX(true); setMaxXValue((value) => Math.max(0, (maxX ? value : 1) - 1)); }}>▼</button>
             </div>
           </div>
         </label>
@@ -2031,8 +2031,8 @@ export default function App() {
           <div className="number-input-wrap">
             <input type="number" min="0" max="6" value={maxY ? maxYValue : ""} placeholder="6" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 0, 6, setMaxY, setMaxYValue)} />
             <div className="number-stepper">
-              <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.min(6, (maxY ? value : 0) + 1)); }}>▲</button>
-              <button type="button" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.max(0, (maxY ? value : 1) - 1)); }}>▼</button>
+              <button type="button" className="top-stepper" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.min(6, (maxY ? value : 0) + 1)); }}>▲</button>
+              <button type="button" className="bottom-stepper" title={tooltips.maxY} disabled={running} onClick={() => { setMaxY(true); setMaxYValue((value) => Math.max(0, (maxY ? value : 1) - 1)); }}>▼</button>
             </div>
           </div>
         </label>
@@ -2040,8 +2040,8 @@ export default function App() {
           <div className="number-input-wrap">
             <input type="number" min="1" max="12" value={maxTotal ? maxTotalValue : ""} placeholder="12" disabled={running} onChange={(e) => updateOptionalLimit(e.target.value, 1, 12, setMaxTotal, setMaxTotalValue)} />
             <div className="number-stepper">
-              <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.min(12, (maxTotal ? value : 0) + 1)); }}>▲</button>
-              <button type="button" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.max(1, (maxTotal ? value : 2) - 1)); }}>▼</button>
+              <button type="button" className="top-stepper" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.min(12, (maxTotal ? value : 0) + 1)); }}>▲</button>
+              <button type="button" className="bottom-stepper" title={tooltips.maxTotal} disabled={running} onClick={() => { setMaxTotal(true); setMaxTotalValue((value) => Math.max(1, (maxTotal ? value : 2) - 1)); }}>▼</button>
             </div>
           </div>
         </label>

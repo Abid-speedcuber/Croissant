@@ -535,14 +535,14 @@ body {
   right: 4px;
   display: grid;
   grid-template-rows: 1fr 1fr;
-  gap: 2px;
+  gap: 0px;
 }
 .number-stepper button {
   width: 18px;
   height: 13px;
-  border: 1px solid #40516a;
+  border: 1px solid #1c2534;
   border-radius: 3px;
-  background: #162131 !important;
+  background: #0f1722 !important;
   color: #dce5f2 !important;
   padding: 0;
   font-size: 8px;
@@ -553,6 +553,18 @@ body {
 .number-stepper button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.number-stepper .top-stepper {
+  margin-bottom: 0px;
+  border-bottom-left-radius: 0px;
+  border-bottom-right-radius: 0px;
+  border-bottom: 0.25px solid #17202d;
+}
+.number-stepper .bottom-stepper {
+  margin-top: -0.52px;
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+  border-top: 0.25px solid #17202d;
 }
 .check-grid {
   display: grid;
