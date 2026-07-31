@@ -1131,6 +1131,7 @@ export default function App() {
     openMobileOutput();
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
+    if (debugOutput) flags.push("-v7");
     stopped.current = false;
     solutionsRef.current = [];
     outputLinesRef.current = [];
