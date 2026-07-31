@@ -656,6 +656,7 @@ export default function App() {
   const pageInputFocused = useRef(false);
   const pageSwitcherRef = useRef<HTMLDivElement>(null);
   const pageInputRef = useRef<HTMLInputElement>(null);
+  const touchNavRef = useRef<{ startY: number; lastY: number; moved: boolean; node: HTMLDivElement | null } | null>(null);
   const firstTableSwitchAfterSolveRef = useRef(true);
   const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
@@ -835,6 +836,31 @@ export default function App() {
     if (event.deltaY < 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) goToPage(clampedPage - 1, "bottom");
     else if (event.deltaY > 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollHeight - node.scrollTop - node.clientHeight < 4 && clampedPage < totalPages - 1) goToPage(clampedPage + 1, "top");
   };
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const node = tableView ? tableContainerRef.current : terminalTextRef.current;
+    if (!node) return;
+    const touch = event.touches[0];
+    touchNavRef.current = { startY: touch.clientY, lastY: touch.clientY, moved: false, node };
+  };
+  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const state = touchNavRef.current;
+    if (!state) return;
+    state.lastY = event.touches[0].clientY;
+    state.moved = true;
+  };
+  const handleTouchEnd = () => {
+    const state = touchNavRef.current;
+    touchNavRef.current = null;
+    const node = state?.node;
+    if (!state || !state.moved || !node) return;
+    const dy = state.lastY - state.startY;
+    if (dy > 30) {
+      if (node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) goToPage(clampedPage - 1, "bottom");
+    } else if (dy < -30) {
+      const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 4;
+      if (node.scrollHeight > node.clientHeight + 4 && atBottom && clampedPage < totalPages - 1) goToPage(clampedPage + 1, "top");
+    }
+  };
   const handleTerminalScroll = () => {
     const node = terminalTextRef.current;
     if (!node) return;
@@ -915,7 +941,7 @@ export default function App() {
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (followTerminalRef.current) return;
     const node = tableView ? tableContainerRef.current : terminalTextRef.current;
     if (!node) return;
@@ -1651,7 +1677,7 @@ export default function App() {
         <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1} title={t('btn.nextPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}>›</button>
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
-      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel}>
+      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
         <div className="terminal-head"><span>{t('table.hash')}</span><b>{t('table.solution')}</b>{tableMetricRef.current === "Angle" && <span>{t('table.angle')}</span>}{tableMetricRef.current !== "Slice" && <span>{t('table.moves')}</span>}<span>{t('table.slices')}</span>{showErgo && <span>{t('table.ergo')}</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
@@ -1663,7 +1689,7 @@ export default function App() {
           }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
-      </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll}>
+      </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
         {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`}
