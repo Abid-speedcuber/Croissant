@@ -472,6 +472,9 @@ export default function App() {
   const debugStatsRef = useRef<{ solutionTimestamps: number[]; rateSamples: number[] }>({ solutionTimestamps: [], rateSamples: [] });
   const progressNodesRef = useRef(0);
   const progressDepthRef = useRef(0);
+  const progressRateRef = useRef(0);
+  const lastProgressNodesRef = useRef(0);
+  const lastProgressAtRef = useRef(0);
   const lineQueue = useRef<Promise<void>>(Promise.resolve());
   const outputIdleTimer = useRef<number | undefined>(undefined);
   const renderFrame = useRef<number | undefined>(undefined);
@@ -1050,7 +1053,17 @@ export default function App() {
     if (line.startsWith("__PROGRESS__")) {
       if (!solveStartTimeRef.current) solveStartTimeRef.current = performance.now();
       const nm = line.match(/nodes=(\d+)/), dm = line.match(/depth=(\d+)/);
-      if (nm) progressNodesRef.current = parseInt(nm[1], 10);
+      if (nm) {
+        const nodes = parseInt(nm[1], 10);
+        const now = performance.now();
+        if (lastProgressNodesRef.current > 0) {
+          const dt = (now - lastProgressAtRef.current) / 1000;
+          if (dt > 0) progressRateRef.current = (nodes - lastProgressNodesRef.current) / dt;
+        }
+        lastProgressNodesRef.current = nodes;
+        lastProgressAtRef.current = now;
+        progressNodesRef.current = nodes;
+      }
       if (dm) progressDepthRef.current = parseInt(dm[1], 10);
       return;
     }
@@ -1144,6 +1157,9 @@ export default function App() {
     debugStatsRef.current = { solutionTimestamps: [], rateSamples: [] };
     progressNodesRef.current = 0;
     progressDepthRef.current = 0;
+    progressRateRef.current = 0;
+    lastProgressNodesRef.current = 0;
+    lastProgressAtRef.current = 0;
     followTerminalRef.current = true;
     lastSolveCubeShape.current = cubeShape;
     firstTableSwitchAfterSolveRef.current = true;
@@ -1488,7 +1504,7 @@ export default function App() {
     const stddev = samples.length > 1 ? Math.sqrt(samples.reduce((sum, v) => sum + (v - avg) ** 2, 0) / samples.length) : 0;
     const nodesSearched = progressNodesRef.current;
     const searchDepth = progressDepthRef.current;
-    const nodeRate = elapsedTotal > 0 ? nodesSearched / elapsedTotal : 0;
+    const nodeRate = runningRef.current ? progressRateRef.current : elapsedTotal > 0 ? nodesSearched / elapsedTotal : 0;
     return { elapsed, solutionCount, rollingRate, avgRate: avg, stddevRate: stddev, nodesSearched, searchDepth, nodeRate };
   };
   const renderOutputShell = () => (
