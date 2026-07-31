@@ -103,6 +103,7 @@
     "normal": "Normal",
     "karn": "Karn"
   },
+  "outputNotation": "Notation:",
   "terminal": {
     "emptyScramble": "scramble will be displayed here...",
     "emptySolution": "solution will be displayed here...",

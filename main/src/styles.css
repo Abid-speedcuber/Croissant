@@ -486,9 +486,14 @@ body {
   padding: 0 9px;
   text-align: left;
 }
-.option-dropdown-menu button:hover,
+.option-dropdown-menu button:hover {
+  background: #25324d;
+}
 .option-dropdown-menu button.selected {
   background: #345078;
+}
+.option-dropdown-menu button.selected:hover {
+  background: #3d6088;
 }
 .option-dropdown-menu button.selected {
   color: #9ac7f2;
@@ -1301,16 +1306,8 @@ body {
 .output-tools button:hover {
   background: #345078;
 }
-.output-tools .karn-select {
-  height: 22px;
-  padding: 0 2px;
-  border: 1px solid #536178;
-  border-radius: 3px;
-  background: #27303d;
-  color: #9db7d7;
+.output-tools .generator-toggle {
   font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
 }
 .generator-toggle {
   cursor: pointer;

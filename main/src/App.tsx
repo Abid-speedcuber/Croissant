@@ -60,8 +60,8 @@ function OptionDropdown({ id, label, title, value, options, disabled, open, setO
                 role="option"
                 aria-selected={option === value}
                 className={option === value ? "selected" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
+                onMouseDown={(event) => {
+                  event.preventDefault();
                   onChange(option);
                   setOpen(null);
                 }}
@@ -323,6 +323,10 @@ function Cube({
         f: "up",
         s: "d",
         l: "dp",
+        h: "up",
+        g: "u",
+        w: "dp",
+        o: "d",
         escape: "reset",
       };
       const action = map[e.key.toLowerCase()];
@@ -1489,10 +1493,7 @@ export default function App() {
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
       <div className="output-tools">
         <div className="output-tools-left">
-          <select className="karn-select" title={tooltips.karn} value={karn ? "karn" : "normal"} disabled={running} onChange={(e) => setKarn(e.target.value === "karn")}>
-            <option value="normal">{t('karnSelect.normal')}</option>
-            <option value="karn">{t('karnSelect.karn')}</option>
-          </select>
+          <span className="generator-toggle" title={tooltips.karn} onClick={() => !running && setKarn((k) => !k)}>{t('outputNotation')} <span className="generator-toggle-value">{karn ? t('karnSelect.karn') : t('karnSelect.normal')}</span></span>
         </div>
         <div className="output-tools-right">
           {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}>⏱</button>}
@@ -1510,13 +1511,24 @@ export default function App() {
         <div className="terminal-head"><span>{t('table.hash')}</span><b>{t('table.solution')}</b>{tableMetricRef.current === "Angle" && <span>{t('table.angle')}</span>}{tableMetricRef.current !== "Slice" && <span>{t('table.moves')}</span>}<span>{t('table.slices')}</span>{showErgo && <span>{t('table.ergo')}</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
-          return <div className="solution" key={x.raw} onMouseDown={(event) => { if (event.button !== 0 && event.button !== 2) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display }); }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          return <div className="solution" key={x.raw} onMouseDown={(event) => {
+            if (event.button !== 0 && event.button !== 2) return;
+            event.preventDefault();
+            if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
+            setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
+          }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
         {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
-        {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: line.solution.display }); }}>{renderSolutionText(line.text)}</span>)}
+        {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`}
+          onMouseDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            if (contextMenu) setContextMenu(null);
+          }}
+          onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: line.solution.display }); }}>{renderSolutionText(line.text)}</span>)}
         {statusLines.map((line, index) => <span key={`status-${index}-${line}`} className="terminal-line terminal-line-final">{line}</span>)}
       </div>}
     </div>
@@ -1661,7 +1673,10 @@ export default function App() {
         {renderOptionsPanel()}
         {renderOutputShell()}
       </div>
-      {contextMenu && <div className="solution-context" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
+      {contextMenu && <div className="solution-context" style={{
+        left: Math.max(0, Math.min(contextMenu.x, window.innerWidth - 180)),
+        top: Math.max(0, Math.min(contextMenu.y, window.innerHeight - 80)),
+      }} onClick={(event) => event.stopPropagation()}>
         <button onClick={() => { void navigator.clipboard.writeText(lineWithoutBracket(contextMenu.alg)); setContextMenu(null); }}>{t('btn.copyAlg')}</button>
         <button onClick={() => {
           const key = currentRunKey();

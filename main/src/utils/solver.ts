@@ -366,7 +366,7 @@ export const tooltips = {
   generator: "Output algs that set up the case from solved instead of solving it.",
   cubeshape: "Only generate algs that keep the puzzle in cubeshape throughout.",
   ignoreEquator: "Ignore equator states. Equivalent to clicking the middle bar until it is gray.",
-  karn: "Display solutions in karnotation instead of WCA notation.",
+  karn: "Click to switch between WCA and Karn as output notation.",
   maxX: "Limit the maximum top-layer turn in either direction (0-6).",
   maxY: "Limit the maximum bottom-layer turn in either direction (0-6).",
   maxTotal: "Limit the maximum combined |top|+|bottom| turn per move pair (1-12).",
