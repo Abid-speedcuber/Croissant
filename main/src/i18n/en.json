@@ -46,6 +46,8 @@
     "copyAll": "Copy all algs in terminal",
     "switchTableView": "Switch to table view",
     "switchTerminalView": "Switch to terminal view",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
     "expandTerminal": "Expand terminal",
     "shrinkTerminal": "Shrink terminal",
     "scrollBottom": "Scroll to bottom and resume auto-scroll",
@@ -157,7 +159,15 @@
       "debugOutput": "Debug output",
       "uiScale": "UI scale",
       "reset": "Reset",
-      "language": "Language"
+      "language": "Language",
+      "pageSize": "Solutions per page",
+      "showAll": "Show all the generated solutions in a single page"
+    },
+    "showAll": {
+      "title": "Show all solutions?",
+      "warning": "This may create lag and, in the worst case, crash the app. Make sure your device is capable of handling it.",
+      "cancel": "Cancel",
+      "confirm": "Confirm"
     },
     "debug": {
       "title": "Debug Stats",

@@ -12,6 +12,7 @@ import {
 import { Modal } from './components/Modal';
 import { t, LangCode, getLang, setLang } from './i18n';
 
+const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
 const solved = [
   0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7,
 ];
@@ -523,7 +524,10 @@ export default function App() {
     [mobileOptionsOpen, setMobileOptionsOpen] = useState(false), [mobileOutputOpen, setMobileOutputOpen] = useState(false),
     [zoom, setZoom] = useState(1),
     [smartKarn, setSmartKarn] = useState(true), [abidNotation, setAbidNotation] = useState(false),
-    [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false);
+    [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false),
+    [pageSize, setPageSize] = useState(1000), [showAll, setShowAll] = useState(false),
+    [page, setPage] = useState(0);
+  const [showAllConfirm, setShowAllConfirm] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false),
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
     [pendingDeletes, setPendingDeletes] = useState<Record<string, number>>({});
@@ -647,6 +651,7 @@ export default function App() {
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const terminalScrollPositionRef = useRef(0);
   const tableScrollPositionRef = useRef(0);
+  const pageScrollEdgeRef = useRef<"top" | "bottom">("top");
   const firstTableSwitchAfterSolveRef = useRef(true);
   const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
@@ -714,6 +719,7 @@ export default function App() {
     }
     const onPop = () => {
       setModal(null);
+      setShowAllConfirm(false);
       setFavoritesOpen(false);
       setFavoritesClosing(false);
     };
@@ -774,11 +780,48 @@ export default function App() {
     followTerminalRef.current = true;
     setFollowTerminal(true);
     setCompletedWhilePaused(false);
+    if (!showAll) {
+      const lastPage = Math.max(0, Math.ceil(solutions.length / pageSize) - 1);
+      pageScrollEdgeRef.current = "bottom";
+      setPage(lastPage);
+    }
     node.scrollTop = node.scrollHeight;
   };
   const openMobileOutput = () => {
     setMobileOutputOpen(true);
     requestAnimationFrame(scrollTerminalToBottom);
+  };
+  const goToPage = (next: number, edge: "top" | "bottom") => {
+    setPage(next);
+    pageScrollEdgeRef.current = edge;
+    if (running && next === totalPages - 1) {
+      followTerminalRef.current = true;
+      setFollowTerminal(true);
+      setCompletedWhilePaused(false);
+    } else {
+      followTerminalRef.current = false;
+      setFollowTerminal(false);
+    }
+  };
+  const handleTerminalWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const node = terminalTextRef.current;
+    if (!node) return;
+    if (event.deltaY < 0) {
+      if (running) {
+        followTerminalRef.current = false;
+        setFollowTerminal(false);
+      }
+      if (node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) goToPage(clampedPage - 1, "bottom");
+    } else if (event.deltaY > 0) {
+      const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 4;
+      if (node.scrollHeight > node.clientHeight + 4 && atBottom && clampedPage < totalPages - 1) goToPage(clampedPage + 1, "top");
+    }
+  };
+  const handleTableWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const node = tableContainerRef.current;
+    if (!node) return;
+    if (event.deltaY < 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) goToPage(clampedPage - 1, "bottom");
+    else if (event.deltaY > 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollHeight - node.scrollTop - node.clientHeight < 4 && clampedPage < totalPages - 1) goToPage(clampedPage + 1, "top");
   };
   const handleTerminalScroll = () => {
     const node = terminalTextRef.current;
@@ -842,6 +885,19 @@ export default function App() {
   useEffect(() => {
     isSwitchingViewRef.current = false;
   }, [tableView]);
+  useEffect(() => {
+    if (showAll || !followTerminalRef.current) return;
+    setPage(Math.max(0, Math.ceil(solutions.length / pageSize) - 1));
+  }, [solutions.length, pageSize, showAll]);
+  useEffect(() => {
+    setPage(0);
+  }, [pageSize, showAll]);
+  useEffect(() => {
+    if (followTerminalRef.current) return;
+    const node = tableView ? tableContainerRef.current : terminalTextRef.current;
+    if (!node) return;
+    node.scrollTop = pageScrollEdgeRef.current === "bottom" ? node.scrollHeight : 0;
+  }, [page, tableView]);
   useEffect(() => {
     if (!tableBusyMessage) return;
     const id = window.setInterval(() => setTableBusyTick((value) => value + 1), 900);
@@ -1006,16 +1062,13 @@ export default function App() {
     };
   };
   /*
-   * LIVE STREAMING — INTENTIONAL FEATURE (Abid)
+   * LIVE STREAMING — INTENTIONAL FEATURE (by Abid)
    *
    * Solutions appear one-by-one in the terminal as the solver emits them, similar
    * to how AI UIs stream tokens. This is THE magic of the app. It MUST NOT be
    * traded away for raw speed — no batching, no hiding behind a spinner, no
    * waiting for "all results" before showing anything. Every solution must be
    * flushed to the terminal as soon as it is available.
-   *
-   * The only acceptable optimization is to defer EXPENSIVE post-processing
-   * (karnify, rating) while still showing the raw algorithm immediately.
    */
   const addOutputLine = (line: OutputLine) => {
     outputLinesRef.current = [...outputLinesRef.current, line].slice(-1000);
@@ -1172,6 +1225,7 @@ export default function App() {
     outputLinesRef.current = [{ raw: solvingMsg, karn: solvingMsg, isSolution: false }];
     setStatusLines([]);
     setSolutions([]);
+    setPage(0);
     setFollowTerminal(true);
     setTableView(false);
     setTableBusyMessage("");
@@ -1293,6 +1347,8 @@ export default function App() {
       if (typeof value.maxTotal === "boolean") setMaxTotal(value.maxTotal);
       if (typeof value.maxTotalValue === "number") setMaxTotalValue(value.maxTotalValue);
       if (typeof value.zoom === "number") { setZoom(value.zoom); zoomRef.current = value.zoom; document.documentElement.classList.toggle("tall-viewport", window.innerHeight / value.zoom >= 810); }
+      if (typeof value.pageSize === "number" && PAGE_SIZE_OPTIONS.includes(value.pageSize)) setPageSize(value.pageSize);
+      if (typeof value.showAll === "boolean") setShowAll(value.showAll);
       queueMicrotask(() => { settingsReady.current = true; });
     });
   }, []);
@@ -1301,9 +1357,9 @@ export default function App() {
     void saveSettings({
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape: cubeShapeMemory, ignoreMiddle,
-      maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom,
+      maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll,
     });
-  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom]);
+  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll]);
   useEffect(() => {
     if (!solutions.length || running) return;
     let cancelled = false;
@@ -1365,21 +1421,37 @@ export default function App() {
     const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
     return { ...solution, display, alg: lineAlg(display) };
   };
-  const visibleSolutions = (() => {
+  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(solutions.length / pageSize));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const pageStart = clampedPage * pageSize;
+  const pageEnd = showAll ? solutions.length : Math.min(pageStart + pageSize, solutions.length);
+  const pageSolutions = (() => {
     const seen = new Set<string>();
     const rows: DisplaySolution[] = [];
-    for (const solution of solutions) {
-      const row = displaySolution(solution);
+    for (let i = pageStart; i < pageEnd; i++) {
+      const row = displaySolution(solutions[i]);
       if (seen.has(row.alg)) continue;
       seen.add(row.alg);
       rows.push(row);
     }
     return rows;
   })();
+  const collectAllDisplays = () => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const solution of solutions) {
+      const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
+      const alg = lineAlg(display);
+      if (seen.has(alg)) continue;
+      seen.add(alg);
+      out.push(display);
+    }
+    return out;
+  };
   const displayErgo = (solution: Solution) =>
     running || tableBusyMessage ? solutionErgo(solution) ?? solution.ergoRaw : solutionErgo(solution);
-  const tableSolutions = [...visibleSolutions].sort((a, b) => {
-    if (showErgo && solutions.some((row) => displayErgo(row) !== undefined)) {
+  const tableSolutions = [...pageSolutions].sort((a, b) => {
+    if (showErgo && pageSolutions.some((row) => displayErgo(row) !== undefined)) {
       const aErgo = displayErgo(a), bErgo = displayErgo(b);
       const aNan = aErgo === undefined, bNan = bErgo === undefined;
       if (aNan && !bNan) return 1;
@@ -1389,7 +1461,7 @@ export default function App() {
     if (a.slices !== b.slices) return a.slices - b.slices;
     return a.moves - b.moves;
   });
-  const terminalSolutions = visibleSolutions.map((solution, index) => {
+  const terminalSolutions = pageSolutions.map((solution, index) => {
     const ergo = displayErgo(solution);
     const suffix = showErgo && !running
       ? ergo === undefined ? "  (⚠)" : `  (${ergo.toFixed(2)})`
@@ -1524,8 +1596,13 @@ export default function App() {
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}>⌄</button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
+      {!showAll && totalPages > 1 && <div className="page-switcher">
+        <button disabled={clampedPage === 0} title={t('btn.prevPage')} onClick={() => goToPage(clampedPage - 1, "bottom")}>‹</button>
+        <span className="page-switcher-indicator">{clampedPage + 1} / {totalPages}</span>
+        <button disabled={clampedPage >= totalPages - 1} title={t('btn.nextPage')} onClick={() => goToPage(clampedPage + 1, "top")}>›</button>
+      </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
-      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll}>
+      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel}>
         <div className="terminal-head"><span>{t('table.hash')}</span><b>{t('table.solution')}</b>{tableMetricRef.current === "Angle" && <span>{t('table.angle')}</span>}{tableMetricRef.current !== "Slice" && <span>{t('table.moves')}</span>}<span>{t('table.slices')}</span>{showErgo && <span>{t('table.ergo')}</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
@@ -1534,10 +1611,10 @@ export default function App() {
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}><span>{i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
-      </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={(event) => { if (event.deltaY < 0 && running) { followTerminalRef.current = false; setFollowTerminal(false); } }} onScroll={handleTerminalScroll}>
+      </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll}>
         {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`}
@@ -1712,7 +1789,20 @@ export default function App() {
         smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
         setLanguage: (code) => { setLang(code); setLangState(code); },
+        pageSize, setPageSize, showAll, setShowAll, pageSizeOptions: PAGE_SIZE_OPTIONS,
+        onRequestShowAll: () => setShowAllConfirm(true),
       }} debugStats={modal === "debug" ? computeDebugStats() : null} />}
+      {showAllConfirm && <div className="modal-shade modal-shade-top" onClick={() => setShowAllConfirm(false)}>
+        <div className="modal modal-confirm" onClick={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={() => setShowAllConfirm(false)}>✕</button>
+          <h2>{t('modal.showAll.title')}</h2>
+          <p>{t('modal.showAll.warning')}</p>
+          <div className="modal-confirm-actions">
+            <button onClick={() => setShowAllConfirm(false)}>{t('modal.showAll.cancel')}</button>
+            <button className="modal-confirm-primary" onClick={() => { setShowAll(true); setShowAllConfirm(false); }}>{t('modal.showAll.confirm')}</button>
+          </div>
+        </div>
+      </div>}
       {(favoritesOpen || favoritesClosing) && <div className={"modal-shade" + (favoritesClosing ? " closing" : "")} style={favoritesClosing ? { background: "transparent", pointerEvents: "none" } : {}} onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
         const startOutside = !favShadeStartRef.current || !(favShadeStartRef.current as Element).closest(".favorites-modal");
         const endOutside = !favShadeEndRef.current || !(favShadeEndRef.current as Element).closest(".favorites-modal");
@@ -1727,7 +1817,7 @@ export default function App() {
             const key = currentRunKey();
             setFavorites((old) => ({ ...old, [key]: {
               name: old[key]?.name || `Position ${Object.keys(old).length + 1}`,
-              algorithms: Array.from(new Set([...(old[key]?.algorithms || []), ...visibleSolutions.map((solution) => solution.display)])),
+              algorithms: Array.from(new Set([...(old[key]?.algorithms || []), ...collectAllDisplays()])),
             } }));
           }}>{t('btn.saveSolutions')}</button>}
           {!Object.keys(favorites).length && <p>{t('favorites.empty')}</p>}

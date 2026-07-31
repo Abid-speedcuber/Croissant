@@ -16,6 +16,10 @@ export function Modal({
     ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
     debugOutput: boolean; setDebugOutput: (value: boolean) => void;
     zoom: number; setZoom: (value: number) => void;
+    pageSize: number; setPageSize: (value: number) => void;
+    showAll: boolean; setShowAll: (value: boolean) => void;
+    pageSizeOptions: number[];
+    onRequestShowAll: () => void;
     disabled: boolean;
     hasMaxTurn: boolean;
     language?: LangCode;
@@ -44,6 +48,15 @@ export function Modal({
             <input type="checkbox" checked={settings?.debugOutput ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setDebugOutput(e.target.checked)} />
             <span>{t('modal.settings.debugOutput')}</span>
           </label>
+          <label className="modal-check">
+            <input type="checkbox" checked={settings?.showAll ?? false} disabled={settings?.disabled} onChange={(e) => { if (e.target.checked) settings?.onRequestShowAll(); else settings?.setShowAll(false); }} />
+            <span>{t('modal.settings.showAll')}</span>
+          </label>
+        </div>
+        <div className="settings-slider">
+          <span className="settings-slider-label">{t('modal.settings.pageSize')}</span>
+          <input type="range" min="0" max={String((settings?.pageSizeOptions.length ?? 1) - 1)} step="1" value={Math.max(0, (settings?.pageSizeOptions ?? []).indexOf(settings?.pageSize ?? 1000))} disabled={settings?.disabled || settings?.showAll} onChange={(e) => settings?.setPageSize((settings?.pageSizeOptions ?? [])[Number(e.target.value)] ?? 1000)} />
+          <span className="settings-slider-value">{(settings?.pageSize ?? 1000).toLocaleString()}</span>
         </div>
         <div className="settings-slider">
           <span className="settings-slider-label">{t('modal.settings.uiScale')}</span>
