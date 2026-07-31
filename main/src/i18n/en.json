@@ -48,6 +48,7 @@
     "switchTerminalView": "Switch to terminal view",
     "prevPage": "Previous page",
     "nextPage": "Next page",
+    "pageNumber": "Page number",
     "expandTerminal": "Expand terminal",
     "shrinkTerminal": "Shrink terminal",
     "scrollBottom": "Scroll to bottom and resume auto-scroll",

@@ -8,6 +8,10 @@
 * {
   box-sizing: border-box;
 }
+::selection {
+  background: #14b8a6;
+  color: #0d1117;
+}
 html,
 body,
 #root {
@@ -1425,45 +1429,101 @@ body {
   bottom: 10px;
   z-index: 5;
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 6px;
-  border: 1px solid #536178;
-  border-radius: 14px;
+  align-items: stretch;
   background: #1b2432;
   color: #dce5f2;
   font-size: 11px;
   box-shadow: 0 6px 16px #0007;
   opacity: 0.25;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.25s ease 0.6s;
 }
-.page-switcher:hover {
+.page-switcher:hover,
+.page-switcher:focus-within {
   opacity: 1;
+  transition: opacity 0.1s ease;
 }
-.page-switcher button {
-  width: 20px;
-  height: 20px;
+.page-switcher button:focus-visible,
+.page-switcher input:focus-visible {
+  outline: none;
+}
+.page-switcher-btn {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: none;
-  border-radius: 3px;
+  border: 1px solid #536178;
   background: transparent;
   color: #9ac7f2;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
-.page-switcher button:hover:not(:disabled) {
+.page-switcher-prev {
+  margin-right: 0;
+  border-right-width: 0;
+  border-top-left-radius: 13px;
+  border-bottom-left-radius: 13px;
+}
+.page-switcher-next {
+  margin-left: 0;
+  border-left-width: 0;
+  border-top-right-radius: 13px;
+  border-bottom-right-radius: 13px;
+}
+.page-switcher-btn:hover:not(:disabled) {
   color: #dce5f2;
   background: #345078;
 }
-.page-switcher button:disabled {
+.page-switcher-btn:disabled {
   color: #4a5568;
   cursor: default;
 }
-.page-switcher-indicator {
-  min-width: 46px;
-  text-align: center;
+.page-switcher-center {
+  box-sizing: border-box;
+  height: 26px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border: 1px solid #536178;
+  border-width: 1px 0;
+  border-radius: 0;
+  color: #aeb9cd;
   user-select: none;
+  line-height: 1;
+}
+.page-switcher-inputwrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.page-switcher-input,
+.page-switcher-inputshadow {
+  font: inherit;
+  line-height: 1;
+  text-align: right;
+  white-space: pre;
+}
+.page-switcher-input {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: #e8ecf4;
+}
+.page-switcher-inputshadow {
+  visibility: hidden;
+}
+.page-switcher-total {
+  color: #718198;
 }
 .solution code.abid,
 .abid-inline {

@@ -526,7 +526,8 @@ export default function App() {
     [smartKarn, setSmartKarn] = useState(true), [abidNotation, setAbidNotation] = useState(false),
     [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false),
     [pageSize, setPageSize] = useState(1000), [showAll, setShowAll] = useState(false),
-    [page, setPage] = useState(0);
+    [page, setPage] = useState(0),
+    [pageInput, setPageInput] = useState("1");
   const [showAllConfirm, setShowAllConfirm] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false),
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
@@ -652,6 +653,9 @@ export default function App() {
   const terminalScrollPositionRef = useRef(0);
   const tableScrollPositionRef = useRef(0);
   const pageScrollEdgeRef = useRef<"top" | "bottom">("top");
+  const pageInputFocused = useRef(false);
+  const pageSwitcherRef = useRef<HTMLDivElement>(null);
+  const pageInputRef = useRef<HTMLInputElement>(null);
   const firstTableSwitchAfterSolveRef = useRef(true);
   const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
@@ -803,6 +807,14 @@ export default function App() {
       setFollowTerminal(false);
     }
   };
+  const commitPageInput = () => {
+    const n = parseInt(pageInput, 10);
+    if (Number.isFinite(n)) {
+      const target = Math.min(totalPages, Math.max(1, n));
+      goToPage(target - 1, "top");
+    }
+    setPageInput(String(clampedPage + 1));
+  };
   const handleTerminalWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     const node = terminalTextRef.current;
     if (!node) return;
@@ -892,6 +904,17 @@ export default function App() {
   useEffect(() => {
     setPage(0);
   }, [pageSize, showAll]);
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      const pill = pageSwitcherRef.current;
+      const input = pageInputRef.current;
+      if (pill && input && document.activeElement === input && !pill.contains(event.target as Node)) {
+        input.blur();
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
   useEffect(() => {
     if (followTerminalRef.current) return;
     const node = tableView ? tableContainerRef.current : terminalTextRef.current;
@@ -1425,6 +1448,10 @@ export default function App() {
   const clampedPage = Math.min(page, totalPages - 1);
   const pageStart = clampedPage * pageSize;
   const pageEnd = showAll ? solutions.length : Math.min(pageStart + pageSize, solutions.length);
+  useEffect(() => {
+    if (pageInputFocused.current) return;
+    setPageInput(String(clampedPage + 1));
+  }, [clampedPage]);
   const pageSolutions = (() => {
     const seen = new Set<string>();
     const rows: DisplaySolution[] = [];
@@ -1596,10 +1623,32 @@ export default function App() {
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}>⌄</button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
-      {!showAll && totalPages > 1 && <div className="page-switcher">
-        <button disabled={clampedPage === 0} title={t('btn.prevPage')} onClick={() => goToPage(clampedPage - 1, "bottom")}>‹</button>
-        <span className="page-switcher-indicator">{clampedPage + 1} / {totalPages}</span>
-        <button disabled={clampedPage >= totalPages - 1} title={t('btn.nextPage')} onClick={() => goToPage(clampedPage + 1, "top")}>›</button>
+      {!showAll && totalPages > 1 && <div className="page-switcher" ref={pageSwitcherRef}>
+        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0} title={t('btn.prevPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}>‹</button>
+        <div className="page-switcher-center">
+          <span className="page-switcher-inputwrap">
+            <input
+              ref={pageInputRef}
+              className="page-switcher-input"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={pageInput}
+              aria-label={t('btn.pageNumber')}
+              onFocus={(event) => {
+                pageInputFocused.current = true;
+                const el = event.target;
+                requestAnimationFrame(() => el.select());
+              }}
+              onBlur={() => { pageInputFocused.current = false; commitPageInput(); }}
+              onChange={(event) => setPageInput(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              onKeyDown={(event) => { if (event.key === "Enter") commitPageInput(); }}
+            />
+            <span className="page-switcher-inputshadow" aria-hidden="true">{pageInput || "0"}</span>
+          </span>
+          <span className="page-switcher-total">/ {totalPages}</span>
+        </div>
+        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1} title={t('btn.nextPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}>›</button>
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
       {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel}>
