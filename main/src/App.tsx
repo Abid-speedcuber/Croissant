@@ -657,6 +657,9 @@ export default function App() {
   const pageSwitcherRef = useRef<HTMLDivElement>(null);
   const pageInputRef = useRef<HTMLInputElement>(null);
   const touchNavRef = useRef<{ startY: number; lastY: number; moved: boolean; node: HTMLDivElement | null } | null>(null);
+  const terminalPageRef = useRef(0);
+  const tablePageRef = useRef(0);
+  const restoreScrollRef = useRef<number | null>(null);
   const firstTableSwitchAfterSolveRef = useRef(true);
   const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
@@ -786,7 +789,7 @@ export default function App() {
     setFollowTerminal(true);
     setCompletedWhilePaused(false);
     if (!showAll) {
-      const lastPage = Math.max(0, Math.ceil(solutions.length / pageSize) - 1);
+      const lastPage = Math.max(0, totalPages - 1);
       pageScrollEdgeRef.current = "bottom";
       setPage(lastPage);
     }
@@ -886,11 +889,19 @@ export default function App() {
       terminalScrollPositionRef.current = terminalTextRef.current.scrollTop;
     }
     if (firstTableSwitchAfterSolveRef.current) {
+      terminalPageRef.current = 0;
       terminalScrollPositionRef.current = 0;
+      tablePageRef.current = 0;
       tableScrollPositionRef.current = 0;
       firstTableSwitchAfterSolveRef.current = false;
+    } else {
+      terminalPageRef.current = clampedPage;
     }
+    followTerminalRef.current = false;
+    setFollowTerminal(false);
     isSwitchingViewRef.current = true;
+    restoreScrollRef.current = tableScrollPositionRef.current;
+    setPage(tablePageRef.current);
     setTableView(true);
   };
   const finishTableBusySoon = () => {
@@ -900,16 +911,14 @@ export default function App() {
     if (tableContainerRef.current) {
       tableScrollPositionRef.current = tableContainerRef.current.scrollTop;
     }
+    tablePageRef.current = clampedPage;
+    followTerminalRef.current = false;
+    setFollowTerminal(false);
     isSwitchingViewRef.current = true;
+    restoreScrollRef.current = terminalScrollPositionRef.current;
+    setPage(terminalPageRef.current);
     setTableView(false);
   };
-  useLayoutEffect(() => {
-    if (tableView && tableContainerRef.current) {
-      tableContainerRef.current.scrollTop = tableScrollPositionRef.current;
-    } else if (!tableView && terminalTextRef.current) {
-      terminalTextRef.current.scrollTop = terminalScrollPositionRef.current;
-    }
-  }, [tableView]);
   useEffect(() => {
     if (followTerminal && !isSwitchingViewRef.current) {
       requestAnimationFrame(() => {
@@ -925,7 +934,7 @@ export default function App() {
   }, [tableView]);
   useEffect(() => {
     if (showAll || !followTerminalRef.current) return;
-    setPage(Math.max(0, Math.ceil(solutions.length / pageSize) - 1));
+    setPage(Math.max(0, totalPages - 1));
   }, [solutions.length, pageSize, showAll]);
   useEffect(() => {
     setPage(0);
@@ -945,7 +954,12 @@ export default function App() {
     if (followTerminalRef.current) return;
     const node = tableView ? tableContainerRef.current : terminalTextRef.current;
     if (!node) return;
-    node.scrollTop = pageScrollEdgeRef.current === "bottom" ? node.scrollHeight : 0;
+    if (restoreScrollRef.current !== null) {
+      node.scrollTop = restoreScrollRef.current;
+      restoreScrollRef.current = null;
+    } else {
+      node.scrollTop = pageScrollEdgeRef.current === "bottom" ? node.scrollHeight : 0;
+    }
   }, [page, tableView]);
   useEffect(() => {
     if (!tableBusyMessage) return;
@@ -1268,6 +1282,9 @@ export default function App() {
     tableMetricRef.current = metric;
     terminalScrollPositionRef.current = 0;
     tableScrollPositionRef.current = 0;
+    terminalPageRef.current = 0;
+    tablePageRef.current = 0;
+    restoreScrollRef.current = null;
     setRunCubeShape(cubeShape);
     const solvingMsg = t('status.solving');
     setOutputLines([{ raw: solvingMsg, karn: solvingMsg, isSolution: false }]);
@@ -1470,10 +1487,16 @@ export default function App() {
     const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
     return { ...solution, display, alg: lineAlg(display) };
   };
-  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(solutions.length / pageSize));
+  const totalPages = showAll ? 1 : (() => {
+    const raw = Math.max(1, Math.ceil(solutions.length / pageSize));
+    // Intentional feature by Abid: fold a tiny trailing overflow (<10% of a page)
+    // into the previous page instead of creating a nearly-empty last page.
+    const remainder = solutions.length % pageSize;
+    return remainder > 0 && remainder < pageSize * 0.1 ? Math.max(1, raw - 1) : raw;
+  })();
   const clampedPage = Math.min(page, totalPages - 1);
   const pageStart = clampedPage * pageSize;
-  const pageEnd = showAll ? solutions.length : Math.min(pageStart + pageSize, solutions.length);
+  const pageEnd = showAll ? solutions.length : clampedPage === totalPages - 1 ? solutions.length : Math.min(pageStart + pageSize, solutions.length);
   useEffect(() => {
     if (pageInputFocused.current) return;
     setPageInput(String(clampedPage + 1));
