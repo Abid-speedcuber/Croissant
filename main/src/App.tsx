@@ -1424,7 +1424,7 @@ export default function App() {
         <OptionDropdown id="normalize" label={t('options.normalizeABF')} title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">
-        <span className="generator-toggle" title={tooltips.generator} onClick={() => !running && setGenerator((g) => !g)}>{t('options.output')} <span className="generator-toggle-value">{generator ? t('options.outputValueScramble') : t('options.outputValueSolution')}</span></span>
+        <span className="generator-toggle">{t('options.output')} <span className="generator-toggle-value" title={tooltips.generator} onClick={() => !running && setGenerator((g) => !g)}>{generator ? t('options.outputValueScramble') : t('options.outputValueSolution')}</span></span>
         <label className="inline-all-optimal" title={tooltips.all}>
           <input type="checkbox" checked={all} disabled={running} onChange={(e) => setAll(e.target.checked)} />
           <span>{t('options.generateAll')}</span>
@@ -1493,7 +1493,7 @@ export default function App() {
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
       <div className="output-tools">
         <div className="output-tools-left">
-          <span className="generator-toggle" title={tooltips.karn} onClick={() => !running && setKarn((k) => !k)}>{t('outputNotation')} <span className="generator-toggle-value">{karn ? t('karnSelect.karn') : t('karnSelect.normal')}</span></span>
+          <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setKarn((k) => !k)}>{karn ? t('karnSelect.karn') : t('karnSelect.normal')}</span></span>
         </div>
         <div className="output-tools-right">
           {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}>⏱</button>}

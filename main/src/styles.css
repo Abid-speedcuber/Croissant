@@ -580,18 +580,22 @@ body {
   align-items: center;
 }
 .check-grid label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   min-height: 28px;
+  width: fit-content;
+  justify-self: start;
   color: #e8ecf4;
 }
 .inline-all-optimal {
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center;
   gap: 8px;
   grid-column: 1 / -1;
   min-height: 28px;
+  width: fit-content;
+  justify-self: start;
   white-space: nowrap;
 }
 .all-optimal-label {
@@ -625,10 +629,15 @@ body {
   height: 13px;
   margin: 0;
   accent-color: #4a90d9;
+  cursor: pointer;
 }
 .check-grid label:has(input[type="checkbox"]:disabled),
 .modal-check:has(input[type="checkbox"]:disabled) {
   opacity: 0.5;
+  cursor: not-allowed;
+}
+.check-grid label:has(input[type="checkbox"]:disabled) input[type="checkbox"],
+.modal-check:has(input[type="checkbox"]:disabled) input[type="checkbox"] {
   cursor: not-allowed;
 }
 .limit-grid {
@@ -1310,7 +1319,7 @@ body {
   font-size: 11px;
 }
 .generator-toggle {
-  cursor: pointer;
+  cursor: default;
   color: #e8ecf4;
   width: fit-content;
   display: inline-block;
@@ -1319,9 +1328,9 @@ body {
 .generator-toggle-value {
   color: #9ac7f2;
   font-weight: 700;
-}
-.generator-toggle-value:hover {
+  cursor: pointer;
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .generator-toggle-value:active {
   color: #6fa3d9;
