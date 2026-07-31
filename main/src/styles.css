@@ -1455,6 +1455,10 @@ body {
   animation: fav-modal-out .4s steps(5,end) forwards;
   pointer-events: none;
 }
+.favorites-modal.opening {
+  animation: fav-modal-in .2s ease-out forwards;
+  animation-play-state: paused;
+}
 @keyframes fav-modal-out {
   0% { transform: scale(1); }
   20% { transform: scale(0.55); }
@@ -1462,6 +1466,10 @@ body {
   60% { transform: scale(0.08); }
   80% { transform: scale(0.02); }
   100% { transform: scale(0.003); }
+}
+@keyframes fav-modal-in {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
 }
 .favorite-save {
   display: block;
