@@ -9,8 +9,8 @@ int sq1optMain(int argc, char *argv[]);
 void sq1optRequestStop();
 void sq1optSetExtendedOutput(bool val);
 void sq1optSetTableDirectory(const std::string &dir);
-std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool first_match_only);
-bool cornersAre2GenSolvable(const int pos[24], int two_gen);
+std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool specific_angle_bot, bool first_match_only);
+bool cornersAre2GenSolvable(const int pos[24], int two_gen, bool specific_angle_bot);
 
 namespace {
 using LineCallback = void (*)(const char *, void *);
@@ -82,12 +82,12 @@ extern "C" char *sq1_run_alloc(int argc, const char *const *input_argv,
 
 extern "C" void sq1_free_string(char *value) { delete[] value; }
 extern "C" void sq1_request_stop() { sq1optRequestStop(); }
-extern "C" int sq1_two_gen_compatibility(const int *position, bool *corners_two,
-                                          bool *corners_pseudo) {
+extern "C" int sq1_two_gen_compatibility(const int *position, bool specific_angle_bot,
+                                          bool *corners_two, bool *corners_pseudo) {
     if (!position) return 0;
-    if (corners_two) *corners_two = cornersAre2GenSolvable(position, 2);
-    if (corners_pseudo) *corners_pseudo = cornersAre2GenSolvable(position, 1);
-    if (!twoGenPreadf(position, 2, true).empty()) return 2;
-    if (!twoGenPreadf(position, 1, true).empty()) return 1;
+    if (corners_two) *corners_two = cornersAre2GenSolvable(position, 2, specific_angle_bot);
+    if (corners_pseudo) *corners_pseudo = cornersAre2GenSolvable(position, 1, specific_angle_bot);
+    if (!twoGenPreadf(position, 2, specific_angle_bot, true).empty()) return 2;
+    if (!twoGenPreadf(position, 1, specific_angle_bot, true).empty()) return 1;
     return 0;
 }

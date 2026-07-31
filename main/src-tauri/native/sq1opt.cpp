@@ -537,37 +537,38 @@ bool validPosition(const int pos[24]) {
 	return true;
 }
 
-std::vector<int> twoGenPreadf(const int pos[24], int twoGen, bool firstMatchOnly = false) {
+std::vector<int> twoGenPreadf(const int pos[24], int twoGen, bool specificAngleBot = false, bool firstMatchOnly = false) {
 	std::vector<int> result;
 	if (twoGen == 0) { result.push_back(0); return result; }
 
-	// The 8 contiguous 6-slot windows of the solved D layer (2-gen blocks)...
+	// all 8 differently colored cece/ecec blocks
 	static const int blocks2g[8][6] = {
-		{14, 6, 6,15, 7, 7}, // O·G·P·H (solved bottom-left)
-		{15, 7, 7,12, 4, 4}, // P·H·M·E
-		{12, 4, 4,13, 5, 5}, // M·E·N·F
-		{13, 5, 5,14, 6, 6}, // N·F·O·G
-		{ 6, 6,15, 7, 7,12}, // G·P·H·M
-		{ 7, 7,12, 4, 4,13}, // H·M·E·N
-		{ 4, 4,13, 5, 5,14}, // E·N·F·O
-		{ 5, 5,14, 6, 6,15}, // F·O·G·P
+		{14, 6, 6,15, 7, 7}, // 7G8H (solved DL)
+		{15, 7, 7,12, 4, 4}, // 8H5E
+		{12, 4, 4,13, 5, 5}, // 5E6F
+		{13, 5, 5,14, 6, 6}, // 6F7G
+		{ 6, 6,15, 7, 7,12}, // G8H5
+		{ 7, 7,12, 4, 4,13}, // H5E6
+		{ 4, 4,13, 5, 5,14}, // E6F7
+		{ 5, 5,14, 6, 6,15}, // F7G8
 	};
-	// ...and the 4 solved CEC blocks (pseudo-2-gen).
+	// all 4 differently colored cec blocks
 	static const int blocksP2g[4][5] = {
-		{4,4,13,5,5}, // E,6,F
-		{5,5,14,6,6}, // F,7,G
-		{6,6,15,7,7}, // G,8,H
-		{7,7,12,4,4}, // H,5,E
+		{4,4,13,5,5}, // E6F
+		{5,5,14,6,6}, // F7G
+		{6,6,15,7,7}, // G8H
+		{7,7,12,4,4}, // H5E
 	};
 
-	// For each candidate rotation k, the bottom-left "frozen" region is at offsets
-	// 6..11 (2-gen) — or 7..11 / 6..10 for the shorter p2g CEC block, since D±1 is
-	// allowed.  realIdx(i) is the pos[] index that lands at bottom offset i after
-	// doBot(k).  A candidate is valid if some block W is piece-by-piece compatible
-	// with it (couldBe) AND writing W's concrete pieces there leaves a valid
-	// position (no piece used twice / no layer overfull).  This handles fully
-	// concrete and partially-specified positions uniformly.
+	// k represents the bottom move.
+	// For each k, DL is at offsets 6..11 (2g) — or 7..11 / 6..10 (p2g).
+	// realIdx(i) is the pos[] index that lands at bottom offset i after doBot(k).
+	// A candidate is valid if it couldBe() some block W AND writing W's concrete
+	// pieces there leaves a valid state (no piece used twice / no extra colors).
+	// This handles both concrete and partial positions.
 	for (int k = 0; k < 12; k++) {
+		// if bottom angle locked, only allow those bottom moves
+		if (specificAngleBot && k != 0 && k != 1 && k != 11) continue;
 		auto realIdx = [&](int i) { return 12 + (i - k + 12) % 12; };
 		bool ok = false;
 
@@ -715,25 +716,19 @@ bool partialHas2GenCorners(const int pos[24]) {
 	return tryAssign(avail[0], avail[1]) || tryAssign(avail[1], avail[0]);
 }
 
-// Are the corners 2-gen-solvable for this position, evaluated once per valid preadf
-// candidate?  For each preadf rotation k, doBot(k) brings a solved block to the
-// frozen bottom-left.  has2GenCorners / partialHas2GenCorners assume the bottom-left
-// pair is the canonical G,H with a canonical solved target, so we first relabel the
-// corners by sigma — the map that sends doBot(k)*canonical back to canonical
-// (identity on the top corners, a cyclic shift on the D-layer corners).  Because a
-// value relabel commutes with the position permutations a 2-gen solve applies,
-// checking the relabelled, rotated position against the canonical frame is exactly
-// checking the original against doBot(k)*canonical.  Partial pieces carry only a
-// layer constraint, which the shift preserves, so they pass through untouched.
-// The position is corner-2-gen-solvable iff ANY candidate passes.  twoGen==0 -> true.
-bool cornersAre2GenSolvable(const int pos[24], int twoGen) {
+// "Are the corners 2g for this position, evaluated once per valid preadf candidate?"
+// For each preadf k, we do it, and then color shift it to be G,H
+// (UVXY pass through untouched).
+// The position is corner-2-gen-solvable iff ANY candidate passes.
+// specificAngleBot: UI state. restrict k.
+bool cornersAre2GenSolvable(const int pos[24], int twoGen, bool specificAngleBot = false) {
 	if (twoGen == 0) return true;
 	static const int C[24] = {0,0,8,1,1,9,2,2,10,3,3,11,12,4,4,13,5,5,14,6,6,15,7,7};
 	auto doBotArr = [](int a[24], int m){
 		m = ((m % 12) + 12) % 12;
 		while (m-- > 0) { int c = a[23]; for (int i=23;i>12;i--) a[i]=a[i-1]; a[12]=c; }
 	};
-	for (int k : twoGenPreadf(pos, twoGen)) {
+	for (int k : twoGenPreadf(pos, twoGen, specificAngleBot)) {
 		int copy[24]; for (int i=0;i<24;i++) copy[i]=pos[i]; doBotArr(copy, k);
 		int cano; // the amount to color shift by
 		if (copy[23] >= 0 && copy[23] < 8) cano = (7 - copy[23]) * 3; // corner
@@ -1131,7 +1126,7 @@ public:
 	// Whether the corners can be solved with pseudo-2-gen moves — see has2GenCorners().
 	bool has2GenCorners(){ return ::has2GenCorners(pos); }
 	// Valid preadf D rotations for 2-gen / pseudo-2-gen — see twoGenPreadf().
-	std::vector<int> findPreadf(int twoGen) const { return twoGenPreadf(pos, twoGen); }
+	std::vector<int> findPreadf(int twoGen) const { return twoGenPreadf(pos, twoGen, specificAngleBot, false); }
 	bool singleMatch(int posI, int solvedI) { return couldBe(posI, solvedI); }
 	bool matchesSolved() {
 		int solved[24] = {0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7};
@@ -1525,11 +1520,8 @@ class PositionSolver {
 			if (!checkKeepCubeShape()) {
 				return 19;
 			}
-			// keeping cube shape with a 2-gen mode also requires the corner
-			// permutation to be solvable with 2-gen moves (in addition to the
-			// block/preadf check above) — otherwise the search would never finish.
-			// Checked once per valid preadf candidate.
-			if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(fp.pos, twoGen)) {
+			// check for corner 2 gen for every valid (p)2g preadf candidate
+			if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(fp.pos, twoGen, specificAngleBot)) {
 				return 19;
 			}
 		}
@@ -1983,11 +1975,11 @@ public:
 
 		if (keepCubeShape) {
 			// check that it's in cube shape and of the right parity, and that the
-			// corner permutation is 2-gen-solvable (partial-aware, once per preadf).
+			// corner permutation is 2g (partial-aware, once per preadf).
 			if (!checkKeepCubeShape()) {
 				return 19;
 			}
-			if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(fp.pos, twoGen)) {
+			if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(fp.pos, twoGen, specificAngleBot)) {
 				return 19;
 			}
 		}
@@ -2131,7 +2123,7 @@ static int preValidate(FullPosition& p, bool keepCubeShape, int twoGen) {
 	if (!keepCubeShape) return 0;
 	if (!isInCubeshapeRaw(p.pos)) return 19;
 	if (!p.isPartial() && p.getParityOdd()) return 19;
-	if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(p.pos, twoGen)) return 19;
+	if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(p.pos, twoGen, specificAngleBot)) return 19;
 	return 0;
 }
 

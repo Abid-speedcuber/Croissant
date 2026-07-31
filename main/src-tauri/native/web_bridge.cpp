@@ -8,8 +8,8 @@
 
 void sq1optSetExtendedOutput(bool val);
 
-std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool first_match_only);
-bool cornersAre2GenSolvable(const int pos[24], int two_gen);
+std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool specific_angle_bot, bool first_match_only);
+bool cornersAre2GenSolvable(const int pos[24], int two_gen, bool specific_angle_bot);
 
 // Static initializer — enables extended output for the WASM bridge before main()
 struct EnableExtended { EnableExtended() { sq1optSetExtendedOutput(true); } };
@@ -70,14 +70,14 @@ extern "C" char *sq1_web_rate_algorithm_json_alloc(const char *algorithm, bool i
     }
 }
 
-extern "C" char *sq1_web_two_gen_status_json_alloc(const int *position) {
+extern "C" char *sq1_web_two_gen_status_json_alloc(const int *position, bool specific_angle_bot) {
     if (!position) {
         return copy_allocated("{\"compatibility\":0,\"cornersTwo\":false,\"cornersPseudo\":false}");
     }
-    const bool corners_two = cornersAre2GenSolvable(position, 2);
-    const bool corners_pseudo = cornersAre2GenSolvable(position, 1);
-    const int compatibility = !twoGenPreadf(position, 2, true).empty() ? 2
-        : !twoGenPreadf(position, 1, true).empty() ? 1
+    const bool corners_two = cornersAre2GenSolvable(position, 2, specific_angle_bot);
+    const bool corners_pseudo = cornersAre2GenSolvable(position, 1, specific_angle_bot);
+    const int compatibility = !twoGenPreadf(position, 2, specific_angle_bot, true).empty() ? 2
+        : !twoGenPreadf(position, 1, specific_angle_bot, true).empty() ? 1
         : 0;
     std::ostringstream out;
     out << "{\"compatibility\":" << compatibility

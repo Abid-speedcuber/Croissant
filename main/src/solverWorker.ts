@@ -26,7 +26,7 @@ type InvokeRequest =
   | { id: number; type: "invoke"; command: "unkarnify"; args: { input: string } }
   | { id: number; type: "invoke"; command: "karnify"; args: { input: string; position?: string | null; generator: boolean } }
   | { id: number; type: "invoke"; command: "rate_algorithm"; args: { algorithm: string; initialTopA: boolean } }
-  | { id: number; type: "invoke"; command: "two_gen_status"; args: { position: number[] } };
+  | { id: number; type: "invoke"; command: "two_gen_status"; args: { position: number[]; specificAngleBot: boolean } };
 
 type WorkerEvent =
   | { id: number; type: "line"; line: string }
@@ -47,7 +47,7 @@ type WasmApi = {
   unkarnify: (input: string) => number;
   karnify: (input: string, position: string, generator: number) => number;
   rateAlgorithm: (algorithm: string, initialTopA: number) => number;
-  twoGenStatus: (position: number) => number;
+  twoGenStatus: (position: number, specificAngleBot: number) => number;
   freeString: (ptr: number) => void;
 };
 
@@ -88,7 +88,7 @@ async function loadModule(): Promise<EmscriptenModule> {
       unkarnify: instance.cwrap("sq1_web_unkarnify_alloc", "number", ["string"]) as (input: string) => number,
       karnify: instance.cwrap("sq1_web_karnify_alloc", "number", ["string", "string", "number"]) as (input: string, position: string, generator: number) => number,
       rateAlgorithm: instance.cwrap("sq1_web_rate_algorithm_json_alloc", "number", ["string", "number"]) as (algorithm: string, initialTopA: number) => number,
-      twoGenStatus: instance.cwrap("sq1_web_two_gen_status_json_alloc", "number", ["number"]) as (position: number) => number,
+      twoGenStatus: instance.cwrap("sq1_web_two_gen_status_json_alloc", "number", ["number", "number"]) as (position: number, specificAngleBot: number) => number,
       freeString: instance.cwrap("sq1_web_free_string", null, ["number"]) as (ptr: number) => void,
     };
     return instance;
@@ -123,7 +123,7 @@ async function invoke(command: InvokeRequest & { type: "invoke" }): Promise<unkn
     const ptr = mod._malloc(24 * 4);
     try {
       mod.HEAP32.set(pos.slice(0, 24), ptr >> 2);
-      return readJson<TwoGenStatus>(api.twoGenStatus(ptr));
+      return readJson<TwoGenStatus>(api.twoGenStatus(ptr, command.args.specificAngleBot ? 1 : 0));
     } finally {
       mod._free(ptr);
     }

@@ -16,7 +16,7 @@ unsafe extern "C" {
     fn sq1_free_string(value: *mut c_char);
     fn sq1_request_stop();
     fn sq1_rate_algorithm(algorithm: *const c_char, initial_top_a: bool, output: *mut RatingResult) -> bool;
-    fn sq1_two_gen_compatibility(position: *const i32, corners_two: *mut bool, corners_pseudo: *mut bool) -> i32;
+    fn sq1_two_gen_compatibility(position: *const i32, specific_angle_bot: bool, corners_two: *mut bool, corners_pseudo: *mut bool) -> i32;
 }
 
 #[repr(C)]
@@ -87,11 +87,11 @@ fn rate_algorithm(algorithm: String, initial_top_a: bool) -> Result<RatingResult
 }
 
 #[tauri::command]
-fn two_gen_status(position: Vec<i32>) -> Result<TwoGenStatus, String> {
+fn two_gen_status(position: Vec<i32>, specific_angle_bot: bool) -> Result<TwoGenStatus, String> {
     if position.len() != 24 { return Err("A Square-1 position must have 24 slots".into()); }
     let mut corners_two = false;
     let mut corners_pseudo = false;
-    let compatibility = unsafe { sq1_two_gen_compatibility(position.as_ptr(), &mut corners_two, &mut corners_pseudo) };
+    let compatibility = unsafe { sq1_two_gen_compatibility(position.as_ptr(), specific_angle_bot, &mut corners_two, &mut corners_pseudo) };
     Ok(TwoGenStatus { compatibility, corners_two, corners_pseudo })
 }
 
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn shared_two_gen_constraint_check_accepts_solved_position() {
         let solved = vec![0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7];
-        let status = two_gen_status(solved).unwrap();
+        let status = two_gen_status(solved, false).unwrap();
         assert_eq!(status.compatibility, 2);
         assert!(status.corners_two && status.corners_pseudo);
     }

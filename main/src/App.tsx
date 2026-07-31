@@ -1307,11 +1307,12 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     if (!tauri()?.core?.invoke) return;
-    void tauri()!.core!.invoke<TwoGenStatus>("two_gen_status", { position: rawPosition(cubeState) })
+    const specificAngleBot = angle === "Both" || angle === "Bottom";
+    void tauri()!.core!.invoke<TwoGenStatus>("two_gen_status", { position: rawPosition(cubeState), specificAngleBot })
       .then((status) => { if (!cancelled) setTwoGenStatus(status); })
       .catch((err) => console.error("two_gen_status invoke failed:", err));
     return () => { cancelled = true; };
-  }, [cubeState]);
+  }, [cubeState, angle]);
   useEffect(() => {
     void loadFavorites().then((value) => {
       if (value) setFavorites(value);
