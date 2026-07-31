@@ -2358,18 +2358,18 @@ int sq1optMain(int argc, char* argv[]){
 	if(verbosity>=3) std::cout << "Initializing..."<<std::endl;
 	// calculate transition tables
 	ChoiceTable ct;
-	if(verbosity>=4) std::cout << "  5. Shape transition table"<<std::endl;
+	if(verbosity>=4) std::cout << "  5. Computing move table for CS"<<std::endl;
 	ShapeTranTable st;
-	if(verbosity>=4) std::cout << "  4. Coloring transition table #1"<<std::endl;
+	if(verbosity>=4) std::cout << "  4. Computing move table for edges"<<std::endl;
 	ShpColTranTable scte( st, ct, true );
-	if(verbosity>=4) std::cout << "  3. Coloring transition table #2"<<std::endl;
+	if(verbosity>=4) std::cout << "  3. Coloring move table for corners"<<std::endl;
 	ShpColTranTable sctc( st, ct, false );
 
 	//calculate pruning tables for two colourings
 	FullPosition q;
-	if(verbosity>=4) std::cout << "  2. Coloring pruning table #1"<<std::endl;
+	if(verbosity>=4) std::cout << "  2. Computing pruning table #1"<<std::endl;
 	PrunTable pr1(q, 0, st,scte,sctc );
-	if(verbosity>=4) std::cout << "  1. Coloring pruning table #2"<<std::endl;
+	if(verbosity>=4) std::cout << "  1. Computing pruning table #2"<<std::endl;
 	PrunTable pr2(q, 1, st,scte,sctc );
 	if(verbosity>=4) std::cout << "  0. Finished."<<std::endl;
 	PositionSolver ps( st, scte, sctc, pr1, pr2 );
@@ -2385,7 +2385,7 @@ int sq1optMain(int argc, char* argv[]){
 			std::cout << ", 2gen";
 		}
 		if (keepCubeShape) {
-			std::cout << ", Keep Cube Shape";
+			std::cout << ", Stay in CS";
 		}
 		std::cout<< std::endl;
 	}
@@ -2410,7 +2410,7 @@ int sq1optMain(int argc, char* argv[]){
 
 		//show position
 		if(verbosity>=1){
-			std::cout<<"Position: ";
+			std::cout<<"State: ";
 			p.print();
 			std::cout<<std::endl;
 		}
