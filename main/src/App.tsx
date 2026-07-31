@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadSettings, saveSettings, loadFavorites, saveFavorites } from "./storage";
+import { loadSettings, saveSettings, loadFavorites, saveFavorites, writeOffloadedChunk, readOffloadedChunk, removeOffloadedChunk, clearOffloadedSolutions } from "./storage";
 import {
   CubeState, Modal as ModalType, FavoriteBin, Solution, OutputLine, RatingResult, TwoGenStatus,
   DisplaySolution, DropdownProps, CubeActions, TauriGlobal,
@@ -13,6 +13,12 @@ import { Modal } from './components/Modal';
 import { t, LangCode, getLang, setLang } from './i18n';
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
+const OFFLOAD_CHUNK = 5000;
+const computeTotalPages = (total: number, pageSize: number) => {
+  const raw = Math.max(1, Math.ceil(total / pageSize));
+  const remainder = total % pageSize;
+  return remainder > 0 && remainder < pageSize * 0.1 ? Math.max(1, raw - 1) : raw;
+};
 const solved = [
   0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7,
 ];
@@ -528,6 +534,12 @@ export default function App() {
     [pageSize, setPageSize] = useState(1000), [showAll, setShowAll] = useState(false),
     [page, setPage] = useState(0),
     [pageInput, setPageInput] = useState("1");
+  const [useLessRam, _setUseLessRam] = useState(false);
+  const [offloadedTotal, setOffloadedTotal] = useState(0);
+  const [pendingTailCount, setPendingTailCount] = useState(0);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const setUseLessRam = (value: boolean) => { useLessRamRef.current = value; _setUseLessRam(value); };
+  const totalCount = solutions.length + offloadedTotal + pendingTailCount;
   const [showAllConfirm, setShowAllConfirm] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false),
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
@@ -666,6 +678,16 @@ export default function App() {
   const cubeColumnRef = useRef<HTMLDivElement>(null);
   const tableMetricRef = useRef("Slice");
   const mainGridRef = useRef<HTMLDivElement>(null);
+  const useLessRamRef = useRef(false);
+  const pageRef = useRef(0);
+  const pageSizeRef = useRef(1000);
+  const showAllRef = useRef(false);
+  const ramOffsetRef = useRef(0);
+  const offloadedTotalRef = useRef(0);
+  const offloadedChunksRef = useRef<Map<number, number>>(new Map());
+  const pendingTailRef = useRef<Solution[] | null>(null);
+  const offloadBusyRef = useRef(false);
+  const offloadPendingRef = useRef(false);
 
   useEffect(() => {
     const el = document.documentElement;
@@ -800,6 +822,7 @@ export default function App() {
     requestAnimationFrame(scrollTerminalToBottom);
   };
   const goToPage = (next: number, edge: "top" | "bottom") => {
+    if (useLessRamRef.current && !isViewInRam(next, totalCountRefs())) setIsRestoring(true);
     setPage(next);
     pageScrollEdgeRef.current = edge;
     if (running && next === totalPages - 1) {
@@ -901,6 +924,7 @@ export default function App() {
     setFollowTerminal(false);
     isSwitchingViewRef.current = true;
     restoreScrollRef.current = tableScrollPositionRef.current;
+    if (useLessRamRef.current && !isViewInRam(tablePageRef.current, totalCountRefs())) setIsRestoring(true);
     setPage(tablePageRef.current);
     setTableView(true);
   };
@@ -916,11 +940,12 @@ export default function App() {
     setFollowTerminal(false);
     isSwitchingViewRef.current = true;
     restoreScrollRef.current = terminalScrollPositionRef.current;
+    if (useLessRamRef.current && !isViewInRam(terminalPageRef.current, totalCountRefs())) setIsRestoring(true);
     setPage(terminalPageRef.current);
     setTableView(false);
   };
   useEffect(() => {
-    if (followTerminal && !isSwitchingViewRef.current) {
+    if (followTerminal && !isSwitchingViewRef.current && !isRestoring) {
       requestAnimationFrame(() => {
         if (followTerminalRef.current) {
           const node = terminalTextRef.current;
@@ -928,17 +953,33 @@ export default function App() {
         }
       });
     }
-  }, [outputLines, statusLines, solutions, tableView, running, followTerminal]);
+  }, [outputLines, statusLines, solutions, tableView, running, followTerminal, isRestoring]);
   useEffect(() => {
     isSwitchingViewRef.current = false;
   }, [tableView]);
   useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+  useEffect(() => {
+    pageSizeRef.current = pageSize;
+  }, [pageSize]);
+  useEffect(() => {
+    showAllRef.current = showAll;
+  }, [showAll]);
+  useEffect(() => {
     if (showAll || !followTerminalRef.current) return;
     setPage(Math.max(0, totalPages - 1));
-  }, [solutions.length, pageSize, showAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalCount, pageSize, showAll]);
   useEffect(() => {
     setPage(0);
   }, [pageSize, showAll]);
+  useEffect(() => {
+    if (!settingsReady.current) return;
+    if (useLessRam && !isViewInRam(page, totalCountRefs())) setIsRestoring(true);
+    void syncOffload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [solutions, page, pageSize, useLessRam, showAll, running]);
   useEffect(() => {
     const onMouseDown = (event: MouseEvent) => {
       const pill = pageSwitcherRef.current;
@@ -951,7 +992,7 @@ export default function App() {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
   useLayoutEffect(() => {
-    if (followTerminalRef.current) return;
+    if (followTerminalRef.current || isRestoring) return;
     const node = tableView ? tableContainerRef.current : terminalTextRef.current;
     if (!node) return;
     if (restoreScrollRef.current !== null) {
@@ -960,7 +1001,7 @@ export default function App() {
     } else {
       node.scrollTop = pageScrollEdgeRef.current === "bottom" ? node.scrollHeight : 0;
     }
-  }, [page, tableView]);
+  }, [page, tableView, isRestoring]);
   useEffect(() => {
     if (!tableBusyMessage) return;
     const id = window.setInterval(() => setTableBusyTick((value) => value + 1), 900);
@@ -1155,6 +1196,23 @@ export default function App() {
     scheduleSolutionFlush();
   };
   const addSolution = (row: Solution) => {
+    const ramEnd = ramOffsetRef.current + solutionsRef.current.length;
+    const pendingLen = pendingTailRef.current?.length ?? 0;
+    const total = solutionsRef.current.length + offloadedTotalRef.current + pendingLen;
+    if (useLessRamRef.current && ramEnd < total) {
+      const tailStart = total - pendingLen;
+      if (pendingLen && ramEnd === tailStart) {
+        solutionsRef.current = [...solutionsRef.current, ...pendingTailRef.current!];
+        pendingTailRef.current = null;
+        setPendingTailCount(0);
+      } else {
+        pendingTailRef.current = [...(pendingTailRef.current ?? []), row];
+        setPendingTailCount(pendingTailRef.current.length);
+        scheduleSolutionFlush();
+        debugStatsRef.current.solutionTimestamps.push(performance.now());
+        return;
+      }
+    }
     solutionsRef.current = [...solutionsRef.current, row];
     scheduleSolutionFlush();
     debugStatsRef.current.solutionTimestamps.push(performance.now());
@@ -1162,6 +1220,184 @@ export default function App() {
   const setSolutionRows = (rows: Solution[]) => {
     solutionsRef.current = rows;
     scheduleSolutionFlush();
+  };
+  const totalCountRefs = () => offloadedTotalRef.current + solutionsRef.current.length + (pendingTailRef.current?.length ?? 0);
+  const offloadRange = async (start: number, rows: Solution[]) => {
+    if (!rows.length) return;
+    for (let i = 0; i < rows.length; i += OFFLOAD_CHUNK) {
+      const chunk = rows.slice(i, i + OFFLOAD_CHUNK);
+      const chunkStart = start + i;
+      offloadedChunksRef.current.set(chunkStart, chunk.length);
+      await writeOffloadedChunk(chunkStart, chunk);
+    }
+    offloadedTotalRef.current += rows.length;
+  };
+  const restorePage = async (viewStart: number, viewEnd: number, tailStart: number, total: number) => {
+    const loaded: { index: number; row: Solution }[] = [];
+    const diskEnd = Math.min(viewEnd, tailStart);
+    if (viewStart < diskEnd) {
+      const chunks = [...offloadedChunksRef.current.entries()].sort((a, b) => a[0] - b[0]);
+      for (const [chunkStart, count] of chunks) {
+        const chunkEnd = chunkStart + count;
+        if (chunkEnd <= viewStart || chunkStart >= diskEnd) continue;
+        const raw = await readOffloadedChunk(chunkStart);
+        if (!raw || raw.length !== count) {
+          offloadedChunksRef.current.delete(chunkStart);
+          offloadedTotalRef.current -= count;
+          continue;
+        }
+        const from = Math.max(0, viewStart - chunkStart);
+        const to = Math.min(count, diskEnd - chunkStart);
+        for (let i = from; i < to; i++) loaded.push({ index: chunkStart + i, row: raw[i] });
+        offloadedChunksRef.current.delete(chunkStart);
+        offloadedTotalRef.current -= count;
+        await removeOffloadedChunk(chunkStart);
+        const before = raw.slice(0, from);
+        if (before.length) { offloadedChunksRef.current.set(chunkStart, before.length); offloadedTotalRef.current += before.length; await writeOffloadedChunk(chunkStart, before); }
+        const after = raw.slice(to);
+        if (after.length) { const aStart = chunkStart + to; offloadedChunksRef.current.set(aStart, after.length); offloadedTotalRef.current += after.length; await writeOffloadedChunk(aStart, after); }
+      }
+      loaded.sort((a, b) => a.index - b.index);
+    }
+    let result = loaded.map((x) => x.row);
+    if (viewEnd > tailStart) {
+      const from = Math.max(0, viewStart - tailStart);
+      if (from > 0) await offloadRange(tailStart, (pendingTailRef.current ?? []).slice(0, from));
+      const pending = pendingTailRef.current ?? [];
+      const to = Math.min(pending.length, viewEnd - tailStart);
+      result = [...result, ...pending.slice(from, to)];
+      if (to >= pending.length) pendingTailRef.current = null;
+      else pendingTailRef.current = pending.slice(to);
+      setPendingTailCount(pendingTailRef.current?.length ?? 0);
+    }
+    return result;
+  };
+  const flushPendingTailToDisk = async () => {
+    const pending = pendingTailRef.current;
+    if (!pending?.length) { pendingTailRef.current = null; setPendingTailCount(0); return; }
+    const total = totalCountRefs();
+    await offloadRange(total - pending.length, pending);
+    pendingTailRef.current = null;
+    setPendingTailCount(0);
+  };
+  const restoreAll = async () => {
+    const chunks = [...offloadedChunksRef.current.entries()].sort((a, b) => a[0] - b[0]);
+    const ramOffset = ramOffsetRef.current;
+    const full: Solution[] = [];
+    let inserted = false;
+    for (const [start, count] of chunks) {
+      if (!inserted && start >= ramOffset) { full.push(...solutionsRef.current); inserted = true; }
+      const raw = await readOffloadedChunk(start);
+      if (raw && raw.length === count) full.push(...raw);
+      await removeOffloadedChunk(start);
+    }
+    if (!inserted) full.push(...solutionsRef.current);
+    const pending = pendingTailRef.current ?? [];
+    pendingTailRef.current = null;
+    setPendingTailCount(0);
+    full.push(...pending);
+    offloadedChunksRef.current.clear();
+    offloadedTotalRef.current = 0;
+    ramOffsetRef.current = 0;
+    solutionsRef.current = full;
+    setSolutions([...full]);
+    setOffloadedTotal(0);
+  };
+  const isViewInRam = (view: number, total: number) => {
+    const pc = computeTotalPages(total, pageSizeRef.current);
+    const v = Math.min(Math.max(view, 0), pc - 1);
+    const vs = v * pageSizeRef.current;
+    const ve = v === pc - 1 ? total : Math.min(vs + pageSizeRef.current, total);
+    const rs = ramOffsetRef.current;
+    const re = rs + solutionsRef.current.length;
+    return vs >= rs && ve <= re;
+  };
+  const syncOffload = async () => {
+    if (!useLessRamRef.current) {
+      if (offloadedTotalRef.current || (pendingTailRef.current?.length ?? 0)) {
+        if (offloadBusyRef.current) { offloadPendingRef.current = true; return; }
+        offloadBusyRef.current = true;
+        try { await restoreAll(); } finally {
+          offloadBusyRef.current = false;
+          if (offloadPendingRef.current) { offloadPendingRef.current = false; void syncOffload(); }
+        }
+      }
+      return;
+    }
+    if (offloadBusyRef.current) { offloadPendingRef.current = true; return; }
+    offloadBusyRef.current = true;
+    try {
+      let total = totalCountRefs();
+      if (!total) { setIsRestoring(false); return; }
+      if (!runningRef.current && (pendingTailRef.current?.length ?? 0)) {
+        await flushPendingTailToDisk();
+        total = totalCountRefs();
+      }
+      const pageCount = computeTotalPages(total, pageSizeRef.current);
+      const view = Math.min(Math.max(pageRef.current, 0), pageCount - 1);
+      const viewStart = view * pageSizeRef.current;
+      const viewEnd = view === pageCount - 1 ? total : Math.min(viewStart + pageSizeRef.current, total);
+      const ramOffset = ramOffsetRef.current;
+      const ramEnd = ramOffset + solutionsRef.current.length;
+      if (showAllRef.current) {
+        if (solutionsRef.current.length === total) { setIsRestoring(false); return; }
+        setIsRestoring(true);
+        await offloadRange(ramOffset, solutionsRef.current);
+        solutionsRef.current = [];
+        ramOffsetRef.current = 0;
+        await restoreAll();
+        setIsRestoring(false);
+        return;
+      }
+      if (viewStart >= ramOffset && viewEnd <= ramEnd) {
+        if (runningRef.current) {
+          if (viewStart > ramOffset) {
+            await offloadRange(ramOffset, solutionsRef.current.slice(0, viewStart - ramOffset));
+            const cur = solutionsRef.current;
+            solutionsRef.current = cur.slice(viewStart - ramOffset);
+            ramOffsetRef.current = viewStart;
+            setSolutions([...solutionsRef.current]);
+            setOffloadedTotal(offloadedTotalRef.current);
+          }
+          setIsRestoring(false);
+          return;
+        }
+        if (viewStart > ramOffset) {
+          await offloadRange(ramOffset, solutionsRef.current.slice(0, viewStart - ramOffset));
+        }
+        const cur = solutionsRef.current;
+        const keep = viewEnd - viewStart;
+        if (cur.length > viewEnd - ramOffset) {
+          await offloadRange(viewEnd, cur.slice(viewEnd - ramOffset));
+        }
+        const cur2 = solutionsRef.current;
+        solutionsRef.current = cur2.slice(viewStart - ramOffset, viewStart - ramOffset + keep);
+        ramOffsetRef.current = viewStart;
+        setSolutions([...solutionsRef.current]);
+        setOffloadedTotal(offloadedTotalRef.current);
+        setIsRestoring(false);
+        return;
+      }
+      setIsRestoring(true);
+      await offloadRange(ramOffset, solutionsRef.current);
+      solutionsRef.current = [];
+      ramOffsetRef.current = 0;
+      const freshTotal = totalCountRefs();
+      const freshPageCount = computeTotalPages(freshTotal, pageSizeRef.current);
+      const freshView = Math.min(Math.max(pageRef.current, 0), freshPageCount - 1);
+      const freshStart = freshView * pageSizeRef.current;
+      const freshEnd = freshView === freshPageCount - 1 ? freshTotal : Math.min(freshStart + pageSizeRef.current, freshTotal);
+      const pendingLen = pendingTailRef.current?.length ?? 0;
+      const loaded = await restorePage(freshStart, freshEnd, freshTotal - pendingLen, freshTotal);
+      solutionsRef.current = loaded;
+      ramOffsetRef.current = freshStart;
+      setSolutions([...loaded]);
+      setOffloadedTotal(offloadedTotalRef.current);
+      setIsRestoring(false);
+    } finally {
+      offloadBusyRef.current = false;
+      if (offloadPendingRef.current) { offloadPendingRef.current = false; void syncOffload(); }
+    }
   };
   const receiveSolverLine = async (line: string, startPosition: string, runId: number) => {
     if (stopped.current) return;
@@ -1264,6 +1500,14 @@ export default function App() {
     stopped.current = false;
     solutionsRef.current = [];
     outputLinesRef.current = [];
+    ramOffsetRef.current = 0;
+    offloadedTotalRef.current = 0;
+    offloadedChunksRef.current.clear();
+    pendingTailRef.current = null;
+    setOffloadedTotal(0);
+    setPendingTailCount(0);
+    setIsRestoring(false);
+    if (useLessRamRef.current) void clearOffloadedSolutions();
     seenRaw.current.clear();
     seenDisplay.current.clear();
     lineQueue.current = Promise.resolve();
@@ -1312,7 +1556,7 @@ export default function App() {
       const shouldAutoTable = followTerminalRef.current;
       // Intentional feature by Abid: only auto-switch to table view when there are
       // 2+ solutions, since table view is only useful for comparing/organizing output.
-      if (shouldAutoTable && solutionsRef.current.length >= 2) {
+      if (shouldAutoTable && totalCountRefs() >= 2) {
         switchToTableMode();
         setTableBusyMessage(t('table.busyResolving'));
       }
@@ -1321,15 +1565,15 @@ export default function App() {
       for (const line of `${result.stderr || ""}`.split(/\r?\n/).filter(Boolean))
         await receiveSolverLine(line, start, runId);
       if (runId !== solveRunId.current) return;
-      if (lastSolveCubeShape.current) {
-        if (shouldAutoTable && solutionsRef.current.length) setTableBusyMessage(t('table.busyNormalizing'));
+      if (lastSolveCubeShape.current && !useLessRamRef.current) {
+        if (shouldAutoTable && totalCountRefs()) setTableBusyMessage(t('table.busyNormalizing'));
         setSolutionRows(medianNormalize(solutionsRef.current));
       }
       if (shouldAutoTable) setTableBusyMessage(t('table.busyBuilding'));
       flushSolutionState();
-      const count = solutionsRef.current.length;
+      const count = totalCountRefs();
       const status = `${stopped.current ? t('status.stopped') : result.code === 0 ? t('status.done') : t('status.error')} — ${count} solution${count === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`;
-      setStatusLines(lastSolveCubeShape.current && count ? [t('status.ranked').replace('{{count}}', String(count))] : [status]);
+      setStatusLines(!useLessRamRef.current && lastSolveCubeShape.current && count ? [t('status.ranked').replace('{{count}}', String(count))] : [status]);
       // Intentional feature by Abid: only auto-switch to table view when 2+ solutions
       // exist, since table view is only useful for comparing/organizing output.
       if (shouldAutoTable && count >= 2) {
@@ -1415,6 +1659,7 @@ export default function App() {
       if (typeof value.zoom === "number") { setZoom(value.zoom); zoomRef.current = value.zoom; document.documentElement.classList.toggle("tall-viewport", window.innerHeight / value.zoom >= 810); }
       if (typeof value.pageSize === "number" && PAGE_SIZE_OPTIONS.includes(value.pageSize)) setPageSize(value.pageSize);
       if (typeof value.showAll === "boolean") setShowAll(value.showAll);
+      if (typeof value.useLessRam === "boolean") setUseLessRam(value.useLessRam);
       queueMicrotask(() => { settingsReady.current = true; });
     });
   }, []);
@@ -1423,9 +1668,9 @@ export default function App() {
     void saveSettings({
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape: cubeShapeMemory, ignoreMiddle,
-      maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll,
+      maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam,
     });
-  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll]);
+  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam]);
   useEffect(() => {
     if (!solutions.length || running) return;
     let cancelled = false;
@@ -1461,6 +1706,24 @@ export default function App() {
     if (!favoritesReady.current) return;
     void saveFavorites(favorites);
   }, [favorites]);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const onBeforeUnload = () => { void clearOffloadedSolutions(); };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    if ((window as Window & { __TAURI__?: unknown }).__TAURI__) {
+      void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+        try {
+          unlisten = await getCurrentWindow().onCloseRequested(async () => {
+            await clearOffloadedSolutions();
+          });
+        } catch { /* capability missing; the beforeunload fallback still runs */ }
+      });
+    }
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      unlisten?.();
+    };
+  }, []);
   const cubeshapeBlockedBy2Gen = (two === "2 Gen" && !twoGenStatus.cornersTwo) ||
     (two === "Pseudo 2 Gen" && !twoGenStatus.cornersPseudo);
   const cubeshapeForced = !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen;
@@ -1488,15 +1751,15 @@ export default function App() {
     return { ...solution, display, alg: lineAlg(display) };
   };
   const totalPages = showAll ? 1 : (() => {
-    const raw = Math.max(1, Math.ceil(solutions.length / pageSize));
+    const raw = Math.max(1, Math.ceil(totalCount / pageSize));
     // Intentional feature by Abid: fold a tiny trailing overflow (<10% of a page)
     // into the previous page instead of creating a nearly-empty last page.
-    const remainder = solutions.length % pageSize;
+    const remainder = totalCount % pageSize;
     return remainder > 0 && remainder < pageSize * 0.1 ? Math.max(1, raw - 1) : raw;
   })();
   const clampedPage = Math.min(page, totalPages - 1);
   const pageStart = clampedPage * pageSize;
-  const pageEnd = showAll ? solutions.length : clampedPage === totalPages - 1 ? solutions.length : Math.min(pageStart + pageSize, solutions.length);
+  const pageEnd = showAll ? totalCount : clampedPage === totalPages - 1 ? totalCount : Math.min(pageStart + pageSize, totalCount);
   useEffect(() => {
     if (pageInputFocused.current) return;
     setPageInput(String(clampedPage + 1));
@@ -1504,24 +1767,36 @@ export default function App() {
   const pageSolutions = (() => {
     const seen = new Set<string>();
     const rows: DisplaySolution[] = [];
+    const ramOffset = useLessRam ? ramOffsetRef.current : 0;
     for (let i = pageStart; i < pageEnd; i++) {
-      const row = displaySolution(solutions[i]);
+      const index = i - ramOffset;
+      if (index < 0 || index >= solutions.length) continue;
+      const row = displaySolution(solutions[index]);
       if (seen.has(row.alg)) continue;
       seen.add(row.alg);
       rows.push(row);
     }
     return rows;
   })();
-  const collectAllDisplays = () => {
+  const collectAllDisplays = async () => {
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const solution of solutions) {
+    const add = (solution: Solution) => {
       const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
       const alg = lineAlg(display);
-      if (seen.has(alg)) continue;
+      if (seen.has(alg)) return;
       seen.add(alg);
       out.push(display);
+    };
+    if (useLessRamRef.current) {
+      const chunks = [...offloadedChunksRef.current.entries()].sort((a, b) => a[0] - b[0]);
+      for (const [start] of chunks) {
+        const raw = await readOffloadedChunk(start);
+        if (raw) for (const s of raw) add(s);
+      }
+      for (const s of pendingTailRef.current ?? []) add(s);
     }
+    for (const solution of solutionsRef.current) add(solution);
     return out;
   };
   const displayErgo = (solution: Solution) =>
@@ -1641,7 +1916,7 @@ export default function App() {
     if (!start) return { elapsed: "—", solutionCount: 0, rollingRate: 0, avgRate: 0, stddevRate: 0, nodesSearched: 0, searchDepth: 0, nodeRate: 0 };
     const end = runningRef.current ? now : (solveStopTimeRef.current || now);
     const elapsed = ((end - start) / 1000).toFixed(1);
-    const solutionCount = solutionsRef.current.length;
+    const solutionCount = totalCountRefs();
     const elapsedTotal = (end - start) / 1000;
     const windowDur = Math.min(60, Math.max(0, elapsedTotal));
     const cutoff = end - windowDur * 1000;
@@ -1663,7 +1938,7 @@ export default function App() {
         </div>
         <div className="output-tools-right">
           {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}>⏱</button>}
-          <button title={t('btn.copyAll')} disabled={!solutions.length} onClick={copyTerminalText}>⧉</button>
+          <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}>⧉</button>
           <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
           <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}>×</button>
           <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
@@ -1673,7 +1948,7 @@ export default function App() {
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}>⌄</button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
       {!showAll && totalPages > 1 && <div className="page-switcher" ref={pageSwitcherRef}>
-        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0} title={t('btn.prevPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}>‹</button>
+        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0 || (useLessRam && isRestoring)} title={t('btn.prevPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}>‹</button>
         <div className="page-switcher-center">
           <span className="page-switcher-inputwrap">
             <input
@@ -1697,7 +1972,7 @@ export default function App() {
           </span>
           <span className="page-switcher-total">/ {totalPages}</span>
         </div>
-        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1} title={t('btn.nextPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}>›</button>
+        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || (useLessRam && isRestoring)} title={t('btn.nextPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}>›</button>
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
       {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
@@ -1712,8 +1987,10 @@ export default function App() {
           }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
+        {useLessRam && isRestoring && <div className="table-busy"><span className="table-busy-spinner" /><span>{t('terminal.loadingPage')}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
-        {!outputLines.length && !solutions.length && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
+        {useLessRam && isRestoring && <span className="terminal-line terminal-line-status">{t('terminal.loadingPage')}</span>}
+        {!outputLines.length && !totalCount && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`}
           onMouseDown={(event) => {
@@ -1888,6 +2165,7 @@ export default function App() {
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
         setLanguage: (code) => { setLang(code); setLangState(code); },
         pageSize, setPageSize, showAll, setShowAll, pageSizeOptions: PAGE_SIZE_OPTIONS,
+        useLessRam, setUseLessRam,
         onRequestShowAll: () => setShowAllConfirm(true),
       }} debugStats={modal === "debug" ? computeDebugStats() : null} />}
       {showAllConfirm && <div className="modal-shade modal-shade-top" onClick={() => setShowAllConfirm(false)}>
@@ -1911,13 +2189,14 @@ export default function App() {
         <div ref={favModalRef} className={"modal favorites-modal" + (favoritesClosing ? " closing" : "") + (favoritesOpening ? " opening" : "")} style={favoritesClosing ? { transformOrigin: `${favClosingOriginRef.current.x}% ${favClosingOriginRef.current.y}%` } : undefined} onAnimationEnd={favoritesClosing ? onFavCloseAnimEnd : favoritesOpening ? onFavOpenAnimEnd : undefined} onClick={(event) => event.stopPropagation()}>
           <button className="modal-close" onClick={beginCloseFavorites}>✕</button>
           <h2>{t('favorites.heading')}</h2>
-          {!!solutions.length && <button className="favorite-save" onClick={() => {
+          {!!totalCount && <button className="favorite-save" onClick={() => void (async () => {
             const key = currentRunKey();
+            const algs = await collectAllDisplays();
             setFavorites((old) => ({ ...old, [key]: {
               name: old[key]?.name || `Position ${Object.keys(old).length + 1}`,
-              algorithms: Array.from(new Set([...(old[key]?.algorithms || []), ...collectAllDisplays()])),
+              algorithms: Array.from(new Set([...(old[key]?.algorithms || []), ...algs])),
             } }));
-          }}>{t('btn.saveSolutions')}</button>}
+          })()}>{t('btn.saveSolutions')}</button>}
           {!Object.keys(favorites).length && <p>{t('favorites.empty')}</p>}
           {Object.entries(favorites).map(([key, bin]) => {
             const binDeleteKey = `bin::${key}`;

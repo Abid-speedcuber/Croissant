@@ -18,6 +18,7 @@ export function Modal({
     zoom: number; setZoom: (value: number) => void;
     pageSize: number; setPageSize: (value: number) => void;
     showAll: boolean; setShowAll: (value: boolean) => void;
+    useLessRam: boolean; setUseLessRam: (value: boolean) => void;
     pageSizeOptions: number[];
     onRequestShowAll: () => void;
     disabled: boolean;
@@ -51,6 +52,10 @@ export function Modal({
           <label className="modal-check">
             <input type="checkbox" checked={settings?.showAll ?? false} disabled={settings?.disabled} onChange={(e) => { if (e.target.checked) settings?.onRequestShowAll(); else settings?.setShowAll(false); }} />
             <span>{t('modal.settings.showAll')}</span>
+          </label>
+          <label className="modal-check">
+            <input type="checkbox" checked={settings?.useLessRam ?? false} onChange={(e) => settings?.setUseLessRam(e.target.checked)} />
+            <span>{t('modal.settings.useLessRam')}</span>
           </label>
         </div>
         <div className="settings-slider">

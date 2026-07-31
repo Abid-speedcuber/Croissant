@@ -110,7 +110,8 @@
   "terminal": {
     "emptyScramble": "Setup move will be displayed here...",
     "emptySolution": "solution will be displayed here...",
-    "copied": "Terminal copied to clipboard!"
+    "copied": "Terminal copied to clipboard!",
+    "loadingPage": "Loading page…"
   },
   "table": {
     "hash": "#",
@@ -162,7 +163,8 @@
       "reset": "Reset",
       "language": "Language",
       "pageSize": "Solutions per page",
-      "showAll": "Show all the generated solutions in a single page"
+      "showAll": "Show all the generated solutions in a single page",
+      "useLessRam": "Use less RAM (offload solution pages to disk)"
     },
     "showAll": {
       "title": "Show all solutions?",
