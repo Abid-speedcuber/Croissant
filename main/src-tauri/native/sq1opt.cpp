@@ -2354,7 +2354,7 @@ int sq1optMain(int argc, char* argv[]){
 	ShapeTranTable st;
 	if(verbosity>=4) std::cout << "  4. Computing move table for edges"<<std::endl;
 	ShpColTranTable scte( st, ct, true );
-	if(verbosity>=4) std::cout << "  3. Coloring move table for corners"<<std::endl;
+	if(verbosity>=4) std::cout << "  3. Computing move table for corners"<<std::endl;
 	ShpColTranTable sctc( st, ct, false );
 
 	//calculate pruning tables for two colourings
