@@ -1144,6 +1144,12 @@ public:
 
 };
 
+// The four shapes reachable while staying in cubeshape (checked against the
+// shape table by checkKeepCubeShape; parity-opposite twins are excluded).
+static inline bool isCubeShape(int shp) {
+	return shp==5052 || shp==4148 || shp==5039 || shp==4163;
+}
+
 //pruning table for combination of shape,edgecolouring,cornercolouring.
 class PrunTable {
 public:
@@ -1401,6 +1407,10 @@ class PositionSolver {
 	public:
 	int e0,e1,e2,c0,c1,c2;
 	int shp,shp2,middle;
+	// Secondary parity track: for PartialPositionSolver this is the parity-twin
+	// shape; for full positions it mirrors shp/shp2 so the slice guard below
+	// reduces to the primary track.
+	int shpx, shpx2;
 	FullPosition fp;
 	ShapeTranTable& stt;
 	ShpColTranTable& scte;
@@ -1447,6 +1457,12 @@ class PositionSolver {
 	bool m_cubeshape{false};
 	clock_t m_lastProgressClock{0};
 
+	// Precomputed per-shape answer to "does a slice from this shape keep the
+	// primary parity track in cubeshape?" (= checkKeepCubeShape applied to the
+	// post-slice state of one track).  One byte read per slice attempt instead of
+	// two transition-table lookups.
+	std::vector<char> m_sliceStaysCubePrimary;
+
 	// Emit the held-back dirty solutions for a depth that produced no clean
 	// solution (internal U2/D2 was necessary).  Honors single-solution mode.
 	// Returns whether at least one solution was emitted.
@@ -1462,9 +1478,26 @@ class PositionSolver {
 	}
 
 	PositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable& pr10, PrunTable& pr20 )
-		: stt(stt0), scte(scte0), sctc(sctc0), pr1(pr10), pr2(pr20) {};
+		: stt(stt0), scte(scte0), sctc(sctc0), pr1(pr10), pr2(pr20)
+	{
+		m_sliceStaysCubePrimary.resize(NUMSHAPES);
+		for (int s = 0; s < NUMSHAPES; s++) {
+			// The cube-shape set is closed under mirroring, so the mirror track
+			// (tranTable[.][3]) is a cube shape iff the slice target is.
+			m_sliceStaysCubePrimary[s] = isCubeShape(stt.tranTable[s][2]) ? 1 : 0;
+		}
+	}
 	virtual bool checkKeepCubeShape() {
-		return (shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163);
+		// shp2 is the mirror of shp and the cube-shape set is mirror-closed, so
+		// only the primary track needs testing.
+		return isCubeShape(shp);
+	}
+	// Pre-slice equivalent of checkKeepCubeShape on the post-slice state.  Used in
+	// -c mode to avoid generating a slice that would be immediately rejected.
+	// For a full position shpx==shp so only the primary track is consulted; the
+	// partial solver's parity-twin track (shpx) is folded in an override.
+	virtual inline bool sliceStaysCubeShape() {
+		return m_sliceStaysCubePrimary[shp] != 0;
 	}
 	void set(FullPosition& p, bool findAll0, bool ignoreTrans0){
 		int cc0 = p.getCornerColouring(0);
@@ -1481,6 +1514,8 @@ class PositionSolver {
 		e2 = (ec2==-1 ? -1 : scte.ct.choice2Idx[ec2]);
 		shp = stt.getShape(p.getShape(),p.getParityOdd());
 		shp2 = stt.tranTable[shp][3];
+		shpx = shp;
+		shpx2 = shp2;
 		middle = p.middle;
 		findAll=findAll0;
 		ignoreTrans=ignoreTrans0;
@@ -1763,16 +1798,18 @@ class PositionSolver {
 						isUselessSegTriple(lastTurns[0], lastTurns[1], lastTurns[2], lastTurns[3], lastTurns[4], lastTurns[5]);
 				}
 			}
-			if (!block60 && !twoGenBlock && !uselessSeg) {
-			int lt0=lastTurns[0], lt1=lastTurns[1];
-			lastTurns[0]=lastTurns[2];
-			lastTurns[1]=lastTurns[3];
-			lastTurns[2]=lastTurns[4];
-			lastTurns[3]=lastTurns[5];
-			lastTurns[4]=0;
-			lastTurns[5]=0;
-			doMove(2);
-			if (!keepCubeShape || checkKeepCubeShape()) {
+			if (!block60 && !twoGenBlock && !uselessSeg && (!keepCubeShape || sliceStaysCubeShape())) {
+				// In -c mode sliceStaysCubeShape() has already verified that the slice
+				// keeps us in cubeshape (both parity tracks), so the state produced by
+				// doMove(2) below needs no further cubeshape check.
+				int lt0=lastTurns[0], lt1=lastTurns[1];
+				lastTurns[0]=lastTurns[2];
+				lastTurns[1]=lastTurns[3];
+				lastTurns[2]=lastTurns[4];
+				lastTurns[3]=lastTurns[5];
+				lastTurns[4]=0;
+				lastTurns[5]=0;
+				doMove(2);
 				// This slice closes the current segment: a slice now precedes it, so
 				// if it was a (6,0)/(0,6) and one already came before, it is internal.
 				m_slicesDone++;
@@ -1785,15 +1822,14 @@ class PositionSolver {
 				m_slicesDone--;
 				if(r<0) return r;
 				if(r!=0 && !findAll && (metric!=SLICE_METRIC || m_cleanFound)) return(r);
-			}
-			doMove(2);
-			lastTurns[5]=lastTurns[3];
-			lastTurns[4]=lastTurns[2];
-			lastTurns[3]=lastTurns[1];
-			lastTurns[2]=lastTurns[0];
-			lastTurns[1]=lt1;
-			lastTurns[0]=lt0;
-			} // end block60 check
+				doMove(2);
+				lastTurns[5]=lastTurns[3];
+				lastTurns[4]=lastTurns[2];
+				lastTurns[3]=lastTurns[1];
+				lastTurns[2]=lastTurns[0];
+				lastTurns[1]=lt1;
+				lastTurns[0]=lt0;
+			} // end slice guard
 		}
 		return r;
 	}
@@ -1922,15 +1958,16 @@ class PositionSolver {
 
 // PartialositionSolver is like PositionSolver but may have some incompletely defined pieces
 class PartialPositionSolver : public PositionSolver {
-	int shpx, shpx2; // extra shapes to account for both possible parities
-
 public:
 	PartialPositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable& pr10, PrunTable& pr20 )
 	    : PositionSolver(stt0, scte0, sctc0, pr10, pr20) {}
 	bool checkKeepCubeShape() override {
-		bool primary = (shp==5052 || shp==4148 || shp==5039 || shp==4163) && (shp2==5052 || shp2==4148 || shp2==5039 || shp2==4163);
-		bool secondary = (shpx==5052 || shpx==4148 || shpx==5039 || shpx==4163) && (shpx2==5052 || shpx2==4148 || shpx2==5039 || shpx2==4163);
-		return primary || secondary;
+		return isCubeShape(shp) || isCubeShape(shpx);
+	}
+	// Fold both possible parity interpretations of the partial position into the
+	// pre-slice guard (the base version only consults the primary track shp).
+	inline bool sliceStaysCubeShape() override {
+		return (m_sliceStaysCubePrimary[shp] || m_sliceStaysCubePrimary[shpx]) != 0;
 	}
 	void set(FullPosition& p, bool findAll0, bool ignoreTrans0){
 		PositionSolver::set(p, findAll0, ignoreTrans0);
