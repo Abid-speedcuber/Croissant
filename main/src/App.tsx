@@ -1679,7 +1679,7 @@ export default function App() {
   });
   useEffect(() => {
     void loadSettings().then((value) => {
-      if (!value) return;
+      if (!value) { queueMicrotask(() => { settingsReady.current = true; }); return; }
       if (typeof value.smartKarn === "boolean") setSmartKarn(value.smartKarn);
       if (typeof value.abidNotation === "boolean") setAbidNotation(value.abidNotation);
       if (typeof value.ignoreTransforms === "boolean") setIgnoreTransforms(value.ignoreTransforms);
