@@ -18,15 +18,15 @@ export type DiskSpaceReport = {
 };
 
 const TABLE_LABELS: Record<string, string> = {
-  "sq1stt.dat": "Shape-transition table",
-  "sq1scte.dat": "Slice-Edge colouring table",
-  "sq1sctc.dat": "Slice-Corner colouring table",
-  "sq1p1u.dat": "Turn-metric pruning table (1/2)",
-  "sq1p2u.dat": "Turn-metric pruning table (2/2)",
-  "sq1p1a.dat": "Angle-metric pruning table (1/2)",
-  "sq1p2a.dat": "Angle-metric pruning table (2/2)",
-  "sq1p1w.dat": "Slice-metric pruning table (1/2)",
-  "sq1p2w.dat": "Slice-metric pruning table (2/2)",
+  "sq1stt.dat": "Move table for CS",
+  "sq1scte.dat": "Move table for edges",
+  "sq1sctc.dat": "Move table for corners",
+  "sq1p1u.dat": "Move-metric pruning table #1",
+  "sq1p2u.dat": "Move-metric pruning table #2",
+  "sq1p1a.dat": "Angle-metric pruning table #1",
+  "sq1p2a.dat": "Angle-metric pruning table #2",
+  "sq1p1w.dat": "Slice-metric pruning table #1",
+  "sq1p2w.dat": "Slice-metric pruning table #2",
 };
 
 const TABLE_ORDER = [
