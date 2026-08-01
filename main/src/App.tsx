@@ -674,6 +674,25 @@ export default function App() {
    */
   const terminalTextRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  // True only while the user is actively touching/dragging the terminal
+  // (mousedown or touch), so fast content growth alone can't be mistaken
+  // for a user-initiated scroll-up (see handleTerminalScroll below).
+  const terminalUserActiveRef = useRef(false);
+  const terminalUserActiveTimeoutRef = useRef<number | undefined>(undefined);
+  const markTerminalUserActive = () => {
+    terminalUserActiveRef.current = true;
+    if (terminalUserActiveTimeoutRef.current !== undefined) {
+      window.clearTimeout(terminalUserActiveTimeoutRef.current);
+      terminalUserActiveTimeoutRef.current = undefined;
+    }
+  };
+  const scheduleTerminalUserInactive = () => {
+    if (terminalUserActiveTimeoutRef.current !== undefined) window.clearTimeout(terminalUserActiveTimeoutRef.current);
+    terminalUserActiveTimeoutRef.current = window.setTimeout(() => {
+      terminalUserActiveRef.current = false;
+      terminalUserActiveTimeoutRef.current = undefined;
+    }, 400);
+  };
   const terminalScrollPositionRef = useRef(0);
   const tableScrollPositionRef = useRef(0);
   const pageScrollEdgeRef = useRef<"top" | "bottom">("top");
@@ -786,6 +805,11 @@ export default function App() {
     window.addEventListener("pointerdown", handlePointerDown);
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [contextMenu]);
+  useEffect(() => {
+    const onMouseUp = () => scheduleTerminalUserInactive();
+    window.addEventListener("mouseup", onMouseUp);
+    return () => window.removeEventListener("mouseup", onMouseUp);
+  }, []);
   const finalizeSliceHistory = () => {
     const pending = slicePending.current;
     if (!pending.length) return;
@@ -877,6 +901,7 @@ export default function App() {
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const node = tableView ? tableContainerRef.current : terminalTextRef.current;
     if (!node) return;
+    markTerminalUserActive();
     const touch = event.touches[0];
     touchNavRef.current = { startY: touch.clientY, lastY: touch.clientY, moved: false, node };
   };
@@ -887,6 +912,7 @@ export default function App() {
     state.moved = true;
   };
   const handleTouchEnd = () => {
+    scheduleTerminalUserInactive();
     const state = touchNavRef.current;
     touchNavRef.current = null;
     const node = state?.node;
@@ -907,7 +933,7 @@ export default function App() {
     terminalScrollPositionRef.current = next;
     if (running && next < prev) {
       const nearBottom = node.scrollHeight - next - node.clientHeight < 50;
-      if (!nearBottom && followTerminalRef.current) {
+      if (!nearBottom && followTerminalRef.current && terminalUserActiveRef.current) {
         followTerminalRef.current = false;
         setFollowTerminal(false);
       }
@@ -2021,7 +2047,7 @@ export default function App() {
         })}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
         {useLessRam && isRestoring && <div className="table-busy"><span className="table-busy-spinner" /><span>{t('terminal.loadingPage')}</span></div>}
-      </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
+      </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll} onMouseDown={markTerminalUserActive} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; scheduleTerminalUserInactive(); }}>
         {useLessRam && isRestoring && <span className="terminal-line terminal-line-status">{t('terminal.loadingPage')}</span>}
         {!outputLines.length && !totalCount && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
