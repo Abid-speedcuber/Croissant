@@ -41,6 +41,82 @@ struct RatingResult {
 #[serde(rename_all = "camelCase")]
 struct TwoGenStatus { compatibility: i32, corners_two: bool, corners_pseudo: bool }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TableInfo { name: String, size: u64 }
+
+fn table_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("pruning-tables"))
+}
+
+fn is_table_file(name: &str) -> bool {
+    !name.is_empty()
+        && name.ends_with(".dat")
+        && std::path::Path::new(name).file_name().map(|f| f == name).unwrap_or(false)
+}
+
+#[tauri::command]
+fn list_pruning_tables(app: tauri::AppHandle) -> Vec<TableInfo> {
+    let mut out = Vec::new();
+    let dir = match table_dir(&app) {
+        Ok(d) => d,
+        Err(_) => return out,
+    };
+    if let Ok(rd) = fs::read_dir(dir) {
+        for entry in rd.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if is_table_file(&name) {
+                if let Ok(meta) = entry.metadata() {
+                    out.push(TableInfo { name, size: meta.len() });
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+#[tauri::command]
+fn delete_pruning_table(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    if !is_table_file(&name) { return Err("Invalid table file name".into()); }
+    let path = table_dir(&app)?.join(&name);
+    fs::remove_file(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_pruning_tables(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = table_dir(&app)?;
+    if let Ok(rd) = fs::read_dir(dir) {
+        for entry in rd.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if is_table_file(&name) { let _ = fs::remove_file(entry.path()); }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn app_size(app: tauri::AppHandle) -> u64 {
+    let exe = match std::env::current_exe() { Ok(e) => e, Err(_) => return 0 };
+    let root = match exe.parent() { Some(d) => d.to_path_buf(), None => return 0 };
+    let mut total = 0u64;
+    let mut stack = vec![root];
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = fs::read_dir(dir) else { continue };
+        for entry in rd.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let skip = path.file_name().map(|n| n == "pruning-tables" || n == "node_modules").unwrap_or(false);
+                if !skip { stack.push(path); }
+            } else if let Ok(meta) = entry.metadata() {
+                total += meta.len();
+            }
+        }
+    }
+    let _ = app;
+    total
+}
+
 fn run_karn_bridge(input: &str, position: Option<&str>, generator: bool, convert_to_karn: bool) -> Result<String, String> {
     let input = std::ffi::CString::new(input).map_err(|_| "Input contains a NUL byte")?;
     let position_c = std::ffi::CString::new(position.unwrap_or("")).map_err(|_| "Position contains a NUL byte")?;
@@ -151,7 +227,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(SolverState::default())
-        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, two_gen_status])
+        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size])
         .run(tauri::generate_context!())
         .expect("error while running Croissant");
 }

@@ -166,6 +166,18 @@
       "showAll": "Show all the generated solutions in a single page",
       "useLessRam": "Use less RAM (offload solution pages to disk)"
     },
+    "disk": {
+      "manage": "Manage Disk Space",
+      "title": "Manage Disk Space",
+      "total": "Total storage usage",
+      "appSize": "App size",
+      "solutions": "Current Generated Solutions",
+      "clearSolutions": "Clear the currently generated solutions",
+      "tablesTitle": "Generated tables",
+      "noTables": "No pruning tables are stored right now.",
+      "deleteTable": "Delete this table (it will be regenerated when needed)",
+      "deleteOnQuit": "Delete all the pruning tables when quitting the app"
+    },
     "showAll": {
       "title": "Show all solutions?",
       "warning": "This may create lag and, in the worst case, crash the app. Make sure your device is capable of handling it.",

@@ -101,3 +101,11 @@ export function createWebNative() {
     Channel,
   };
 }
+
+// Removes a table from the in-memory WASM filesystem of the live solve worker
+// (if any).  Used together with the IndexedDB deletion so the table does not
+// get re-persisted on the next solve.
+export function deleteSolverTable(name: string): void {
+  if (!solveWorker) return;
+  solveWorker.postMessage({ id: 0, type: "deleteTable", name });
+}

@@ -10,8 +10,17 @@ type StorageBackend = {
 let backend: StorageBackend | null = null;
 
 function isTauri(): boolean {
-  const w = window as Window & { __SQ1_NATIVE__?: unknown; __TAURI__?: unknown };
-  return !!(w.__SQ1_NATIVE__ || w.__TAURI__);
+  // The real Tauri runtime exposes window.__TAURI__ (withGlobalTauri: true) and
+  // window.__TAURI_INTERNALS__. The web build also sets window.__SQ1_NATIVE__ to
+  // the in-browser native bridge, so it must NOT be treated as native.
+  const w = window as Window & { __TAURI__?: unknown };
+  return !!w.__TAURI__;
+}
+
+// Synchronous platform check: true for the desktop/mobile builds (Tauri),
+// false for the browser build.  Used to pick platform defaults.
+export function isNativePlatform(): boolean {
+  return isTauri();
 }
 
 const localStorageBackend: StorageBackend = {
@@ -143,4 +152,23 @@ export async function clearOffloadedSolutions(): Promise<void> {
       if (key.startsWith(OFFLOAD_PREFIX)) await store.removeItem(key);
     }
   } catch { /* best effort */ }
+}
+
+// Approximate size in bytes of the currently generated solutions that are kept
+// in storage (offloaded chunks).  Works for both the Tauri store and the web
+// localStorage fallback.
+export async function solutionBytes(): Promise<number> {
+  try {
+    const store = await getBackend();
+    const keys = await store.keys();
+    let total = 0;
+    for (const key of keys) {
+      if (!key.startsWith(OFFLOAD_PREFIX)) continue;
+      const value = await store.getItem(key);
+      if (value) total += value.length;
+    }
+    return total;
+  } catch {
+    return 0;
+  }
 }

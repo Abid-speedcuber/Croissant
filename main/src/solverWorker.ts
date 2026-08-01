@@ -26,7 +26,8 @@ type InvokeRequest =
   | { id: number; type: "invoke"; command: "unkarnify"; args: { input: string } }
   | { id: number; type: "invoke"; command: "karnify"; args: { input: string; position?: string | null; generator: boolean } }
   | { id: number; type: "invoke"; command: "rate_algorithm"; args: { algorithm: string; initialTopA: boolean } }
-  | { id: number; type: "invoke"; command: "two_gen_status"; args: { position: number[]; specificAngleBot: boolean } };
+  | { id: number; type: "invoke"; command: "two_gen_status"; args: { position: number[]; specificAngleBot: boolean } }
+  | { id: number; type: "deleteTable"; name: string };
 
 type WorkerEvent =
   | { id: number; type: "line"; line: string }
@@ -34,7 +35,15 @@ type WorkerEvent =
   | { id: number; type: "error"; message: string };
 
 type EmscriptenModule = {
-  FS: { mkdir: (path: string) => void };
+  FS: {
+    mkdir: (path: string) => void;
+    writeFile: (path: string, data: Uint8Array) => void;
+    readdir: (path: string) => string[];
+    readFile: (path: string) => Uint8Array;
+    analyzePath: (path: string) => { exists: boolean };
+    stat: (path: string) => { size: number };
+    unlink: (path: string) => void;
+  };
   HEAP32: Int32Array;
   UTF8ToString: (ptr: number) => string;
   callMain: (args: string[]) => number;
@@ -58,6 +67,41 @@ let activeSolveId: number | undefined;
 
 const emit = (event: WorkerEvent) => self.postMessage(event);
 
+const TABLE_DIR = "/tables";
+
+async function restorePersistedTables(mod: EmscriptenModule) {
+  const { listTableEntries, loadTableBlob } = await import("./tableStore");
+  const entries = await listTableEntries();
+  for (const entry of entries) {
+    const blob = await loadTableBlob(entry.name);
+    if (!blob) continue;
+    try {
+      if (!mod.FS.analyzePath(TABLE_DIR).exists) mod.FS.mkdir(TABLE_DIR);
+      mod.FS.writeFile(`${TABLE_DIR}/${entry.name}`, new Uint8Array(blob));
+    } catch { /* skip unreadable blob */ }
+  }
+}
+
+async function syncTablesToIdb(mod: EmscriptenModule) {
+  const { storeTableBlob, listTableEntries } = await import("./tableStore");
+  let names: string[] = [];
+  const sizes = new Map<string, number>();
+  try {
+    names = mod.FS.readdir(TABLE_DIR).filter((name) => name.endsWith(".dat"));
+    for (const name of names) sizes.set(name, mod.FS.stat(`${TABLE_DIR}/${name}`).size);
+  } catch { return; }
+  const stored = await listTableEntries();
+  const storedSizes = new Map(stored.map((entry) => [entry.name, entry.size]));
+  for (const name of names) {
+    if (storedSizes.get(name) === sizes.get(name)) continue;
+    try {
+      const data = mod.FS.readFile(`${TABLE_DIR}/${name}`);
+      const bytes = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+      await storeTableBlob(name, bytes);
+    } catch { /* skip unreadable table */ }
+  }
+}
+
 async function loadModule(): Promise<EmscriptenModule> {
   if (modulePromise) return modulePromise;
   modulePromise = (async () => {
@@ -78,11 +122,12 @@ async function loadModule(): Promise<EmscriptenModule> {
       locateFile: (file: string) => new URL(`../wasm/${file}`, self.location.href).href,
     });
     try {
-      instance.FS.mkdir("/tables");
+      instance.FS.mkdir(TABLE_DIR);
     } catch {
       // The module can be reused for the whole tab session.
     }
-    instance.cwrap("sq1opt_web_set_table_directory", null, ["string"])("/tables");
+    instance.cwrap("sq1opt_web_set_table_directory", null, ["string"])(TABLE_DIR);
+    await restorePersistedTables(instance);
     moduleInstance = instance;
     api = {
       unkarnify: instance.cwrap("sq1_web_unkarnify_alloc", "number", ["string"]) as (input: string) => number,
@@ -140,6 +185,7 @@ async function solve(request: InvokeRequest & { type: "solve" }) {
   } finally {
     activeSolveId = undefined;
   }
+  await syncTablesToIdb(mod);
 }
 
 self.onmessage = (event: MessageEvent<InvokeRequest>) => {
@@ -147,6 +193,11 @@ self.onmessage = (event: MessageEvent<InvokeRequest>) => {
   void (async () => {
     try {
       if (request.type === "solve") await solve(request);
+      else if (request.type === "deleteTable") {
+        if (activeSolveId === undefined && moduleInstance) {
+          try { moduleInstance.FS.unlink(`${TABLE_DIR}/${request.name}`); } catch { /* not present */ }
+        }
+      }
       else emit({ id: request.id, type: "result", result: await invoke(request) });
     } catch (error) {
       emit({ id: request.id, type: "error", message: error instanceof Error ? error.message : String(error) });

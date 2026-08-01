@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadSettings, saveSettings, loadFavorites, saveFavorites, writeOffloadedChunk, readOffloadedChunk, removeOffloadedChunk, clearOffloadedSolutions } from "./storage";
+import { loadSettings, saveSettings, loadFavorites, saveFavorites, writeOffloadedChunk, readOffloadedChunk, removeOffloadedChunk, clearOffloadedSolutions, isNativePlatform } from "./storage";
+import { clearTableBlobs } from "./tableStore";
+import { clearAllTables } from "./diskSpace";
 import {
   CubeState, Modal as ModalType, FavoriteBin, Solution, OutputLine, RatingResult, TwoGenStatus,
   DisplaySolution, DropdownProps, CubeActions, TauriGlobal,
@@ -10,6 +12,7 @@ import {
   ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips,
 } from "./utils";
 import { Modal } from './components/Modal';
+import { DiskSpaceModal } from './components/DiskSpaceModal';
 import { t, LangCode, getLang, setLang } from './i18n';
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
@@ -540,6 +543,15 @@ export default function App() {
   const [isRestoring, setIsRestoring] = useState(false);
   const setUseLessRam = (value: boolean) => { useLessRamRef.current = value; _setUseLessRam(value); };
   const totalCount = solutions.length + offloadedTotal + pendingTailCount;
+  const deleteTablesOnQuitRef = useRef(!isNativePlatform());
+  const [deleteTablesOnQuit, _setDeleteTablesOnQuit] = useState(!isNativePlatform());
+  const deleteTablesOnQuitV2 = deleteTablesOnQuit;
+  const setDeleteTablesOnQuit = (value: boolean) => {
+    deleteTablesOnQuitRef.current = value;
+    _setDeleteTablesOnQuit(value);
+    if (value && !isNativePlatform()) void clearTableBlobs();
+  };
+  const [diskOpen, setDiskOpen] = useState(false);
   const [showAllConfirm, setShowAllConfirm] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false),
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
@@ -1312,6 +1324,17 @@ export default function App() {
     const re = rs + solutionsRef.current.length;
     return vs >= rs && ve <= re;
   };
+  const clearSolutions = () => {
+    solutionsRef.current = [];
+    pendingTailRef.current = null;
+    setPendingTailCount(0);
+    offloadedChunksRef.current.clear();
+    offloadedTotalRef.current = 0;
+    ramOffsetRef.current = 0;
+    setOffloadedTotal(0);
+    setSolutions([]);
+    void clearOffloadedSolutions();
+  };
   const syncOffload = async () => {
     if (!useLessRamRef.current) {
       if (offloadedTotalRef.current || (pendingTailRef.current?.length ?? 0)) {
@@ -1660,6 +1683,7 @@ export default function App() {
       if (typeof value.pageSize === "number" && PAGE_SIZE_OPTIONS.includes(value.pageSize)) setPageSize(value.pageSize);
       if (typeof value.showAll === "boolean") setShowAll(value.showAll);
       if (typeof value.useLessRam === "boolean") setUseLessRam(value.useLessRam);
+      if (typeof value.deleteTablesOnQuitV2 === "boolean") setDeleteTablesOnQuit(value.deleteTablesOnQuitV2);
       queueMicrotask(() => { settingsReady.current = true; });
     });
   }, []);
@@ -1669,8 +1693,9 @@ export default function App() {
       smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape: cubeShapeMemory, ignoreMiddle,
       maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam,
+      deleteTablesOnQuitV2,
     });
-  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam]);
+  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam, deleteTablesOnQuit]);
   useEffect(() => {
     if (!solutions.length || running) return;
     let cancelled = false;
@@ -1708,13 +1733,21 @@ export default function App() {
   }, [favorites]);
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    const onBeforeUnload = () => { void clearOffloadedSolutions(); };
+    const cleanupOnQuit = () => {
+      void clearOffloadedSolutions();
+      if (deleteTablesOnQuitRef.current) {
+        if (isNativePlatform()) void clearAllTables();
+        else void clearTableBlobs();
+      }
+    };
+    const onBeforeUnload = () => { cleanupOnQuit(); };
     window.addEventListener("beforeunload", onBeforeUnload);
     if ((window as Window & { __TAURI__?: unknown }).__TAURI__) {
       void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
         try {
           unlisten = await getCurrentWindow().onCloseRequested(async () => {
             await clearOffloadedSolutions();
+            if (deleteTablesOnQuitRef.current) await clearAllTables();
           });
         } catch { /* capability missing; the beforeunload fallback still runs */ }
       });
@@ -2167,7 +2200,9 @@ export default function App() {
         pageSize, setPageSize, showAll, setShowAll, pageSizeOptions: PAGE_SIZE_OPTIONS,
         useLessRam, setUseLessRam,
         onRequestShowAll: () => setShowAllConfirm(true),
+        onOpenDiskSpace: () => setDiskOpen(true),
       }} debugStats={modal === "debug" ? computeDebugStats() : null} />}
+      {modal === "settings" && diskOpen && <DiskSpaceModal onClose={() => setDiskOpen(false)} deleteOnQuit={deleteTablesOnQuit} setDeleteOnQuit={setDeleteTablesOnQuit} solutions={solutions} onClearSolutions={clearSolutions} />}
       {showAllConfirm && <div className="modal-shade modal-shade-top" onClick={() => setShowAllConfirm(false)}>
         <div className="modal modal-confirm" onClick={(event) => event.stopPropagation()}>
           <button className="modal-close" onClick={() => setShowAllConfirm(false)}>✕</button>
