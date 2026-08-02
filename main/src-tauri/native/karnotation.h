@@ -409,8 +409,10 @@ inline std::unordered_map<std::string, std::string> &getWCAToKarnMap()
 {
     static std::unordered_map<std::string, std::string> map;
     static bool initialized = false;
-    if (!initialized) {
-        for (const auto &[k, v] : WCA_TO_KARN) {
+    if (!initialized)
+    {
+        for (const auto &[k, v] : WCA_TO_KARN)
+        {
             map[k] = v;
         }
         initialized = true;
@@ -422,8 +424,10 @@ inline std::unordered_map<std::string, std::string> &getWCAToKarnOCSMap()
 {
     static std::unordered_map<std::string, std::string> map;
     static bool initialized = false;
-    if (!initialized) {
-        for (const auto &[k, v] : WCA_TO_KARN_OCS) {
+    if (!initialized)
+    {
+        for (const auto &[k, v] : WCA_TO_KARN_OCS)
+        {
             map[k] = v;
         }
         initialized = true;
@@ -435,8 +439,10 @@ inline std::unordered_map<std::string, std::string> &getKarnToHighKarnMap()
 {
     static std::unordered_map<std::string, std::string> map;
     static bool initialized = false;
-    if (!initialized) {
-        for (const auto &[k, v] : KARN_TO_HIGHKARN) {
+    if (!initialized)
+    {
+        for (const auto &[k, v] : KARN_TO_HIGHKARN)
+        {
             map[k] = v;
         }
         initialized = true;
@@ -448,8 +454,10 @@ inline std::unordered_map<std::string, std::string> &getKarnToHighKarnOCSMap()
 {
     static std::unordered_map<std::string, std::string> map;
     static bool initialized = false;
-    if (!initialized) {
-        for (const auto &[k, v] : KARN_TO_HIGHKARN_OCS) {
+    if (!initialized)
+    {
+        for (const auto &[k, v] : KARN_TO_HIGHKARN_OCS)
+        {
             map[k] = v;
         }
         initialized = true;
@@ -848,15 +856,19 @@ inline std::string karnify(const std::string &algPart)
             std::string padded = " " + tokens[i] + " ";
             auto it = wcaMap.find(padded);
             std::string k;
-            if (it != wcaMap.end()) {
+            if (it != wcaMap.end())
+            {
                 k = trimStr(it->second);
-            } else {
+            }
+            else
+            {
                 // Fallback: not found in map, keep numeric with commas removed
                 k = replaceAll(tokens[i], ",", "");
             }
             // Remove duplicate spaces that might have been introduced
             std::string prev;
-            do {
+            do
+            {
                 prev = k;
                 k = replaceAll(k, "  ", " ");
             } while (k != prev);
@@ -896,8 +908,6 @@ inline std::string karnify(const std::string &algPart)
 //   Uppercase letters A-H = corners; digits 1-8 = edges.
 // generatorMode: if true, start from the solved state (all algs share the
 //   same start, so compute slots once externally if calling in a batch).
-//
-// NOTE: not called anywhere yet.
 // ===========================================================================
 namespace karnifycs_detail
 {
@@ -1022,167 +1032,204 @@ namespace karnifycs_detail
 
 } // namespace karnifycs_detail
 
+namespace karnifycs_detail
+{
+    // the slot layout of a solved cube
+    inline const int kSolvedSlots[24] = {0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0};
+
+    // Shared implementation once slotState[24] is already built. Both public
+    // overloads below funnel into this — one builds slotState from a hex
+    // string (the C-bridge / Rust path), the other from a raw 24-slot pos[]
+    // array (sq1opt's own FullPosition, no string round-trip needed).
+    inline std::string karnifycsImpl(const std::string &algWCA, int slotState[24])
+    {
+        // Split into slash-separated move groups.
+        // Each '/' is a slice. Collect consecutive moves between slices into groups,
+        // then substitute each group as a whole using the correct CS/OCS table.
+        // Groups are separated by slices in the output.
+
+        // First pass: collect groups and record CS state at start of each group.
+        struct Group
+        {
+            std::string joined; // space-separated moves e.g. "-3,0 3,0"
+            bool inCS;
+        };
+        std::vector<Group> groups;
+        std::vector<bool> sliceBefore; // sliceBefore[i] = true if there's a slash before group i
+
+        bool leadingSlash = !algWCA.empty() && (algWCA.front() == '/' || algWCA.front() == '\\' || algWCA.front() == '|');
+        if (leadingSlash)
+            kcSlice(slotState);
+
+        // Parse move tokens between slashes/pipes
+        std::string normalized = replaceAll(algWCA, "\\", "/");
+        normalized = replaceAll(normalized, "|", "/");
+        // split by '/'
+        auto parts = splitStr(normalized, '/');
+
+        // parts[0] is empty if leading slash, otherwise first move group
+        // each part IS one move. We need to group consecutive moves between slices.
+        // Since input is already "move/move/move", every '/' is a slice,
+        // so each part is exactly one inter-slice group (one move).
+        // We want to join adjacent same-CS parts for better multi-token substitution.
+
+        Group cur;
+        cur.inCS = kcInCubeshape(slotState);
+        cur.joined = "";
+        bool first = true;
+
+        for (const auto &part : parts)
+        {
+            std::string tok = trimStr(part);
+            if (tok.empty())
+            {
+                // This was a leading/trailing slash already handled, skip
+                continue;
+            }
+            // There's a slash before this tok if it's not the very first token
+            // (leadingSlash already applied; every subsequent part has a slash before it)
+            if (!first)
+            {
+                // flush current group before the slice
+                if (!cur.joined.empty())
+                    groups.push_back(cur);
+                // do the slice
+                kcSlice(slotState);
+                cur.joined = "";
+                cur.inCS = kcInCubeshape(slotState);
+            }
+            first = false;
+
+            // Add move to current group
+            if (!cur.joined.empty())
+                cur.joined += ' ';
+            cur.joined += tok;
+            kcApplyTurnToken(slotState, tok);
+        }
+        if (!cur.joined.empty())
+            groups.push_back(cur);
+
+        bool trailingSlash = algWCA.size() > 1 && (algWCA.back() == '/' || algWCA.back() == '\\' || algWCA.back() == '|');
+
+        // Second pass: substitute each group, collect results first so we can
+        // inspect the first/last output before deciding on leading/trailing slashes.
+        std::vector<std::string> substGroups;
+        substGroups.reserve(groups.size());
+
+        // Get optimized hash maps for O(1) lookups
+        auto &wcaToKarnMap = getWCAToKarnMap();
+        auto &wcaToKarnOCSMap = getWCAToKarnOCSMap();
+
+        for (size_t gi = 0; gi < groups.size(); gi++)
+        {
+            const auto &g = groups[gi];
+            bool isFirst = (gi == 0);
+            bool isLast = (gi == groups.size() - 1);
+
+            bool canKarn = (!isFirst || leadingSlash) && (!isLast || trailingSlash);
+
+            std::string subst;
+            if (canKarn)
+            {
+                // Use hash map lookup instead of replaceWithVector (OPTIMIZED)
+                const auto &map = g.inCS ? wcaToKarnMap : wcaToKarnOCSMap;
+                std::string padded = " " + g.joined + " ";
+
+                // Try hash map lookup first
+                auto it = map.find(padded);
+                if (it != map.end())
+                {
+                    subst = trimStr(it->second);
+                }
+                else
+                {
+                    // Fallback: if not found, keep numeric with commas removed
+                    subst = g.joined;
+                }
+
+                std::string prev;
+                do
+                {
+                    prev = subst;
+                    subst = replaceAll(subst, "  ", " ");
+                } while (subst != prev);
+            }
+            else
+            {
+                // No surrounding slice on this side — keep numeric, just strip commas.
+                subst = g.joined;
+            }
+            subst = replaceAll(subst, ",", "");
+            substGroups.push_back(subst);
+        }
+
+        // Karn tokens carry their surrounding slashes implicitly; numeric ones don't.
+        // "Karn" = the substituted string contains at least one alpha character.
+        auto hasAlpha = [](const std::string &s)
+        {
+            for (unsigned char ch : s)
+                if (std::isalpha(ch))
+                    return true;
+            return false;
+        };
+        bool firstIsKarn = !substGroups.empty() && hasAlpha(substGroups.front());
+        bool lastIsKarn = !substGroups.empty() && hasAlpha(substGroups.back());
+
+        // Leading slash: only needed if the input had one AND the first output token
+        // is numeric (karn tokens bring the slash with them).
+        // Trailing slash: same rule on the other end.
+        std::string out;
+
+        for (const auto &s : substGroups)
+        {
+            if (!out.empty() && out.back() != ' ' && out.back() != '/')
+                out += ' ';
+            out += s;
+        }
+
+        // Apply KARN_TO_HIGHKARN_OCS replacements using optimized function
+        auto &highKarnOCSMap = getKarnToHighKarnOCSMap();
+        std::string k = applyHighKarnReplacements(" " + out + " ", highKarnOCSMap);
+        k = trimStr(k);
+
+        return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
+               ((trailingSlash && !lastIsKarn) ? "/" : "");
+    }
+}
+
+// cubeshape-aware karnify. String-based overload: parses startStateHex
+// (e.g. "A1B2C3D45E6F7G8H", 16-17 chars) into slot state. Used by the
+// C bridge (karn_bridge.cpp) / Rust side, where positions arrive as strings.
 inline std::string karnifycs(
     const std::string &algWCA,
     const std::string &startStateHex,
     bool generatorMode)
 {
     using namespace karnifycs_detail;
-
     int slotState[24];
-    const int solved[24] = {0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0};
     if (generatorMode || !kcParseState(startStateHex, slotState))
+        for (int i = 0; i < 24; i++)
+            slotState[i] = kSolvedSlots[i];
+    return karnifycsImpl(algWCA, slotState);
+}
+
+// overload for callers that already have a raw 24-slot position array
+inline std::string karnifycs(
+    const std::string &algWCA,
+    const int pos[24],
+    bool generatorMode)
+{
+    using namespace karnifycs_detail;
+    int slotState[24];
+    if (generatorMode)
     {
         for (int i = 0; i < 24; i++)
-            slotState[i] = solved[i];
+            slotState[i] = kSolvedSlots[i];
     }
-
-    // Split into slash-separated move groups.
-    // Each '/' is a slice. Collect consecutive moves between slices into groups,
-    // then substitute each group as a whole using the correct CS/OCS table.
-    // Groups are separated by slices in the output.
-
-    // First pass: collect groups and record CS state at start of each group.
-    struct Group
+    else
     {
-        std::string joined; // space-separated moves e.g. "-3,0 3,0"
-        bool inCS;
-    };
-    std::vector<Group> groups;
-    std::vector<bool> sliceBefore; // sliceBefore[i] = true if there's a slash before group i
-
-    bool leadingSlash = !algWCA.empty() && (algWCA.front() == '/' || algWCA.front() == '\\' || algWCA.front() == '|');
-    if (leadingSlash)
-        kcSlice(slotState);
-
-    // Parse move tokens between slashes/pipes
-    std::string normalized = replaceAll(algWCA, "\\", "/");
-    normalized = replaceAll(normalized, "|", "/");
-    // split by '/'
-    auto parts = splitStr(normalized, '/');
-
-    // parts[0] is empty if leading slash, otherwise first move group
-    // each part IS one move. We need to group consecutive moves between slices.
-    // Since input is already "move/move/move", every '/' is a slice,
-    // so each part is exactly one inter-slice group (one move).
-    // We want to join adjacent same-CS parts for better multi-token substitution.
-
-    Group cur;
-    cur.inCS = kcInCubeshape(slotState);
-    cur.joined = "";
-    bool first = true;
-
-    for (const auto &part : parts)
-    {
-        std::string tok = trimStr(part);
-        if (tok.empty())
-        {
-            // This was a leading/trailing slash already handled, skip
-            continue;
-        }
-        // There's a slash before this tok if it's not the very first token
-        // (leadingSlash already applied; every subsequent part has a slash before it)
-        if (!first)
-        {
-            // flush current group before the slice
-            if (!cur.joined.empty())
-                groups.push_back(cur);
-            // do the slice
-            kcSlice(slotState);
-            cur.joined = "";
-            cur.inCS = kcInCubeshape(slotState);
-        }
-        first = false;
-
-        // Add move to current group
-        if (!cur.joined.empty())
-            cur.joined += ' ';
-        cur.joined += tok;
-        kcApplyTurnToken(slotState, tok);
+        for (int i = 0; i < 24; i++)
+            slotState[i] = (pos[i] < 8) ? 0 : 1;
     }
-    if (!cur.joined.empty())
-        groups.push_back(cur);
-
-    bool trailingSlash = algWCA.size() > 1 && (algWCA.back() == '/' || algWCA.back() == '\\' || algWCA.back() == '|');
-
-    // Second pass: substitute each group, collect results first so we can
-    // inspect the first/last output before deciding on leading/trailing slashes.
-    std::vector<std::string> substGroups;
-    substGroups.reserve(groups.size());
-    
-    // Get optimized hash maps for O(1) lookups
-    auto &wcaToKarnMap = getWCAToKarnMap();
-    auto &wcaToKarnOCSMap = getWCAToKarnOCSMap();
-    
-    for (size_t gi = 0; gi < groups.size(); gi++)
-    {
-        const auto &g = groups[gi];
-        bool isFirst = (gi == 0);
-        bool isLast = (gi == groups.size() - 1);
-
-        bool canKarn = (!isFirst || leadingSlash) && (!isLast || trailingSlash);
-
-        std::string subst;
-        if (canKarn)
-        {
-            // Use hash map lookup instead of replaceWithVector (OPTIMIZED)
-            const auto &map = g.inCS ? wcaToKarnMap : wcaToKarnOCSMap;
-            std::string padded = " " + g.joined + " ";
-            
-            // Try hash map lookup first
-            auto it = map.find(padded);
-            if (it != map.end()) {
-                subst = trimStr(it->second);
-            } else {
-                // Fallback: if not found, keep numeric with commas removed
-                subst = g.joined;
-            }
-            
-            std::string prev;
-            do
-            {
-                prev = subst;
-                subst = replaceAll(subst, "  ", " ");
-            } while (subst != prev);
-        }
-        else
-        {
-            // No surrounding slice on this side — keep numeric, just strip commas.
-            subst = g.joined;
-        }
-        subst = replaceAll(subst, ",", "");
-        substGroups.push_back(subst);
-    }
-
-    // Karn tokens carry their surrounding slashes implicitly; numeric ones don't.
-    // "Karn" = the substituted string contains at least one alpha character.
-    auto hasAlpha = [](const std::string &s)
-    {
-        for (unsigned char ch : s)
-            if (std::isalpha(ch))
-                return true;
-        return false;
-    };
-    bool firstIsKarn = !substGroups.empty() && hasAlpha(substGroups.front());
-    bool lastIsKarn = !substGroups.empty() && hasAlpha(substGroups.back());
-
-    // Leading slash: only needed if the input had one AND the first output token
-    // is numeric (karn tokens bring the slash with them).
-    // Trailing slash: same rule on the other end.
-    std::string out;
-
-    for (const auto &s : substGroups)
-    {
-        if (!out.empty() && out.back() != ' ' && out.back() != '/')
-            out += ' ';
-        out += s;
-    }
-
-    // Apply KARN_TO_HIGHKARN_OCS replacements using optimized function
-    auto &highKarnOCSMap = getKarnToHighKarnOCSMap();
-    std::string k = applyHighKarnReplacements(" " + out + " ", highKarnOCSMap);
-    k = trimStr(k);
-
-    return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
-           ((trailingSlash && !lastIsKarn) ? "/" : "");
+    return karnifycsImpl(algWCA, slotState);
 }

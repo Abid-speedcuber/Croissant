@@ -63,7 +63,7 @@ int verbosity = 5;
 bool generator=false;
 bool usenegative=false;
 bool usebrackets=false;
-bool karnotation=false;
+int karnotation = 0;  // 0=off, 1=plain karn, 2=smart karn
 bool specificAngleTop=false;
 bool specificAngleBot=false;
 int metric = SLICE_METRIC;
@@ -127,12 +127,12 @@ static void resetSolverOptions()
 	stopRequested.store(false);
 	verbosity = 5;
 	generator = false;
-	usenegative = false;
+	usenegative = true;
 	usebrackets = false;
-	karnotation = false;
+	karnotation = 0;
 	specificAngleTop = false;
 	specificAngleBot = false;
-	metric = TURN_METRIC;
+	metric = SLICE_METRIC;
 	maxX = 6;
 	maxY = 6;
 	maxTotal = 12;
@@ -1144,7 +1144,6 @@ public:
 
 };
 
-// The four shapes reachable while staying in cubeshape (checked against the
 // shape table by checkKeepCubeShape; parity-opposite twins are excluded).
 static inline bool isCubeShape(int shp) {
 	return shp==5052 || shp==4148 || shp==5039 || shp==4163;
@@ -1905,15 +1904,18 @@ class PositionSolver {
 		out += printmove(mu, md);
 		// Save raw algorithm before karnotation transform (for the bridge)
 		std::string rawAlg = out;
-		if (karnotation)
-			out = karnify(out);
+		bool useSmartKarn = (karnotation == 2) && !m_cubeshape;
+		std::string karnConverted;
+		if (karnotation || g_extendedOutput)
+			karnConverted = useSmartKarn ? karnifycs(rawAlg, fp.pos, generator) : karnify(rawAlg);
+		if (karnotation && !g_extendedOutput)
+			out = karnConverted;
 		std::string line = out + "  [" + std::to_string(tw);
 		if (metric != SLICE_METRIC) line += "|" + std::to_string(tu);
 		if (metric == ANGLE_METRIC) line += "|" + std::to_string(angle);
 		line += "]";
 		if (g_extendedOutput) {
-			std::string karnified = karnify(rawAlg);
-			line += "  " + karnified;
+			line += "  " + karnConverted;
 			if (m_cubeshape) {
 				bool initialTopA = (fp.pos[0] >= 8);
 				try {
@@ -2215,7 +2217,9 @@ void help(){
 	std::cout<<"   -2     2gen - no bottom layer moves."<<std::endl;
 	std::cout<<"   -p     Pseudo 2gen - only allow bottom layer moves of 1, 0, -1."<<std::endl;
 	std::cout<<"   -c     Stay in cubeshape."<<std::endl;
-	std::cout<<"   -k     Output algs in karnotation."<<std::endl;
+	std::cout<<"   -k0    Output algs numerically (default)."<<std::endl;
+	std::cout<<"   -k1    Output algs in karn."<<std::endl;
+	std::cout<<"   -k2    Output algs in smart (cubeshape-aware) karn."<<std::endl;
 	std::cout<<"   -ob    Normalize ABF on both preABF and postABF."<<std::endl;
 	std::cout<<"   -oe    Normalize ABF on preABF only (the move before the first slice)."<<std::endl;
 	std::cout<<"   -os    Normalize ABF on postABF only (the move after the last slice)."<<std::endl;
@@ -2307,7 +2311,9 @@ int sq1optMain(int argc, char* argv[]){
 					break;
 				case 'k':
 				case 'K':
-					karnotation = true;
+					if (argv[i][2] == '0') karnotation = 0;
+					else if (argv[i][2] == '2') karnotation = 2;
+					else karnotation = 1;
 					break;
 				case 'n':
 				case 'N':

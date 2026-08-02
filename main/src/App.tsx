@@ -1131,6 +1131,7 @@ export default function App() {
   const currentRunKey = () => {
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
+    if (smartKarn) flags.push("-k2");
     return [lastSolvePosition.current || positionString(cubeState), ...flags].join(" ");
   };
   const applyRunConfig = (key: string) => {
@@ -1151,6 +1152,7 @@ export default function App() {
     };
     setLimit("-X", setMaxX, setMaxXValue); setLimit("-Y", setMaxY, setMaxYValue); setLimit("-Z", setMaxTotal, setMaxTotalValue);
     setIgnoreTransforms(flags.includes("-x"));
+    setSmartKarn(flags.includes("-k2"));
     solutionsRef.current = [];
     outputLinesRef.current = [];
     seenRaw.current.clear();
@@ -1586,7 +1588,8 @@ export default function App() {
     openMobileOutput();
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
-    if (debugOutput) flags.push("-v7");
+    if (smartKarn) flags.push("-k2");
+    if (debugOutput) flags.push("-v5");
     stopped.current = false;
     solutionsRef.current = [];
     outputLinesRef.current = [];
@@ -1844,6 +1847,7 @@ export default function App() {
   const specificDepthsActive = depths.trim().length > 0;
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
   if (ignoreTransforms) commandFlags.push("-x");
+  if (smartKarn) commandFlags.push("-k2");
   const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   const showErgo = runCubeShape;
   const displaySolution = (solution: Solution): DisplaySolution => {
