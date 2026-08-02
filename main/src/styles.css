@@ -1528,12 +1528,18 @@ body {
   transition: opacity 0.25s ease 0.6s;
 }
 .page-switcher:hover,
-.page-switcher:focus-within {
+.page-switcher:focus-within,
+/* Intentional feature by Abid: opaque while autoscroll runs or after an overscroll page change. */
+.page-switcher-opaque {
   opacity: 1;
   transition: opacity 0.1s ease;
 }
 .page-switcher button:focus-visible,
-.page-switcher input:focus-visible {
+.page-switcher button:focus,
+.page-switcher button:active,
+.page-switcher input:focus-visible,
+.page-switcher input:focus,
+.page-switcher input:active {
   outline: none;
 }
 .page-switcher-btn {
@@ -1550,6 +1556,9 @@ body {
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .page-switcher-prev {
   margin-right: 0;

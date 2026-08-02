@@ -699,6 +699,13 @@ export default function App() {
   const pageInputFocused = useRef(false);
   const pageSwitcherRef = useRef<HTMLDivElement>(null);
   const pageInputRef = useRef<HTMLInputElement>(null);
+  // Intentional feature by Abid: the page-switcher pill stays opaque as long as
+  // autoscroll is running, and flashes opaque on overscroll page changes. After
+  // autoscroll stops or the flash is triggered, it returns to its transparent
+  // state once the cooldown below has elapsed.
+  const PAGE_SWITCHER_COOLDOWN_MS = 2000;
+  const [pageSwitcherOpaque, setPageSwitcherOpaque] = useState(false);
+  const pageSwitcherHideTimerRef = useRef<number | undefined>(undefined);
   const touchNavRef = useRef<{ startY: number; lastY: number; moved: boolean; node: HTMLDivElement | null } | null>(null);
   const terminalPageRef = useRef(0);
   const tablePageRef = useRef(0);
@@ -839,6 +846,7 @@ export default function App() {
   useEffect(() => () => {
     if (sliceTimer.current !== undefined) window.clearTimeout(sliceTimer.current);
     if (renderFrame.current !== undefined) cancelAnimationFrame(renderFrame.current);
+    if (pageSwitcherHideTimerRef.current !== undefined) window.clearTimeout(pageSwitcherHideTimerRef.current);
   }, []);
   const scrollTerminalToBottom = () => {
     const node = terminalTextRef.current;
@@ -856,6 +864,22 @@ export default function App() {
   const openMobileOutput = () => {
     setMobileOutputOpen(true);
     requestAnimationFrame(scrollTerminalToBottom);
+  };
+  // Intentional feature by Abid: temporarily switch the page-switcher pill to
+  // opaque so overscroll page changes are noticed, then let it fade back to
+  // transparent after the cooldown. While autoscroll is running the pill is
+  // already kept opaque, so no flash is needed there.
+  const flashPageSwitcher = () => {
+    if (followTerminalRef.current) return;
+    if (pageSwitcherHideTimerRef.current !== undefined) {
+      window.clearTimeout(pageSwitcherHideTimerRef.current);
+      pageSwitcherHideTimerRef.current = undefined;
+    }
+    setPageSwitcherOpaque(true);
+    pageSwitcherHideTimerRef.current = window.setTimeout(() => {
+      pageSwitcherHideTimerRef.current = undefined;
+      setPageSwitcherOpaque(false);
+    }, PAGE_SWITCHER_COOLDOWN_MS);
   };
   const goToPage = (next: number, edge: "top" | "bottom") => {
     if (useLessRamRef.current && !isViewInRam(next, totalCountRefs())) setIsRestoring(true);
@@ -886,17 +910,17 @@ export default function App() {
         followTerminalRef.current = false;
         setFollowTerminal(false);
       }
-      if (node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) goToPage(clampedPage - 1, "bottom");
+      if (node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) { goToPage(clampedPage - 1, "bottom"); flashPageSwitcher(); }
     } else if (event.deltaY > 0) {
       const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 4;
-      if (node.scrollHeight > node.clientHeight + 4 && atBottom && clampedPage < totalPages - 1) goToPage(clampedPage + 1, "top");
+      if (node.scrollHeight > node.clientHeight + 4 && atBottom && clampedPage < totalPages - 1) { goToPage(clampedPage + 1, "top"); flashPageSwitcher(); }
     }
   };
   const handleTableWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     const node = tableContainerRef.current;
     if (!node) return;
-    if (event.deltaY < 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) goToPage(clampedPage - 1, "bottom");
-    else if (event.deltaY > 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollHeight - node.scrollTop - node.clientHeight < 4 && clampedPage < totalPages - 1) goToPage(clampedPage + 1, "top");
+    if (event.deltaY < 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) { goToPage(clampedPage - 1, "bottom"); flashPageSwitcher(); }
+    else if (event.deltaY > 0 && node.scrollHeight > node.clientHeight + 4 && node.scrollHeight - node.scrollTop - node.clientHeight < 4 && clampedPage < totalPages - 1) { goToPage(clampedPage + 1, "top"); flashPageSwitcher(); }
   };
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const node = tableView ? tableContainerRef.current : terminalTextRef.current;
@@ -919,10 +943,10 @@ export default function App() {
     if (!state || !state.moved || !node) return;
     const dy = state.lastY - state.startY;
     if (dy > 30) {
-      if (node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) goToPage(clampedPage - 1, "bottom");
+      if (node.scrollHeight > node.clientHeight + 4 && node.scrollTop <= 1 && clampedPage > 0) { goToPage(clampedPage - 1, "bottom"); flashPageSwitcher(); }
     } else if (dy < -30) {
       const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 4;
-      if (node.scrollHeight > node.clientHeight + 4 && atBottom && clampedPage < totalPages - 1) goToPage(clampedPage + 1, "top");
+      if (node.scrollHeight > node.clientHeight + 4 && atBottom && clampedPage < totalPages - 1) { goToPage(clampedPage + 1, "top"); flashPageSwitcher(); }
     }
   };
   const handleTerminalScroll = () => {
@@ -995,6 +1019,23 @@ export default function App() {
   useEffect(() => {
     isSwitchingViewRef.current = false;
   }, [tableView]);
+  // Intentional feature by Abid: keep the page-switcher pill opaque as long as
+  // autoscroll is running; once autoscroll stops (scroll-lock or solve end) it
+  // returns to transparent after the cooldown.
+  useEffect(() => {
+    if (followTerminal) {
+      if (pageSwitcherHideTimerRef.current !== undefined) {
+        window.clearTimeout(pageSwitcherHideTimerRef.current);
+        pageSwitcherHideTimerRef.current = undefined;
+      }
+      setPageSwitcherOpaque(true);
+    } else if (pageSwitcherHideTimerRef.current === undefined) {
+      pageSwitcherHideTimerRef.current = window.setTimeout(() => {
+        pageSwitcherHideTimerRef.current = undefined;
+        setPageSwitcherOpaque(false);
+      }, PAGE_SWITCHER_COOLDOWN_MS);
+    }
+  }, [followTerminal]);
   useEffect(() => {
     pageRef.current = page;
   }, [page]);
@@ -2006,8 +2047,8 @@ export default function App() {
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}>⌄</button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
-      {!showAll && totalPages > 1 && <div className="page-switcher" ref={pageSwitcherRef}>
-        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0 || (useLessRam && isRestoring)} title={t('btn.prevPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}>‹</button>
+      {!showAll && totalPages > 1 && <div className={`page-switcher${pageSwitcherOpaque ? " page-switcher-opaque" : ""}`} ref={pageSwitcherRef}>
+        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0 || (useLessRam && isRestoring)} title={t('btn.prevPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}>‹</button>
         <div className="page-switcher-center">
           <span className="page-switcher-inputwrap">
             <input
@@ -2032,7 +2073,7 @@ export default function App() {
           </span>
           <span className="page-switcher-total">/ {totalPages}</span>
         </div>
-        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || (useLessRam && isRestoring)} title={t('btn.nextPage')} onClick={() => { pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}>›</button>
+        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || (useLessRam && isRestoring)} title={t('btn.nextPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}>›</button>
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
       {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
