@@ -6,7 +6,7 @@ import { clearAllTables } from "./diskSpace";
 import {
   CubeState, Modal as ModalType, FavoriteBin, Solution, OutputLine, RatingResult, TwoGenStatus,
   DisplaySolution, DropdownProps, CubeActions, TauriGlobal,
-  twistable, getLayerR, getParityOdd, inCubeshape, doMove, tauri, validDepths, solverFlags,
+  twistable, getLayerR, getParityOdd, isGoodSquares, inCubeshape, doMove, tauri, validDepths, solverFlags,
   positionString, rawPosition, parsePosition, invertScramble, addCommas, applyNumericAlgorithm,
   abidify, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
   ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips,
@@ -1785,7 +1785,7 @@ export default function App() {
   }, []);
   const cubeshapeBlockedBy2Gen = (two === "2 Gen" && !twoGenStatus.cornersTwo) ||
     (two === "Pseudo 2 Gen" && !twoGenStatus.cornersPseudo);
-  const cubeshapeForced = !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen;
+  const cubeshapeForced = !isGoodSquares(cubeState) || cubeshapeBlockedBy2Gen;
   const cubeShape = cubeShapeMemory && !cubeshapeForced;
   const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
     (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
@@ -1934,7 +1934,7 @@ export default function App() {
             <button type="button" title={tooltips.suboptimal} disabled={running || !all} onClick={() => setSuboptimal((value) => value + 1)}>+</button>
           </span>}
         </label>
-        <label title={cubeshapeDisableReason ?? tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !inCubeshape(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShapeMemory(e.target.checked)} /> {t('options.stayInCS')}</label>
+        <label title={cubeshapeDisableReason ?? tooltips.cubeshape}><input type="checkbox" checked={cubeShape} disabled={running || !isGoodSquares(cubeState) || cubeshapeBlockedBy2Gen} onChange={(e) => setCubeShapeMemory(e.target.checked)} /> {t('options.stayInCS')}</label>
       </div>
       <div className="limit-grid">
         <label title={tooltips.maxX}>{t('options.maxTop')}

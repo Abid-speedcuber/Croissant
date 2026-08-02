@@ -27,7 +27,7 @@ export function getParityOdd(pos: number[]): boolean {
   return p;
 }
 
-export function inCubeshape(state: CubeState) {
+export function isGoodSquares(state: CubeState): boolean {
   const rTop = getLayerR(state.position, 0);
   if (rTop < 0) return false;
   const rBot = getLayerR(state.position, 12);
@@ -36,6 +36,15 @@ export function inCubeshape(state: CubeState) {
   if (state.partial.some((v) => v !== 0)) return true;
   const odd = getParityOdd(state.position);
   return (rTop === rBot) === odd;
+}
+
+export function inCubeshape(state: CubeState): boolean {
+  const rTop = getLayerR(state.position, 0);
+  if (rTop < 0) return false;
+  const rBot = getLayerR(state.position, 12);
+  if (rBot < 0) return false;
+  if (rTop === 1 || rBot === 1) return false;
+  return true;
 }
 
 function turn(
