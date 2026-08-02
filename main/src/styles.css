@@ -1700,24 +1700,35 @@ body {
   width: min(720px, calc(100vw - 30px));
 }
 .favorites-modal.closing {
-  animation: fav-modal-out .4s steps(5,end) forwards;
+  animation: fav-modal-out .3s ease-in forwards;
   pointer-events: none;
 }
 .favorites-modal.opening {
-  animation: fav-modal-in .2s ease-out forwards;
+  animation: fav-modal-in .3s ease-out forwards;
   animation-play-state: paused;
 }
+.favorites-shade {
+  animation: fav-shade-in .3s ease-out forwards;
+}
+.favorites-shade.closing {
+  pointer-events: none;
+  animation: fav-shade-out .3s ease-in forwards;
+}
 @keyframes fav-modal-out {
-  0% { transform: scale(1); }
-  20% { transform: scale(0.55); }
-  40% { transform: scale(0.25); }
-  60% { transform: scale(0.08); }
-  80% { transform: scale(0.02); }
-  100% { transform: scale(0.003); }
+  from { transform: scale(1); }
+  to { transform: scale(0); }
 }
 @keyframes fav-modal-in {
   from { transform: scale(0); }
   to { transform: scale(1); }
+}
+@keyframes fav-shade-in {
+  from { background: rgba(0, 0, 0, 0); }
+  to { background: rgba(0, 0, 0, 0.62); }
+}
+@keyframes fav-shade-out {
+  from { background: rgba(0, 0, 0, 0.62); }
+  to { background: rgba(0, 0, 0, 0); }
 }
 .favorite-save {
   display: block;

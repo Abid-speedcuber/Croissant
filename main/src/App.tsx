@@ -2282,7 +2282,7 @@ export default function App() {
           </div>
         </div>
       </div>}
-      {(favoritesOpen || favoritesClosing) && <div className={"modal-shade" + (favoritesClosing ? " closing" : "")} style={favoritesClosing ? { background: "transparent", pointerEvents: "none" } : {}} onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
+      {(favoritesOpen || favoritesClosing) && <div className={"modal-shade favorites-shade" + (favoritesClosing ? " closing" : "")} onPointerDown={(e) => { favShadeStartRef.current = e.target; }} onPointerUp={(e) => { favShadeEndRef.current = e.target; }} onClick={() => {
         const startOutside = !favShadeStartRef.current || !(favShadeStartRef.current as Element).closest(".favorites-modal");
         const endOutside = !favShadeEndRef.current || !(favShadeEndRef.current as Element).closest(".favorites-modal");
         if (startOutside && endOutside) beginCloseFavorites();
