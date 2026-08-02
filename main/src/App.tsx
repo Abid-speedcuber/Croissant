@@ -2016,17 +2016,14 @@ export default function App() {
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              autoComplete="off"
+              name="sq1opt-page-index"
+              id="sq1opt-page-index"
+              autoComplete="one-time-code"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
               value={pageInput}
-              aria-label={t('btn.pageNumber')}
-              onFocus={(event) => {
-                pageInputFocused.current = true;
-                const el = event.target;
-                requestAnimationFrame(() => el.select());
-              }}
+              aria-label={t('btn.goToPage')}
               onBlur={() => { pageInputFocused.current = false; commitPageInput(); }}
               onChange={(event) => setPageInput(event.target.value.replace(/\D/g, "").slice(0, 6))}
               onKeyDown={(event) => { if (event.key === "Enter") commitPageInput(); }}
