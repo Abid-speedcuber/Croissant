@@ -2016,6 +2016,10 @@ export default function App() {
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               value={pageInput}
               aria-label={t('btn.pageNumber')}
               onFocus={(event) => {
