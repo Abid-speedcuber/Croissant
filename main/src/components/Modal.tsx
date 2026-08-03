@@ -287,6 +287,7 @@ export function Modal({
         <div className="modal-section-title">{t('modal.howToUse.sectionFavorites')}</div>
         <p>{renderMarkup(t('modal.howToUse.favIntro'))}</p>
         <p>{t('modal.howToUse.favAdd')}</p>
+        <p>{renderMarkup(t('modal.howToUse.favSaveAll'))}</p>
         <p>{renderMarkup(t('modal.howToUse.favBinId'))}</p>
         <p>{t('modal.howToUse.favInside')}</p>
         <ul>
