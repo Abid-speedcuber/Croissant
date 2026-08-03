@@ -569,6 +569,36 @@ export default function App() {
   const [tableBusyTick, setTableBusyTick] = useState(0);
   const [outputToolsFaded, setOutputToolsFaded] = useState(false);
   const [debugTick, setDebugTick] = useState(0);
+  // Search/filter panel for narrowing the terminal & table down to matching algs.
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
+  const [filterMatchCase, setFilterMatchCase] = useState(true);
+  const [filterRegexMode, setFilterRegexMode] = useState(false);
+  const [filterResults, setFilterResults] = useState<Solution[] | null>(null);
+  const [filterAppliedQuery, setFilterAppliedQuery] = useState("");
+  const [filterSearching, setFilterSearching] = useState(false);
+  const [filterInvalid, setFilterInvalid] = useState(false);
+  const filterSearchIdRef = useRef(0);
+  const filterInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    try {
+      const storedCase = localStorage.getItem("sq1opt.filterMatchCase");
+      if (storedCase !== null) setFilterMatchCase(storedCase === "1");
+      const storedRegex = localStorage.getItem("sq1opt.filterRegex");
+      if (storedRegex !== null) setFilterRegexMode(storedRegex === "1");
+    } catch { /* localStorage unavailable */ }
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("sq1opt.filterMatchCase", filterMatchCase ? "1" : "0"); } catch { /* localStorage unavailable */ }
+  }, [filterMatchCase]);
+  useEffect(() => {
+    try { localStorage.setItem("sq1opt.filterRegex", filterRegexMode ? "1" : "0"); } catch { /* localStorage unavailable */ }
+  }, [filterRegexMode]);
+  useEffect(() => {
+    if (filterOpen) requestAnimationFrame(() => filterInputRef.current?.focus());
+  }, [filterOpen]);
+  // Independent of filterOpen so hiding the overlay (✕) keeps the filter applied.
+  const filterActive = filterAppliedQuery.trim() !== "" && filterResults !== null;
   const beginCloseFavorites = () => {
     if (favoritesClosing) return;
     const heartBtn = document.querySelector<HTMLElement>('.top-favorites-button');
@@ -882,7 +912,7 @@ export default function App() {
     }, PAGE_SWITCHER_COOLDOWN_MS);
   };
   const goToPage = (next: number, edge: "top" | "bottom") => {
-    if (useLessRamRef.current && !isViewInRam(next, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && useLessRamRef.current && !isViewInRam(next, totalCountRefs())) setIsRestoring(true);
     setPage(next);
     pageScrollEdgeRef.current = edge;
     if (running && next === totalPages - 1) {
@@ -986,7 +1016,7 @@ export default function App() {
     setFollowTerminal(false);
     isSwitchingViewRef.current = true;
     restoreScrollRef.current = tableScrollPositionRef.current;
-    if (useLessRamRef.current && !isViewInRam(tablePageRef.current, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && useLessRamRef.current && !isViewInRam(tablePageRef.current, totalCountRefs())) setIsRestoring(true);
     setPage(tablePageRef.current);
     setTableView(true);
   };
@@ -1002,7 +1032,7 @@ export default function App() {
     setFollowTerminal(false);
     isSwitchingViewRef.current = true;
     restoreScrollRef.current = terminalScrollPositionRef.current;
-    if (useLessRamRef.current && !isViewInRam(terminalPageRef.current, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && useLessRamRef.current && !isViewInRam(terminalPageRef.current, totalCountRefs())) setIsRestoring(true);
     setPage(terminalPageRef.current);
     setTableView(false);
   };
@@ -1055,10 +1085,10 @@ export default function App() {
   }, [pageSize, showAll]);
   useEffect(() => {
     if (!settingsReady.current) return;
-    if (useLessRam && !isViewInRam(page, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && useLessRam && !isViewInRam(page, totalCountRefs())) setIsRestoring(true);
     void syncOffload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solutions, page, pageSize, useLessRam, showAll, running]);
+  }, [solutions, page, pageSize, useLessRam, showAll, running, filterActive]);
   useEffect(() => {
     const onMouseDown = (event: MouseEvent) => {
       const pill = pageSwitcherRef.current;
@@ -1600,6 +1630,13 @@ export default function App() {
     setOffloadedTotal(0);
     setPendingTailCount(0);
     setIsRestoring(false);
+    filterSearchIdRef.current++;
+    setFilterOpen(false);
+    setFilterQuery("");
+    setFilterResults(null);
+    setFilterAppliedQuery("");
+    setFilterSearching(false);
+    setFilterInvalid(false);
     if (useLessRamRef.current) void clearOffloadedSolutions();
     seenRaw.current.clear();
     seenDisplay.current.clear();
@@ -1854,21 +1891,112 @@ export default function App() {
     const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
     return { ...solution, display, alg: lineAlg(display) };
   };
+  // Abbreviates large counts to 3 sig figs with a k/m/b suffix, trimming trailing zeros
+  const formatCount = (n: number): string => {
+    const units: [number, string][] = [[1e9, "b"], [1e6, "m"], [1e3, "k"]];
+    for (const [value, suffix] of units) {
+      if (n >= value) {
+        const scaled = n / value;
+        const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+        return `${scaled.toFixed(digits).replace(/\.?0+$/, "")}${suffix}`;
+      }
+    }
+    return `${n}`;
+  };
+  // Scans all solutions (including offloaded/low-RAM chunks) and matches
+  // against the displayed alg text (never the abid-barred glyphs) so the filter
+  // covers everything, not just the currently loaded page.
+  const runFilterSearch = async (query: string, id: number) => {
+    let matcher: (alg: string) => boolean;
+    if (filterRegexMode) {
+      let re: RegExp;
+      try {
+        re = new RegExp(query, filterMatchCase ? "" : "i");
+      } catch {
+        if (id !== filterSearchIdRef.current) return;
+        setFilterInvalid(true);
+        setFilterResults([]);
+        setFilterAppliedQuery(query);
+        setFilterSearching(false);
+        setPage(0);
+        return;
+      }
+      matcher = (alg) => re.test(alg);
+    } else {
+      const needle = filterMatchCase ? query : query.toLowerCase();
+      matcher = (alg) => (filterMatchCase ? alg : alg.toLowerCase()).includes(needle);
+    }
+    const seen = new Set<string>();
+    const matches: Solution[] = [];
+    const consider = (solution: Solution) => {
+      const alg = displaySolution(solution).alg;
+      if (seen.has(alg)) return;
+      seen.add(alg);
+      if (matcher(alg)) matches.push(solution);
+    };
+    if (useLessRamRef.current) {
+      const chunks = [...offloadedChunksRef.current.entries()].sort((a, b) => a[0] - b[0]);
+      for (const [start] of chunks) {
+        if (id !== filterSearchIdRef.current) return;
+        const raw = await readOffloadedChunk(start);
+        if (raw) for (const s of raw) consider(s);
+      }
+      for (const s of pendingTailRef.current ?? []) consider(s);
+    }
+    for (const solution of solutionsRef.current) consider(solution);
+    if (id !== filterSearchIdRef.current) return;
+    setFilterInvalid(false);
+    setFilterResults(matches);
+    setFilterAppliedQuery(query);
+    setFilterSearching(false);
+    setPage(0);
+  };
+  useEffect(() => {
+    if (!filterOpen) return;
+    if (!filterQuery.trim()) {
+      filterSearchIdRef.current++;
+      setFilterResults(null);
+      setFilterAppliedQuery("");
+      setFilterSearching(false);
+      setFilterInvalid(false);
+      return;
+    }
+    setFilterSearching(true);
+    setFilterInvalid(false);
+    const id = ++filterSearchIdRef.current;
+    // Delay the actual scan until typing settles, since it can walk the entire
+    // (potentially offloaded) result set.
+    const timer = window.setTimeout(() => { void runFilterSearch(filterQuery, id); }, 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterOpen, filterQuery, filterMatchCase, filterRegexMode, karn, normalize]);
+  // Pagination targets the filtered set (already fully materialized in memory
+  // by runFilterSearch) rather than the raw total when a filter is active.
+  const activeTotalCount = filterActive ? filterResults!.length : totalCount;
   const totalPages = showAll ? 1 : (() => {
-    const raw = Math.max(1, Math.ceil(totalCount / pageSize));
+    const raw = Math.max(1, Math.ceil(activeTotalCount / pageSize));
     // Intentional feature by Abid: fold a tiny trailing overflow (<10% of a page)
     // into the previous page instead of creating a nearly-empty last page.
-    const remainder = totalCount % pageSize;
+    const remainder = activeTotalCount % pageSize;
     return remainder > 0 && remainder < pageSize * 0.1 ? Math.max(1, raw - 1) : raw;
   })();
   const clampedPage = Math.min(page, totalPages - 1);
   const pageStart = clampedPage * pageSize;
-  const pageEnd = showAll ? totalCount : clampedPage === totalPages - 1 ? totalCount : Math.min(pageStart + pageSize, totalCount);
+  const pageEnd = showAll ? activeTotalCount : clampedPage === totalPages - 1 ? activeTotalCount : Math.min(pageStart + pageSize, activeTotalCount);
   useEffect(() => {
     if (pageInputFocused.current) return;
     setPageInput(String(clampedPage + 1));
   }, [clampedPage]);
   const pageSolutions = (() => {
+    if (filterActive) {
+      // filterResults is already deduplicated by alg during the search scan.
+      const rows: DisplaySolution[] = [];
+      for (let i = pageStart; i < pageEnd; i++) {
+        const solution = filterResults![i];
+        if (solution) rows.push(displaySolution(solution));
+      }
+      return rows;
+    }
     const seen = new Set<string>();
     const rows: DisplaySolution[] = [];
     const ramOffset = useLessRam ? ramOffsetRef.current : 0;
@@ -2063,12 +2191,53 @@ export default function App() {
         </div>
         <div className="output-tools-right">
           {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}>⏱</button>}
+          <button
+            className={`filter-trigger ${filterOpen || filterActive ? "active" : ""}`}
+            title="Find"
+            disabled={running || !totalCount}
+            onClick={() => setFilterOpen((v) => !v)}
+          >⌕</button>
           <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}>⧉</button>
           <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
           <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}>×</button>
           <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
         </div>
       </div>
+      {filterOpen && <div className="filter-overlay" role="search">
+        <input
+          ref={filterInputRef}
+          type="text"
+          className="filter-input"
+          placeholder="Find"
+          value={filterQuery}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          onChange={(event) => setFilterQuery(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setFilterOpen(false); } }}
+        />
+        <span className={`filter-count ${filterInvalid ? "filter-count-invalid" : ""}`}>
+          {filterQuery.trim() === "" ? "No input" :
+            filterInvalid ? "Invalid pattern" :
+            filterSearching ? <><span className="filter-spinner" aria-hidden="true" /> results</> :
+            `${formatCount(filterResults ? filterResults.length : 0)} results`}
+        </span>
+        <button
+          type="button"
+          className={`filter-toggle ${filterMatchCase ? "active" : ""}`}
+          title="Match Case"
+          aria-pressed={filterMatchCase}
+          onClick={() => setFilterMatchCase((v) => !v)}
+        >Aa</button>
+        <button
+          type="button"
+          className={`filter-toggle ${filterRegexMode ? "active" : ""}`}
+          title="Use Regular Expression"
+          aria-pressed={filterRegexMode}
+          onClick={() => setFilterRegexMode((v) => !v)}
+        >.*</button>
+        <button type="button" className="filter-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setFilterOpen(false)}>✕</button>
+      </div>}
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}>⌄</button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
@@ -2112,11 +2281,13 @@ export default function App() {
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
           }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
+        {filterActive && !filterResults!.length && <div className="empty">No algorithms match your search.</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
         {useLessRam && isRestoring && <div className="table-busy"><span className="table-busy-spinner" /><span>{t('terminal.loadingPage')}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll} onMouseDown={markTerminalUserActive} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; scheduleTerminalUserInactive(); }}>
         {useLessRam && isRestoring && <span className="terminal-line terminal-line-status">{t('terminal.loadingPage')}</span>}
         {!outputLines.length && !totalCount && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
+        {filterActive && !filterResults!.length && <span className="terminal-line terminal-line-empty">No algorithms match your search.</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`}
           onMouseDown={(event) => {

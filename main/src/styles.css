@@ -1446,6 +1446,9 @@ body {
 .output-tools button:hover {
   background: #345078;
 }
+.output-tools .filter-trigger {
+  font-size: 15px;
+}
 .output-tools .generator-toggle {
   font-size: 11px;
 }
@@ -1623,6 +1626,83 @@ body {
 }
 .page-switcher-total {
   color: #718198;
+}
+.filter-overlay {
+  position: absolute;
+  top: 38px;
+  right: 8px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: rgba(17, 28, 43, 0.94);
+  border: 1px solid #40516a;
+  border-radius: 7px;
+  box-shadow: 0 10px 26px #0008;
+}
+.filter-input {
+  width: 200px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid #536178;
+  border-radius: 3px;
+  background: #0a0f18;
+  color: #e8ecf4;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.filter-input:focus {
+  border-color: #9ac7f2;
+}
+.filter-count {
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #718198;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.filter-count-invalid {
+  color: #e08585;
+}
+.filter-toggle,
+.filter-close {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #536178;
+  border-radius: 3px;
+  background: #27303d;
+  color: #9db7d7;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.filter-toggle:hover,
+.filter-close:hover {
+  background: #345078;
+}
+.filter-toggle.active {
+  background: #345078;
+  border-color: #9ac7f2;
+  color: #9ac7f2;
+}
+.filter-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #48617f;
+  border-top-color: #9ac7f2;
+  border-radius: 50%;
+  animation: table-spin 0.75s linear infinite;
+}
+.output-tools button.active {
+  background: #345078;
+  border-color: #9ac7f2;
+  color: #9ac7f2;
 }
 .solution code.abid,
 .abid-inline {
