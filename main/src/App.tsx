@@ -2614,7 +2614,7 @@ export default function App() {
       {contextMenu && <div className="solution-context" style={{
         left: Math.max(0, Math.min(contextMenu.x, window.innerWidth - 180)),
         top: Math.max(0, Math.min(contextMenu.y, window.innerHeight - 80)),
-      }} onClick={(event) => event.stopPropagation()}>
+      }} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
         <button onClick={() => { void navigator.clipboard.writeText(lineWithoutBracket(contextMenu.alg)); setContextMenu(null); }}>{t('btn.copyAlg')}</button>
         <button onClick={() => {
           const key = currentRunKey();
