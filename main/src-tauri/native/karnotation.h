@@ -13,97 +13,62 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <regex>
+#include <stdexcept>
 
 // ---------------------------------------------------------------------------
 // KARN_TO_WCA  — Karnotation name (space-padded) -> numeric WCA slash format
 // ---------------------------------------------------------------------------
 static const std::map<std::string, std::string> KARN_TO_WCA = {
-    {" U4 ", " / U U' U U' / "},
-    {" U4' ", " / U' U U' U / "},
-    {" D4 ", " / D D' D D' / "},
-    {" D4' ", " / D' D D' D / "},
-    {" u4 ", " / u u' u u' / "},
-    {" u4' ", " / u' u u' u / "},
-    {" d4 ", " / d d' d d' / "},
-    {" d4' ", " / d' d d' d / "},
-    {" U3 ", " / U U' U / "},
-    {" U3' ", " / U' U U' / "},
-    {" D3 ", " / D D' D / "},
-    {" D3' ", " / D' D D' / "},
-    {" u3 ", " / u u' u / "},
-    {" u3' ", " / u' u u' / "},
-    {" d3 ", " / d d' d / "},
-    {" d3' ", " / d' d d' / "},
-    {" F3 ", " / F F' F / "},
-    {" F3' ", " / F' F F' / "},
-    {" f3 ", " / f f' f / "},
-    {" f3' ", " / f' f f' / "},
-    {" W ", " / U U' / "},
-    {" W' ", " / U' U / "},
-    {" B ", " / D D' / "},
-    {" B' ", " / D' D / "},
-    {" w ", " / u u' / "},
-    {" w' ", " / u' u / "},
-    {" b ", " / d d' / "},
-    {" b' ", " / d' d / "},
-    {" F2 ", " / F F' / "},
-    {" F2' ", " / F' F / "},
-    {" f2 ", " / f f' / "},
-    {" f2' ", " / f' f / "},
-    {" UU ", " / U U / "},
-    {" UU' ", " / U' U' / "},
-    {" DD ", " / D D / "},
-    {" DD' ", " / D' D' / "},
-    {" T2 ", " / T T' / "},
-    {" T2' ", " / T' T / "},
-    {" t2 ", " / t t' / "},
-    {" t2' ", " / t' t / "},
-    {" U2 ", " /6,0/ "},
-    {" U2' ", " /6,0/ "},
-    {" D2 ", " /0,6/ "},
-    {" U2D ", " /6,3/ "},
-    {" U2D' ", " /6,-3/ "},
-    {" U2D2 ", " /6,6/ "},
-    {" UD2 ", " /3,6/ "},
-    {" U'D2 ", " /-3,6/ "},
-    {" U ", " /3,0/ "},
-    {" U' ", " /-3,0/ "},
-    {" D ", " /0,3/ "},
-    {" D' ", " /0,-3/ "},
-    {" E ", " /3,-3/ "},
-    {" E' ", " /-3,3/ "},
-    {" e ", " /3,3/ "},
-    {" e' ", " /-3,-3/ "},
-    {" u ", " /2,-1/ "},
-    {" u' ", " /-2,1/ "},
-    {" d ", " /-1,2/ "},
-    {" d' ", " /1,-2/ "},
-    {" F ", " /4,1/ "},
-    {" F' ", " /-4,-1/ "},
-    {" f ", " /1,4/ "},
-    {" f' ", " /-1,-4/ "},
-    {" T ", " /2,-4/ "},
-    {" T' ", " /-2,4/ "},
-    {" t ", " /4,-2/ "},
-    {" t' ", " /-4,2/ "},
-    {" m ", " /2,2/ "},
-    {" m' ", " /-2,-2/ "},
-    {" M ", " /1,1/ "},
-    {" M' ", " /-1,-1/ "},
-    {" u2 ", " /5,-1/ "},
-    {" u2' ", " /-5,1/ "},
-    {" d2 ", " /-1,5/ "},
-    {" d2' ", " /1,-5/ "},
-    {" K ", " /5,2/ "},
-    {" K' ", " /-5,-2/ "},
-    {" k ", " /2,5/ "},
-    {" k' ", " /-2,-5/ "},
-    {" U2'D ", " /6,3/ "},
-    {" U2'D' ", " /6,-3/ "},
-    {" \xc9\x87 ", " / U D / "},
-    {" \xc9\x87' ", " / U' D' / "},
-    {" \xc9\x86 ", " / U D' / "},
-    {" \xc9\x86' ", " / U' D / "},
+    {"U4", "U U' U U'"}, {"U4'", "U' U U' U"},
+    {"D4", "D D' D D'"}, {"D4'", "D' D D' D"},
+    {"u4", "u u' u u'"}, {"u4'", "u' u u' u"},
+    {"d4", "d d' d d'"}, {"d4'", "d' d d' d"},
+
+    {"U3", "U U' U"}, {"U3'", "U' U U'"},
+    {"D3", "D D' D"}, {"D3'", "D' D D'"},
+    {"u3", "u u' u"}, {"u3'", "u' u u'"},
+    {"d3", "d d' d"}, {"d3'", "d' d d'"},
+    {"F3", "F F' F"}, {"F3'", "F' F F'"},
+    {"f3", "f f' f"}, {"f3'", "f' f f'"},
+
+    {"W", "U U'"}, {"W'", "U' U"},
+    {"B", "D D'"}, {"B'", "D' D"},
+    {"w", "u u'"}, {"w'", "u' u"},
+    {"b", "d d'"}, {"b'", "d' d"},
+    {"F2", "F F'"}, {"F2'", "F' F"},
+    {"f2", "f f'"}, {"f2'", "f' f"},
+    {"UU", "U U"}, {"UU'", "U' U'"},
+    {"DD", "D D"}, {"DD'", "D' D'"},
+    {"T2", "T T'"}, {"T2'", "T' T"},
+    {"t2", "t t'"}, {"t2'", "t' t"},
+    {"E2", "E E'"}, {"E2'", "E' E"},
+    {"\xc9\x87", "U D"}, {"\xc9\x87'", "U' D'"},
+    {"\xc9\x86", "U D'"}, {"\xc9\x86'", "U' D"},
+
+    {"U2", "6,0"}, {"U2'", "6,0"},
+    {"D2", "0,6"},
+    {"U2D", "6,3"}, {"U2D'", "6,-3"},
+    {"U2'D", "6,3"}, {"U2'D'", "6,-3"},
+    {"U2D2", "6,6"},
+    {"UD2", "3,6"}, {"U'D2", "-3,6"},
+
+    {"U", "3,0"}, {"U'", "-3,0"},
+    {"D", "0,3"}, {"D'", "0,-3"},
+    {"E", "3,-3"}, {"E'", "-3,3"},
+    {"e", "3,3"}, {"e'", "-3,-3"},
+    {"u", "2,-1"}, {"u'", "-2,1"},
+    {"d", "-1,2"}, {"d'", "1,-2"},
+    {"F", "4,1"}, {"F'", "-4,-1"},
+    {"f", "1,4"}, {"f'", "-1,-4"},
+    {"T", "2,-4"}, {"T'", "-2,4"},
+    {"t", "4,-2"}, {"t'", "-4,2"},
+    {"m", "2,2"}, {"m'", "-2,-2"},
+    {"M", "1,1"}, {"M'", "-1,-1"},
+    {"u2", "5,-1"}, {"u2'", "-5,1"},
+    {"d2", "-1,5"}, {"d2'", "1,-5"},
+    {"K", "5,2"}, {"K'", "-5,-2"},
+    {"k", "2,5"}, {"k'", "-2,-5"},
 };
 
 // ---------------------------------------------------------------------------
@@ -244,86 +209,47 @@ static const std::vector<std::pair<std::string, std::string>> KARN_TO_HIGHKARN_O
 // SHORTHAND_TO_KARN  — shorthand key (alignment-suffixed) -> karn/numeric sequence
 // ---------------------------------------------------------------------------
 static const std::map<std::string, std::string> SHORTHAND_TO_KARN = {
-    {"bjj", "/U' e D'/"},
-    {"fjj", "/U e' D/"},
-    {"e2bjj", "/U' e' U'/"},
-    {"e2fjj", "/U e U/"},
-    {"nn", "/E E'/"},
-    {"jn", "/D4'/"},
-    {"nj", "/U4/"},
-    {"jj", "/U e' D/"},
-    {"bjj+e2", "/U' e' U'/"},
-    {"-nn", "/E' E/"},
-    {"-jn", "/D4/"},
-    {"-nj", "/D4'/"},
-    {"bpj10", "/d m' U/"},
-    {"bpj0-1", "/u' m D'/"},
-    {"fpj10", "/u m' D/"},
-    {"fpj0-1", "/d' m U'/"},
-    {"aa10", "/u m' u T'/"},
-    {"aa0-1", "/U m' U t'/"},
-    {"fadj10", "/D M' d'/"},
-    {"dadj10", "/D M' d'/"},
-    {"fadj0-1", "/U' M u/"},
-    {"u'adj0-1", "/U' M u/"},
-    {"badj10", "/U M' u'/"},
-    {"uadj10", "/U M' u'/"},
-    {"badj0-1", "/D' M d/"},
-    {"d'adj0-1", "/D' M d/"},
-    {"bb10", "/T u' e U'/"},
-    {"bb0-1", "/t d e' D/"},
-    {"fdd10", "/D e' d t/"},
-    {"fdd0-1", "/U' e u' T/"},
-    {"bdd10", "/U e' u T'/"},
-    {"bdd0-1", "/D' e d' t'/"},
-    {"ff10", "/d m' d M E/"},
-    {"ff0-1", "/u' m U' M T/"},
-    {"fv10", "/d4/"},
-    {"fv0-1", "/d4'/"},
-    {"vf10", "/u4/"},
-    {"vf0-1", "/u4'/"},
-    {"y2fv10", "/u d' u -5,4/"},
-    {"jf10", "/w D' u T'/"},
-    {"jf0-1", "/w' D u' T/"},
-    {"fj10", "/b U' d t/"},
-    {"fj0-1", "/b' U d' t'/"},
-    {"jr00", "/e' w e/"},
-    {"jr10", "/e' b e/"},
-    {"jr0-1", "/e' w' e/"},
-    {"jr1-1", "/e' b' e/"},
-    {"rj00", "/e b' e'/"},
-    {"rj10", "/e w e'/"},
-    {"rj0-1", "/e b' e'/"},
-    {"rj1-1", "/e w e'/"},
-    {"jv10", "/b D d d2'/"},
-    {"jv0-1", "/b' D' d' d2/"},
-    {"vj10", "/w U u u2'/"},
-    {"vj0-1", "/w' U' u' u2/"},
-    {"kk10", "/u m' U E'/"},
-    {"kk0-1", "/U m' u E'/"},
-    {"opp10", "/u2 u2'/"},
-    {"opp0-1", "/u2' u2/"},
-    {"pn10", "/T T'/"},
-    {"pn0-1", "/t t'/"},
-    {"px10", "/f' d3' f'/"},
-    {"px0-1", "/f d3 f/"},
-    {"xp10", "/F' u3' F'/"},
-    {"xp0-1", "/F u3 F/"},
-    {"tt10", "/d m' F' u2'/"},
-    {"fss10", "/u M D' E'/"},
-    {"fss0-1", "/D' M u E'/"},
-    {"bss10", "/D M' u' E/"},
-    {"bss0-1", "/U' M d E/"},
-    {"vv10", "/u M u m' E'/"},
-    {"zz10", "/u M t' M D'/"},
-    {"zz0-1", "/D' M t' M u/"},
-    {"30adj10", "/U M' u'/"},
-    {"3adj10", "/U M' u'/"},
-    {"03adj10", "/D M' d'/"},
-    {"-30adj0-1", "/U' M u/"},
-    {"obopp00", "1,0/M' F M' F M'/0,1"},
-    {"oaopp1-1", "0,1/M' u' M' u' M'/0,1"},
-    {"done!00", "0,0"},
+    {"bjj", "U' e D'"}, {"fjj", "U e' D"},
+    {"e2bjj", "U' e' U'"}, {"e2fjj", "U e U"},
+    {"nn", "E E'"},
+    {"jn", "D4'"}, {"nj", "U4"},
+    {"jj", "U e' D"}, {"bjj+e2", "U' e' U'"},
+    {"-nn", "E' E"},
+    {"-jn", "D4"}, {"-nj", "D4'"},
+    {"bpj10", "d m' U"}, {"bpj0-1", "u' m D'"},
+    {"fpj10", "u m' D"}, {"fpj0-1", "d' m U'"},
+    {"aa10", "u m' u T'"}, {"aa0-1", "U m' U t'"},
+    {"fadj10", "D M' d'"}, {"dadj10", "D M' d'"},
+    {"fadj0-1", "U' M u"}, {"u'adj0-1", "U' M u"},
+    {"badj10", "U M' u'"}, {"uadj10", "U M' u'"},
+    {"badj0-1", "D' M d"}, {"d'adj0-1", "D' M d"},
+    {"bb10", "T u' e U'"}, {"bb0-1", "t d e' D"},
+    {"fdd10", "D e' d t"}, {"fdd0-1", "U' e u' T"},
+    {"bdd10", "U e' u T'"}, {"bdd0-1", "D' e d' t'"},
+    {"ff10", "d m' d M E"}, {"ff0-1", "u' m U' M T"},
+    {"fv10", "d4"}, {"fv0-1", "d4'"},
+    {"vf10", "u4"}, {"vf0-1", "u4'"},
+    {"y2fv10", "u d' u -5,4"},
+    {"jf10", "w D' u T'"}, {"jf0-1", "w' D u' T"},
+    {"fj10", "b U' d t"}, {"fj0-1", "b' U d' t'"},
+    {"jr00", "e' w e"}, {"jr10", "e' b e"},
+    {"jr0-1", "e' w' e"}, {"jr1-1", "e' b' e"},
+    {"rj00", "e b' e'"}, {"rj10", "e w e'"},
+    {"rj0-1", "e b' e'"}, {"rj1-1", "e w e'"},
+    {"jv10", "b D d d2'"}, {"jv0-1", "b' D' d' d2"},
+    {"vj10", "w U u u2'"}, {"vj0-1", "w' U' u' u2"},
+    {"kk10", "u m' U E'"}, {"kk0-1", "U m' u E'"},
+    {"opp10", "u2 u2'"}, {"opp0-1", "u2' u2"},
+    {"pn10", "T T'"}, {"pn0-1", "t t'"},
+    {"px10", "f' d3' f'"}, {"px0-1", "f d3 f"},
+    {"xp10", "F' u3' F'"}, {"xp0-1", "F u3 F"},
+    {"tt10", "d m' F' u2'"},
+    {"fss10", "u M D' E'"}, {"fss0-1", "D' M u E'"},
+    {"bss10", "D M' u' E"}, {"bss0-1", "U' M d E"},
+    {"vv10", "u M u m' E'"},
+    {"zz10", "u M t' M D'"}, {"zz0-1", "D' M t' M u"},
+    {"30adj10", "U M' u'"}, {"-30adj0-1", "U' M u"},
+    {"03adj10", "D M' d'"}, {"0-3adj0-1", "D' M d"},
 };
 
 // ---------------------------------------------------------------------------
@@ -465,18 +391,28 @@ inline std::unordered_map<std::string, std::string> &getKarnToHighKarnOCSMap()
     return map;
 }
 
-// Helper: Apply KARN_TO_HIGHKARN replacements with hash map optimization
+// Helper: These KARN_TO_KARN replacements are applied longest-first so that a
+// superstring key (e.g. " U U' U U' " -> U4) is tried before any substring key
+// (e.g. " U U' " -> W). Hash-map iteration order is arbitrary, so sort keys by
+// descending length before applying.
 inline std::string applyHighKarnReplacements(std::string str, const std::unordered_map<std::string, std::string> &map)
 {
+    std::vector<std::string> keys;
+    keys.reserve(map.size());
+    for (const auto &entry : map) keys.push_back(entry.first);
+    std::sort(keys.begin(), keys.end(), [](const std::string &a, const std::string &b) {
+        return a.size() > b.size();
+    });
+
     std::string prev;
     do
     {
         prev = str;
-        for (const auto &[k, v] : map)
+        for (const auto &k : keys)
         {
-            str = replaceAll(str, k, v);
-            if (str != prev)
-                break;
+            auto it = map.find(k);
+            str = replaceAll(str, k, it->second);
+            if (str != prev) break;
         }
     } while (str != prev);
     return str;
@@ -528,176 +464,231 @@ inline std::string addCommasToMove(const std::string &move)
     }
 }
 
+// Applies addCommasToMove to every space-separated token in a string.
+inline std::string addCommas(const std::string &spaced)
+{
+    std::istringstream iss(spaced);
+    std::string tok, out;
+    bool first = true;
+    while (iss >> tok)
+    {
+        if (!first)
+            out += ' ';
+        out += addCommasToMove(tok);
+        first = false;
+    }
+    return out;
+}
+
 inline std::string getAlignment(bool topA, bool bottomA)
 {
     return std::string(topA ? "1" : "0") + std::string(bottomA ? "-1" : "0");
 }
 
-// ---------------------------------------------------------------------------
-// unkarnifyHelp — apply KARN_TO_WCA dict to a space-separated token string
-// and normalise to a slash-separated numeric string.
-// ---------------------------------------------------------------------------
-inline std::string unkarnifyHelp(const std::string &scramble)
+// Splits on slice chars (/ \ |) and spaces, resolves each token through
+// KARN_TO_WCA in two passes (high-karn -> move sequence, then leftover
+// base-karn -> numeric), and rejoins with slashes. A leading/trailing slice
+// is added automatically when the alg starts/ends on a recognized karn token.
+inline std::string unkarnifyHelp(const std::string &algIn)
 {
-    std::string s = dictReplace(" " + scramble + " ", KARN_TO_WCA);
-    s = trimStr(s);
+    std::string alg = trimStr(algIn);
+    alg = replaceAll(alg, "(", "");
+    alg = replaceAll(alg, ")", "");
 
-    std::string prev;
-    do
     {
-        prev = s;
-        s = replaceAll(s, " / ", "/");
-        s = replaceAll(s, "/ /", "/");
-        s = replaceAll(s, " /", "/");
-        s = replaceAll(s, "/ ", "/");
-        s = replaceAll(s, "//", "/");
-    } while (s != prev);
-
-    for (char &c : s)
-        if (c == ' ')
-            c = '/';
-
-    do
-    {
-        prev = s;
-        s = replaceAll(s, "//", "/");
-    } while (s != prev);
-
-    return s;
-}
-
-// ---------------------------------------------------------------------------
-// replaceShorthands — resolve alignment-dependent shorthand tokens in a
-// slash-separated string.
-// ---------------------------------------------------------------------------
-inline std::string replaceShorthands(std::string scramble)
-{
-    std::vector<std::string> moves;
-    {
-        std::istringstream ss(scramble);
-        std::string tok;
-        while (std::getline(ss, tok, '/'))
-            moves.push_back(tok);
-    }
-
-    bool allKnown = true;
-    for (const auto &m : moves)
-    {
-        if (m.empty())
-            continue;
-        bool numeric = std::isdigit((unsigned char)m[0]) || m[0] == '-';
-        bool inDict = KARN_TO_WCA.count(" " + m + " ") > 0;
-        if (!numeric && !inDict)
-        {
-            allKnown = false;
-            break;
-        }
-    }
-    if (allKnown)
-    {
-        std::string spaced = scramble;
-        for (char &c : spaced)
-            if (c == '/')
-                c = ' ';
         std::string prev;
         do
         {
-            prev = spaced;
-            spaced = replaceAll(spaced, "  ", " ");
-        } while (spaced != prev);
-        return unkarnifyHelp(trimStr(spaced));
+            prev = alg;
+            alg = replaceAll(alg, " / ", "/");
+            alg = replaceAll(alg, " \\ ", "\\");
+            alg = replaceAll(alg, " | ", "|");
+        } while (alg != prev);
+    }
+
+    auto isDelim = [](char c)
+    { return c == '/' || c == '\\' || c == '|' || c == ' '; };
+
+    bool hasDelim = false;
+    for (char c : alg)
+        if (isDelim(c)) { hasDelim = true; break; }
+
+    std::string firstMove, lastMove;
+    if (!hasDelim)
+    {
+        firstMove = lastMove = alg;
+    }
+    else
+    {
+        size_t p = 0;
+        while (p < alg.size() && !isDelim(alg[p])) p++;
+        firstMove = alg.substr(0, p);
+        size_t q = alg.size();
+        while (q > 0 && !isDelim(alg[q - 1])) q--;
+        lastMove = alg.substr(q);
+    }
+
+    bool startsSliceChar = !alg.empty() && (alg[0] == '/' || alg[0] == '\\' || alg[0] == '|');
+    std::string startingSlice = startsSliceChar ? std::string(1, alg[0])
+                                                 : (KARN_TO_WCA.count(firstMove) ? "/" : "");
+
+    bool endsSliceChar = !alg.empty() && alg.back() == '/';
+    std::string endingSlice = endsSliceChar ? "/"
+                                             : (KARN_TO_WCA.count(lastMove) ? "/" : "");
+
+    // collapse delimiter runs to a single space
+    std::string spaced;
+    bool inRun = false;
+    for (char c : alg)
+    {
+        if (isDelim(c))
+        {
+            if (!inRun) { spaced += ' '; inRun = true; }
+        }
+        else
+        {
+            spaced += c;
+            inRun = false;
+        }
+    }
+    spaced = addCommas(trimStr(spaced));
+
+    std::vector<std::string> tokens;
+    {
+        std::istringstream iss(spaced);
+        std::string t;
+        while (iss >> t) tokens.push_back(t);
+    }
+
+    // pass 1: karn token -> its (possibly multi-token) WCA value
+    std::vector<std::string> expanded;
+    for (const auto &tok : tokens)
+    {
+        auto it = KARN_TO_WCA.find(tok);
+        if (it != KARN_TO_WCA.end())
+        {
+            std::istringstream vs(it->second);
+            std::string sub;
+            while (vs >> sub) expanded.push_back(sub);
+        }
+        else
+        {
+            expanded.push_back(tok);
+        }
+    }
+
+    // pass 2: resolve leftover base-karn names from pass 1 (e.g. "U" -> "3,0")
+    for (auto &tok : expanded)
+    {
+        auto it = KARN_TO_WCA.find(tok);
+        if (it != KARN_TO_WCA.end()) tok = it->second;
+    }
+
+    std::string joined;
+    for (size_t i = 0; i < expanded.size(); i++)
+    {
+        if (i) joined += "/";
+        joined += expanded[i];
+    }
+
+    std::string result = startingSlice + joined + endingSlice;
+    result.erase(std::remove(result.begin(), result.end(), ' '), result.end());
+    return result;
+}
+
+inline std::string replaceShorthands(std::string alg)
+{
+    std::vector<std::string> moves;
+    {
+        std::string cur;
+        for (char c : alg)
+        {
+            if (c == '/' || c == '\\' || c == '|')
+            {
+                moves.push_back(cur);
+                cur.clear();
+            }
+            else
+                cur += c;
+        }
+        moves.push_back(cur);
     }
 
     bool topA = false, bottomA = false;
+
     for (const auto &move : moves)
     {
         if (move.empty())
             continue;
-        if (move.find(',') != std::string::npos)
+
+        size_t comma = move.find(',');
+        if (comma != std::string::npos)
         {
-            size_t comma = move.find(',');
             try
             {
                 int u = std::stoi(move.substr(0, comma));
                 int d = std::stoi(move.substr(comma + 1));
-                if (((u % 3) + 3) % 3 != 0)
-                    topA = !topA;
-                if (((d % 3) + 3) % 3 != 0)
-                    bottomA = !bottomA;
+                if (u % 3 != 0) topA = !topA;
+                if (d % 3 != 0) bottomA = !bottomA;
             }
-            catch (...)
-            {
-            }
+            catch (...) {}
+            continue;
         }
-        else
+
+        std::string lower = move;
+        for (char &c : lower) c = (char)std::tolower((unsigned char)c);
+        std::string key = SHORTHAND_ALIGN_INDEPENDENT.count(lower)
+            ? lower
+            : lower + getAlignment(topA, bottomA);
+
+        auto it = SHORTHAND_TO_KARN.find(key);
+        if (it == SHORTHAND_TO_KARN.end())
+            throw std::runtime_error("replaceShorthands: \"" + move + "\" with alignment " +
+                                      getAlignment(topA, bottomA) + " is not defined.");
+
+        const std::string &replacement = it->second;
+        size_t pos = alg.find(move);
+        if (pos != std::string::npos)
+            alg = alg.substr(0, pos) + replacement + alg.substr(pos + move.size());
+
+        for (const auto &sub : splitStr(unkarnifyHelp(replacement), '/'))
         {
-            std::string lower = move;
-            for (char &c : lower)
-                c = (char)std::tolower((unsigned char)c);
-
-            std::string key = SHORTHAND_ALIGN_INDEPENDENT.count(lower)
-                                  ? lower
-                                  : lower + getAlignment(topA, bottomA);
-
-            if (!SHORTHAND_TO_KARN.count(key))
-                return scramble;
-
-            const std::string &repl = SHORTHAND_TO_KARN.at(key);
-            scramble = replaceAll(scramble, move, repl);
-
-            std::string inner = repl;
-            if (!inner.empty() && inner.front() == '/')
-                inner = inner.substr(1);
-            if (!inner.empty() && inner.back() == '/')
-                inner.pop_back();
-            std::string expanded = unkarnifyHelp(inner);
-            std::istringstream ss2(expanded);
-            std::string sub;
-            while (std::getline(ss2, sub, '/'))
+            if (sub.empty()) continue;
+            size_t c2 = sub.find(',');
+            if (c2 == std::string::npos) continue;
+            try
             {
-                if (sub.empty())
-                    continue;
-                size_t c2 = sub.find(',');
-                if (c2 == std::string::npos)
-                    continue;
-                try
-                {
-                    int u2 = std::stoi(sub.substr(0, c2));
-                    int d2 = std::stoi(sub.substr(c2 + 1));
-                    if (((u2 % 3) + 3) % 3 != 0)
-                        topA = !topA;
-                    if (((d2 % 3) + 3) % 3 != 0)
-                        bottomA = !bottomA;
-                }
-                catch (...)
-                {
-                }
+                int u2 = std::stoi(sub.substr(0, c2));
+                int d2 = std::stoi(sub.substr(c2 + 1));
+                if (u2 % 3 != 0) topA = !topA;
+                if (d2 % 3 != 0) bottomA = !bottomA;
             }
+            catch (...) {}
         }
     }
 
+    return unkarnifyHelp(alg);
+}
+
+// Expands "(X X')3" -> "X X' X X' X X'" style repeat groups.
+inline std::string expandRepeatGroups(const std::string &algIn)
+{
+    static const std::regex re(R"(\(([^()]*)\)(\d+))");
+    std::string result = algIn;
+    std::smatch m;
+    while (std::regex_search(result, m, re))
     {
-        std::string prev;
-        do
+        int count = std::stoi(m[2].str());
+        const std::string &inner = m[1].str();
+        std::string repeated;
+        for (int i = 0; i < count; i++)
         {
-            prev = scramble;
-            scramble = replaceAll(scramble, " /", "/");
-            scramble = replaceAll(scramble, "/ ", "/");
-            scramble = replaceAll(scramble, "//", "/");
-        } while (scramble != prev);
+            if (i) repeated += ' ';
+            repeated += inner;
+        }
+        result = m.prefix().str() + repeated + m.suffix().str();
     }
-    for (char &c : scramble)
-        if (c == '/')
-            c = ' ';
-    {
-        std::string prev;
-        do
-        {
-            prev = scramble;
-            scramble = replaceAll(scramble, "  ", " ");
-        } while (scramble != prev);
-    }
-    return unkarnifyHelp(trimStr(scramble));
+    return result;
 }
 
 // ===========================================================================
@@ -716,185 +707,92 @@ inline std::string unkarnify(const std::string &algIn)
     s = replaceAll(s, "8", "-4");
     s = replaceAll(s, "7", "-5");
 
-    bool firstSlice = (!s.empty() && (s[0] == '/' || s[0] == '\\'));
-    if (!firstSlice)
-    {
-        std::istringstream iss(s);
-        std::string tok;
-        if (iss >> tok)
-        {
-            if (KARN_TO_WCA.count(" " + tok + " "))
-                firstSlice = true;
-        }
-    }
-    bool lastSlice = false;
-    {
-        std::istringstream iss(s);
-        std::string last, tok;
-        while (iss >> tok)
-            last = tok;
-        if (!last.empty() && KARN_TO_WCA.count(" " + last + " "))
-            lastSlice = true;
-    }
-
-    for (char &c : s)
-        if (c == '\\' || c == '/')
-            c = ' ';
-    s = replaceAll(s, "(", "");
-    s = replaceAll(s, ")", "");
-    {
-        std::string tmp;
-        bool sp = false;
-        for (char c : s)
-        {
-            if (c == ' ')
-            {
-                if (!sp)
-                {
-                    tmp += ' ';
-                    sp = true;
-                }
-            }
-            else
-            {
-                tmp += c;
-                sp = false;
-            }
-        }
-        s = trimStr(tmp);
-    }
-
-    {
-        std::vector<std::string> tokens;
-        std::istringstream iss(s);
-        std::string tok;
-        while (iss >> tok)
-            tokens.push_back(tok);
-        s.clear();
-        for (size_t i = 0; i < tokens.size(); i++)
-        {
-            if (i)
-                s += ' ';
-            s += addCommasToMove(tokens[i]);
-        }
-    }
+    s = expandRepeatGroups(s);
 
     std::string final_ = replaceShorthands(unkarnifyHelp(s));
 
-    if (firstSlice && (final_.empty() || final_[0] != '/'))
-        final_ = "/" + final_;
-    if (lastSlice && (final_.empty() || final_.back() != '/'))
-        final_ = final_ + "/";
     while (final_.find("//") != std::string::npos)
         final_ = replaceAll(final_, "//", "/");
 
-    auto parts = splitStr(final_, '/');
-    final_.clear();
-    for (size_t i = 0; i < parts.size(); ++i)
-    {
-        if (i)
-            final_ += "/";
-        final_ += addCommasToMove(parts[i]);
-    }
     return final_;
 }
 
-// ===========================================================================
-// karnify — WCA numeric slash-format alg part -> Karnotation display string.
-// Accepts only the alg portion (no bracket suffix).
-// Commas are stripped; numeric moves that have no Karn name stay as numeric
-// but with commas removed (e.g. "-1,2" -> "-12").
-// OPTIMIZED: Uses hash map lookups instead of linear vector search.
-// ===========================================================================
-inline std::string karnify(const std::string &algPart)
+// Splits into individual moves; each move is karnified to its base karn name
+// (WCA_TO_KARN) except the alg's own first/last move when it isn't bordered
+// by a slice — those stay numeric with commas stripped. Runs of base
+// karns are then combined into high karns (KARN_TO_HIGHKARN).
+inline std::string karnify(const std::string &algIn)
 {
-    std::string in = trimStr(algPart);
-    if (in.empty())
-        return in;
+    std::string alg = trimStr(algIn);
+    if (alg.empty())
+        return alg;
 
-    bool leadingSlash = (in.front() == '/' || in.front() == '\\' || in.front() == '|');
-    bool trailingSlash = in.size() > 1 && (in.back() == '/' || in.back() == '\\' || in.back() == '|');
+    bool startsSlice = (alg[0] == '/' || alg[0] == '\\' || alg[0] == '|');
+    std::string startingSlice = startsSlice ? std::string(1, alg[0]) : "";
+    bool endsSlice = alg.back() == '/';
+    std::string endingSlice = endsSlice ? "/" : "";
 
-    // Split by slashes/pipes into individual move tokens (pipe is used as
-    // slice indicator by the ergonomic rater — same boundary semantics).
-    std::string normalized = replaceAll(in, "\\", "/");
-    normalized = replaceAll(normalized, "|", "/");
-    auto parts = splitStr(normalized, '/');
-
-    std::vector<std::string> tokens;
-    for (auto &p : parts)
+    auto isDelim = [](char c)
+    { return c == '/' || c == '\\' || c == '|' || c == ' '; };
+    std::string spaced;
+    bool inRun = false;
+    for (char c : alg)
     {
-        std::string t = trimStr(p);
-        if (!t.empty())
-            tokens.push_back(t);
-    }
-
-    // Lone slash or empty after stripping
-    if (tokens.empty())
-        return leadingSlash ? "/" : "";
-
-    auto hasAlpha = [](const std::string &s)
-    {
-        for (unsigned char ch : s)
-            if (std::isalpha(ch))
-                return true;
-        return false;
-    };
-
-    // Per-token karnification using hash map lookup (OPTIMIZED).
-    auto &wcaMap = getWCAToKarnMap();
-    std::vector<std::string> out_tokens;
-    for (size_t i = 0; i < tokens.size(); i++)
-    {
-        bool isFirst = (i == 0);
-        bool isLast = (i == tokens.size() - 1);
-        bool canKarn = (!isFirst || leadingSlash) && (!isLast || trailingSlash);
-
-        if (canKarn)
+        if (isDelim(c))
         {
-            // Hash map lookup for O(1) instead of O(n) vector search
-            std::string padded = " " + tokens[i] + " ";
-            auto it = wcaMap.find(padded);
-            std::string k;
-            if (it != wcaMap.end())
-            {
-                k = trimStr(it->second);
-            }
-            else
-            {
-                // Fallback: not found in map, keep numeric with commas removed
-                k = replaceAll(tokens[i], ",", "");
-            }
-            // Remove duplicate spaces that might have been introduced
-            std::string prev;
-            do
-            {
-                prev = k;
-                k = replaceAll(k, "  ", " ");
-            } while (k != prev);
-            out_tokens.push_back(k);
+            if (!inRun) { spaced += ' '; inRun = true; }
         }
         else
         {
-            // No surrounding slices on this side — keep numeric, strip comma.
-            out_tokens.push_back(replaceAll(tokens[i], ",", ""));
+            spaced += c;
+            inRun = false;
         }
     }
 
-    bool firstIsKarn = hasAlpha(out_tokens.front());
-    bool lastIsKarn = hasAlpha(out_tokens.back());
+    std::vector<std::string> s;
+    {
+        std::istringstream iss(spaced);
+        std::string t;
+        while (iss >> t) s.push_back(t);
+    }
 
-    std::string out;
-    for (size_t i = 0; i < out_tokens.size(); i++)
-        out += " " + out_tokens[i];
+    auto &wcaMap = getWCAToKarnMap();
 
-    // Apply KARN_TO_HIGHKARN replacements (still needs do-while for combining moves)
+    for (size_t i = 0; i < s.size(); i++)
+    {
+        if (i == 0 && !startsSlice)
+        {
+            s[i] = replaceAll(s[i], ",", "");
+            continue;
+        }
+        if (i == s.size() - 1 && !endsSlice)
+        {
+            s[i] = replaceAll(s[i], ",", "");
+            break;
+        }
+
+        auto it = wcaMap.find(" " + s[i] + " ");
+        bool inBaseKarn = it != wcaMap.end();
+        s[i] = inBaseKarn ? trimStr(it->second) : replaceAll(s[i], ",", "");
+
+        if (inBaseKarn && i == 0 && startingSlice == "/")
+            startingSlice = "";
+        if (inBaseKarn && i == s.size() - 1)
+            endingSlice = "";
+    }
+
+    std::string joined;
+    for (size_t i = 0; i < s.size(); i++)
+    {
+        if (i) joined += ' ';
+        joined += s[i];
+    }
+
+    std::string result = startingSlice + joined + endingSlice;
     auto &highKarnMap = getKarnToHighKarnMap();
-    std::string k = applyHighKarnReplacements(" " + out + " ", highKarnMap);
-    k = trimStr(k);
-
-    return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
-           ((trailingSlash && !lastIsKarn) ? "/" : "");
+    result = applyHighKarnReplacements(" " + result + " ", highKarnMap);
+    result = trimStr(result);
+    return result;
 }
 
 // ===========================================================================
@@ -1043,157 +941,92 @@ namespace karnifycs_detail
     // array (sq1opt's own FullPosition, no string round-trip needed).
     inline std::string karnifycsImpl(const std::string &algWCA, int slotState[24])
     {
-        // Split into slash-separated move groups.
-        // Each '/' is a slice. Collect consecutive moves between slices into groups,
-        // then substitute each group as a whole using the correct CS/OCS table.
-        // Groups are separated by slices in the output.
+        std::string alg = trimStr(algWCA);
+        if (alg.empty())
+            return alg;
 
-        // First pass: collect groups and record CS state at start of each group.
-        struct Group
-        {
-            std::string joined; // space-separated moves e.g. "-3,0 3,0"
-            bool inCS;
-        };
-        std::vector<Group> groups;
-        std::vector<bool> sliceBefore; // sliceBefore[i] = true if there's a slash before group i
+        bool startsSlice = (alg.front() == '/' || alg.front() == '\\' || alg.front() == '|');
+        std::string startingSlice = startsSlice ? std::string(1, alg.front()) : "";
+        bool endsSlice = alg.size() > 1 && alg.back() == '/';
+        std::string endingSlice = endsSlice ? "/" : "";
 
-        bool leadingSlash = !algWCA.empty() && (algWCA.front() == '/' || algWCA.front() == '\\' || algWCA.front() == '|');
-        if (leadingSlash)
+        if (startsSlice)
             kcSlice(slotState);
 
-        // Parse move tokens between slashes/pipes
-        std::string normalized = replaceAll(algWCA, "\\", "/");
+        std::string normalized = replaceAll(alg, "\\", "/");
         normalized = replaceAll(normalized, "|", "/");
-        // split by '/'
         auto parts = splitStr(normalized, '/');
 
-        // parts[0] is empty if leading slash, otherwise first move group
-        // each part IS one move. We need to group consecutive moves between slices.
-        // Since input is already "move/move/move", every '/' is a slice,
-        // so each part is exactly one inter-slice group (one move).
-        // We want to join adjacent same-CS parts for better multi-token substitution.
-
-        Group cur;
-        cur.inCS = kcInCubeshape(slotState);
-        cur.joined = "";
-        bool first = true;
-
+        // Flatten into individual moves, recording the cubeshape state before
+        // each move, and applying a real slice (kcSlice) between slash-groups.
+        std::vector<std::string> moveTok;
+        std::vector<bool> moveInCS;
+        bool firstPart = true;
         for (const auto &part : parts)
         {
-            std::string tok = trimStr(part);
-            if (tok.empty())
+            if (!firstPart)
+                kcSlice(slotState);
+            firstPart = false;
+
+            std::string trimmedPart = trimStr(part);
+            if (trimmedPart.empty())
+                continue;
+
+            std::istringstream iss(trimmedPart);
+            std::string tok;
+            while (iss >> tok)
             {
-                // This was a leading/trailing slash already handled, skip
+                moveInCS.push_back(kcInCubeshape(slotState));
+                moveTok.push_back(tok);
+                kcApplyTurnToken(slotState, tok);
+            }
+        }
+
+        size_t n = moveTok.size();
+        std::vector<std::string> out(n);
+
+        auto &wcaMap = getWCAToKarnMap();
+        auto &wcaOCSMap = getWCAToKarnOCSMap();
+
+        for (size_t i = 0; i < n; i++)
+        {
+            if (i == 0 && !startsSlice)
+            {
+                out[i] = replaceAll(moveTok[i], ",", "");
                 continue;
             }
-            // There's a slash before this tok if it's not the very first token
-            // (leadingSlash already applied; every subsequent part has a slash before it)
-            if (!first)
+            if (i == n - 1 && !endsSlice)
             {
-                // flush current group before the slice
-                if (!cur.joined.empty())
-                    groups.push_back(cur);
-                // do the slice
-                kcSlice(slotState);
-                cur.joined = "";
-                cur.inCS = kcInCubeshape(slotState);
+                out[i] = replaceAll(moveTok[i], ",", "");
+                break;
             }
-            first = false;
 
-            // Add move to current group
-            if (!cur.joined.empty())
-                cur.joined += ' ';
-            cur.joined += tok;
-            kcApplyTurnToken(slotState, tok);
-        }
-        if (!cur.joined.empty())
-            groups.push_back(cur);
+            const auto &map = moveInCS[i] ? wcaMap : wcaOCSMap;
+            auto it = map.find(" " + moveTok[i] + " ");
+            bool inBaseKarn = it != map.end();
+            out[i] = inBaseKarn ? trimStr(it->second) : replaceAll(moveTok[i], ",", "");
 
-        bool trailingSlash = algWCA.size() > 1 && (algWCA.back() == '/' || algWCA.back() == '\\' || algWCA.back() == '|');
-
-        // Second pass: substitute each group, collect results first so we can
-        // inspect the first/last output before deciding on leading/trailing slashes.
-        std::vector<std::string> substGroups;
-        substGroups.reserve(groups.size());
-
-        // Get optimized hash maps for O(1) lookups
-        auto &wcaToKarnMap = getWCAToKarnMap();
-        auto &wcaToKarnOCSMap = getWCAToKarnOCSMap();
-
-        for (size_t gi = 0; gi < groups.size(); gi++)
-        {
-            const auto &g = groups[gi];
-            bool isFirst = (gi == 0);
-            bool isLast = (gi == groups.size() - 1);
-
-            bool canKarn = (!isFirst || leadingSlash) && (!isLast || trailingSlash);
-
-            std::string subst;
-            if (canKarn)
-            {
-                // Use hash map lookup instead of replaceWithVector (OPTIMIZED)
-                const auto &map = g.inCS ? wcaToKarnMap : wcaToKarnOCSMap;
-                std::string padded = " " + g.joined + " ";
-
-                // Try hash map lookup first
-                auto it = map.find(padded);
-                if (it != map.end())
-                {
-                    subst = trimStr(it->second);
-                }
-                else
-                {
-                    // Fallback: if not found, keep numeric with commas removed
-                    subst = g.joined;
-                }
-
-                std::string prev;
-                do
-                {
-                    prev = subst;
-                    subst = replaceAll(subst, "  ", " ");
-                } while (subst != prev);
-            }
-            else
-            {
-                // No surrounding slice on this side — keep numeric, just strip commas.
-                subst = g.joined;
-            }
-            subst = replaceAll(subst, ",", "");
-            substGroups.push_back(subst);
+            if (inBaseKarn && i == 0 && startingSlice == "/")
+                startingSlice = "";
+            if (inBaseKarn && i == n - 1)
+                endingSlice = "";
         }
 
-        // Karn tokens carry their surrounding slashes implicitly; numeric ones don't.
-        // "Karn" = the substituted string contains at least one alpha character.
-        auto hasAlpha = [](const std::string &s)
+        std::string joined;
+        for (size_t i = 0; i < n; i++)
         {
-            for (unsigned char ch : s)
-                if (std::isalpha(ch))
-                    return true;
-            return false;
-        };
-        bool firstIsKarn = !substGroups.empty() && hasAlpha(substGroups.front());
-        bool lastIsKarn = !substGroups.empty() && hasAlpha(substGroups.back());
-
-        // Leading slash: only needed if the input had one AND the first output token
-        // is numeric (karn tokens bring the slash with them).
-        // Trailing slash: same rule on the other end.
-        std::string out;
-
-        for (const auto &s : substGroups)
-        {
-            if (!out.empty() && out.back() != ' ' && out.back() != '/')
-                out += ' ';
-            out += s;
+            if (i) joined += ' ';
+            joined += out[i];
         }
 
-        // Apply KARN_TO_HIGHKARN_OCS replacements using optimized function
+        std::string result = startingSlice + joined + endingSlice;
+        auto &highKarnMap = getKarnToHighKarnMap();
         auto &highKarnOCSMap = getKarnToHighKarnOCSMap();
-        std::string k = applyHighKarnReplacements(" " + out + " ", highKarnOCSMap);
-        k = trimStr(k);
+        result = applyHighKarnReplacements(" " + result + " ", highKarnMap);
+        result = applyHighKarnReplacements(" " + trimStr(result) + " ", highKarnOCSMap);
+        result = trimStr(result);
 
-        return ((leadingSlash && !firstIsKarn) ? "/" : "") + k +
-               ((trailingSlash && !lastIsKarn) ? "/" : "");
+        return result;
     }
 }
 
