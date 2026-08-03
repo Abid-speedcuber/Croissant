@@ -560,7 +560,7 @@ export default function App() {
     [two, setTwo] = useState("None"),
     [angle, setAngle] = useState("None"),
     [normalize, setNormalize] = useState("None"),
-    [all, setAll] = useState(false),
+    [all, setAll] = useState(true),
     [generator, setGenerator] = useState(false),
     [cubeShapeMemory, setCubeShapeMemory] = useState(false),
     [ignoreMiddle, setIgnoreMiddle] = useState(false),
