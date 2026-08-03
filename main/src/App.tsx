@@ -480,7 +480,8 @@ export default function App() {
   const firstSolutionAt = useRef(0);
   const solveStartTimeRef = useRef(0);
   const solveStopTimeRef = useRef(0);
-  const debugStatsRef = useRef<{ solutionTimestamps: number[]; rateSamples: number[] }>({ solutionTimestamps: [], rateSamples: [] });
+  const debugStatsRef = useRef<{ solutionTimestamps: number[] }>({ solutionTimestamps: [] });
+  const rateHistoryRef = useRef<{ t: number; sol: number; node: number }[]>([]);
   const progressNodesRef = useRef(0);
   const progressDepthRef = useRef(0);
   const progressRateRef = useRef(0);
@@ -1118,21 +1119,68 @@ export default function App() {
     return () => window.clearInterval(id);
   }, [tableBusyMessage]);
   useEffect(() => {
-    if (modal !== "debug") return;
+    // Gather live rate samples in the background (regardless of whether the debug
+    // modal is open) so the graph is always fully populated, including after the
+    // solve has finished. History is reset when the next solve starts.
     const id = setInterval(() => {
-      if (!runningRef.current || !solveStartTimeRef.current) return;
-      const stats = debugStatsRef.current;
+      const start = solveStartTimeRef.current;
+      if (!start) return;
       const now = performance.now();
-      const elapsedTotal = (now - solveStartTimeRef.current) / 1000;
-      const windowDur = Math.min(60, Math.max(0, elapsedTotal));
-      const cutoff = now - windowDur * 1000;
-      stats.solutionTimestamps = stats.solutionTimestamps.filter(t => t > cutoff);
-      const rate = windowDur > 0 ? stats.solutionTimestamps.length / windowDur * 60 : 0;
-      stats.rateSamples.push(rate);
-      setDebugTick(t => t + 1);
-    }, 5000);
+      const running = runningRef.current;
+      const refTime = running ? now : (solveStopTimeRef.current || now);
+      const elapsedSec = (refTime - start) / 1000;
+      if (elapsedSec <= 0) return;
+
+      const history = rateHistoryRef.current;
+      const last = history[history.length - 1];
+
+      if (running) {
+        const timestamps = debugStatsRef.current.solutionTimestamps;
+        const keepFrom = now - 15000;
+        let trim = 0;
+        while (trim < timestamps.length && timestamps[trim] <= keepFrom) trim++;
+        if (trim) timestamps.splice(0, trim);
+
+        const windowMs = Math.max(1000, Math.min(10000, elapsedSec * 1000));
+        const cutoff = refTime - windowMs;
+        let count = 0;
+        for (let i = timestamps.length - 1; i >= 0; i--) {
+          if (timestamps[i] > cutoff) count++;
+          else break;
+        }
+        const solRate = count / (windowMs / 60000);
+        const nodeRate = progressRateRef.current;
+        if (!last || elapsedSec - last.t >= 0.4) history.push({ t: elapsedSec, sol: solRate, node: nodeRate });
+      } else if (!last || elapsedSec - last.t >= 0.05) {
+        // Solve finished: push one final point at the stop time, then freeze.
+        const windowMs = Math.max(1000, Math.min(10000, elapsedSec * 1000));
+        const cutoff = refTime - windowMs;
+        const timestamps = debugStatsRef.current.solutionTimestamps;
+        let count = 0;
+        for (let i = timestamps.length - 1; i >= 0; i--) {
+          if (timestamps[i] > cutoff) count++;
+          else break;
+        }
+        const solRate = count / (windowMs / 60000);
+        const nodeRate = elapsedSec > 0 ? progressNodesRef.current / elapsedSec : 0;
+        history.push({ t: elapsedSec, sol: solRate, node: nodeRate });
+      }
+      if (history.length > 30000) {
+        const compacted: { t: number; sol: number; node: number }[] = [];
+        for (let i = 0; i < history.length; i += 2) compacted.push(history[i]);
+        rateHistoryRef.current = compacted;
+      }
+    }, 250);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    // Re-render while the debug modal is open so the grid stats keep updating.
+    if (modal !== "debug") return;
+    const id = setInterval(() => setDebugTick(t => t + 1), 250);
     return () => clearInterval(id);
   }, [modal]);
+
   const armOutputToolFade = () => {
     if (outputIdleTimer.current !== undefined) window.clearTimeout(outputIdleTimer.current);
     outputIdleTimer.current = window.setTimeout(() => setOutputToolsFaded(true), 1500);
@@ -1645,7 +1693,8 @@ export default function App() {
     firstSolutionAt.current = 0;
     solveStartTimeRef.current = 0;
     solveStopTimeRef.current = 0;
-    debugStatsRef.current = { solutionTimestamps: [], rateSamples: [] };
+    debugStatsRef.current = { solutionTimestamps: [] };
+    rateHistoryRef.current = [];
     progressNodesRef.current = 0;
     progressDepthRef.current = 0;
     progressRateRef.current = 0;
@@ -2170,25 +2219,15 @@ export default function App() {
     </div>
   );
   const computeDebugStats = () => {
-    const stats = debugStatsRef.current;
     const now = performance.now();
     const start = solveStartTimeRef.current;
-    if (!start) return { elapsed: "—", solutionCount: 0, rollingRate: 0, avgRate: 0, stddevRate: 0, nodesSearched: 0, searchDepth: 0, nodeRate: 0 };
+    if (!start) return { elapsed: "—", solutionCount: 0, nodesSearched: 0, searchDepth: 0 };
     const end = runningRef.current ? now : (solveStopTimeRef.current || now);
     const elapsed = ((end - start) / 1000).toFixed(1);
     const solutionCount = totalCountRefs();
-    const elapsedTotal = (end - start) / 1000;
-    const windowDur = Math.min(60, Math.max(0, elapsedTotal));
-    const cutoff = end - windowDur * 1000;
-    const recent = stats.solutionTimestamps.filter(t => t > cutoff);
-    const rollingRate = windowDur > 0 ? recent.length / windowDur * 60 : 0;
-    const samples = stats.rateSamples;
-    const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
-    const stddev = samples.length > 1 ? Math.sqrt(samples.reduce((sum, v) => sum + (v - avg) ** 2, 0) / samples.length) : 0;
     const nodesSearched = progressNodesRef.current;
     const searchDepth = progressDepthRef.current;
-    const nodeRate = runningRef.current ? progressRateRef.current : elapsedTotal > 0 ? nodesSearched / elapsedTotal : 0;
-    return { elapsed, solutionCount, rollingRate, avgRate: avg, stddevRate: stddev, nodesSearched, searchDepth, nodeRate };
+    return { elapsed, solutionCount, nodesSearched, searchDepth };
   };
   const renderOutputShell = () => (
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
@@ -2200,7 +2239,7 @@ export default function App() {
           {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}><Icon name="timer" /></button>}
           <button
             className={`filter-trigger ${filterOpen || filterActive ? "active" : ""}`}
-            title="Find"
+            title={t('filter.find')}
             disabled={running || !totalCount}
             onClick={() => setFilterOpen((v) => !v)}
           ><Icon name="search" /></button>
@@ -2215,7 +2254,7 @@ export default function App() {
           ref={filterInputRef}
           type="text"
           className="filter-input"
-          placeholder="Find"
+          placeholder={t('filter.find')}
           value={filterQuery}
           spellCheck={false}
           autoCorrect="off"
@@ -2224,26 +2263,26 @@ export default function App() {
           onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setFilterOpen(false); } }}
         />
         <span className={`filter-count ${filterInvalid ? "filter-count-invalid" : ""}`}>
-          {filterQuery.trim() === "" ? "No input" :
-            filterInvalid ? "Invalid pattern" :
-            filterSearching ? <><span className="filter-spinner" aria-hidden="true" /> results</> :
-            `${formatCount(filterResults ? filterResults.length : 0)} results`}
+          {filterQuery.trim() === "" ? t('filter.noInput') :
+            filterInvalid ? t('filter.invalidPattern') :
+            filterSearching ? <><span className="filter-spinner" aria-hidden="true" /> {t('filter.results')}</> :
+            `${formatCount(filterResults ? filterResults.length : 0)} ${t('filter.results')}`}
         </span>
         <button
           type="button"
           className={`filter-toggle ${filterMatchCase ? "active" : ""}`}
-          title="Match Case"
+          title={t('filter.matchCase')}
           aria-pressed={filterMatchCase}
           onClick={() => setFilterMatchCase((v) => !v)}
         >Aa</button>
         <button
           type="button"
           className={`filter-toggle ${filterRegexMode ? "active" : ""}`}
-          title="Use Regular Expression"
+          title={t('filter.regex')}
           aria-pressed={filterRegexMode}
           onClick={() => setFilterRegexMode((v) => !v)}
         >.*</button>
-        <button type="button" className="filter-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setFilterOpen(false)}><Icon name="close" /></button>
+        <button type="button" className="filter-close" title={t('filter.close')} aria-label={t('filter.close')} onClick={() => setFilterOpen(false)}><Icon name="close" /></button>
       </div>}
       {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}><Icon name="grid" /></button>}
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}><Icon name="chevronDown" /></button>}
@@ -2288,13 +2327,13 @@ export default function App() {
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
           }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
-        {filterActive && !filterResults!.length && <div className="empty">No algorithms match your search.</div>}
+        {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
         {useLessRam && isRestoring && <div className="table-busy"><span className="table-busy-spinner" /><span>{t('terminal.loadingPage')}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll} onMouseDown={markTerminalUserActive} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; scheduleTerminalUserInactive(); }}>
         {useLessRam && isRestoring && <span className="terminal-line terminal-line-status">{t('terminal.loadingPage')}</span>}
         {!outputLines.length && !totalCount && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
-        {filterActive && !filterResults!.length && <span className="terminal-line terminal-line-empty">No algorithms match your search.</span>}
+        {filterActive && !filterResults!.length && <span className="terminal-line terminal-line-empty">{t('filter.noMatches')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`}
           onMouseDown={(event) => {
@@ -2472,7 +2511,15 @@ export default function App() {
         useLessRam, setUseLessRam,
         onRequestShowAll: () => setShowAllConfirm(true),
         onOpenDiskSpace: () => setDiskOpen(true),
-      }} debugStats={modal === "debug" ? computeDebugStats() : null} />}
+      }} debugStats={modal === "debug" ? computeDebugStats() : null} liveDebug={modal === "debug" ? () => ({
+        now: performance.now(),
+        running: runningRef.current,
+        startTime: solveStartTimeRef.current,
+        stopTime: solveStopTimeRef.current,
+        history: rateHistoryRef.current,
+        totalSolutions: totalCountRefs(),
+        totalNodes: progressNodesRef.current,
+      }) : null} />}
       {modal === "settings" && diskOpen && <DiskSpaceModal onClose={() => setDiskOpen(false)} deleteOnQuit={deleteTablesOnQuit} setDeleteOnQuit={setDeleteTablesOnQuit} solutions={solutions} onClearSolutions={clearSolutions} />}
       {showAllConfirm && <div className="modal-shade modal-shade-top" onClick={() => setShowAllConfirm(false)}>
         <div className="modal modal-confirm" onClick={(event) => event.stopPropagation()}>

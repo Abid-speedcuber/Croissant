@@ -2,12 +2,14 @@ import { useRef } from "react";
 import { t, LANGUAGES, LangCode } from "../i18n";
 import type { Modal } from "../utils";
 import { Icon } from "./Icon";
+import { DebugRateGraph, LiveDebugData } from "./DebugRateGraph";
 
 export function Modal({
   type,
   close,
   settings,
   debugStats,
+  liveDebug,
 }: {
   type: Exclude<Modal, null>;
   close: () => void;
@@ -28,7 +30,8 @@ export function Modal({
     language?: LangCode;
     setLanguage?: (code: LangCode) => void;
   };
-  debugStats?: { elapsed: string; solutionCount: number; rollingRate: number; avgRate: number; stddevRate: number; nodesSearched: number; searchDepth: number; nodeRate: number } | null;
+  debugStats?: { elapsed: string; solutionCount: number; nodesSearched: number; searchDepth: number } | null;
+  liveDebug?: (() => LiveDebugData) | null;
 }) {
   const content =
     type === "settings" ? (
@@ -89,19 +92,18 @@ export function Modal({
           <span className="debug-value">{debugStats?.elapsed ?? t('modal.debug.placeholder')}s</span>
           <span className="debug-label">{t('modal.debug.solutions')}</span>
           <span className="debug-value">{debugStats?.solutionCount ?? t('modal.debug.placeholder')}</span>
-          <span className="debug-label">{t('modal.debug.solutionsPerMin')}</span>
-          <span className="debug-value">{debugStats?.rollingRate != null ? debugStats.rollingRate.toFixed(1) : t('modal.debug.placeholder')}</span>
-          <span className="debug-label">{t('modal.debug.avgRate')}</span>
-          <span className="debug-value">{debugStats?.avgRate != null ? debugStats.avgRate.toFixed(1) : t('modal.debug.placeholder')}</span>
-          <span className="debug-label">{t('modal.debug.stddevRate')}</span>
-          <span className="debug-value">{debugStats?.stddevRate != null ? debugStats.stddevRate.toFixed(1) : t('modal.debug.placeholder')}</span>
           <span className="debug-label">{t('modal.debug.nodesSearched')}</span>
           <span className="debug-value">{debugStats?.nodesSearched != null ? debugStats.nodesSearched.toLocaleString() : t('modal.debug.placeholder')}</span>
           <span className="debug-label">{t('modal.debug.depth')}</span>
           <span className="debug-value">{debugStats?.searchDepth ?? t('modal.debug.placeholder')}</span>
-          <span className="debug-label">{t('modal.debug.nodesPerSec')}</span>
-          <span className="debug-value">{debugStats?.nodeRate != null ? Math.round(debugStats.nodeRate).toLocaleString() : t('modal.debug.placeholder')}</span>
         </div>
+        {liveDebug && <DebugRateGraph
+          getLive={liveDebug}
+          solLabel={t('modal.debug.graphSolutions')}
+          nodeLabel={t('modal.debug.graphNodes')}
+          avgLabel={t('modal.debug.graphAvg')}
+          stddevLabel={t('modal.debug.graphStddev')}
+        />}
       </div>
     ) : type === "about" ? (
       <div className="modal-article">

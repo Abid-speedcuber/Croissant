@@ -107,6 +107,16 @@
     "karn": "Karn"
   },
   "outputNotation": "Notation:",
+  "filter": {
+    "find": "Find",
+    "noInput": "No input",
+    "invalidPattern": "Invalid pattern",
+    "results": "results",
+    "matchCase": "Match Case",
+    "regex": "Use Regular Expression",
+    "noMatches": "No algorithms match your search.",
+    "close": "Close search"
+  },
   "terminal": {
     "emptyScramble": "Setup move will be displayed here...",
     "emptySolution": "solution will be displayed here...",
@@ -194,7 +204,11 @@
       "nodesSearched": "Nodes searched",
       "depth": "Depth",
       "nodesPerSec": "Nodes/s",
-      "placeholder": "\u2014"
+      "placeholder": "\u2014",
+      "graphSolutions": "sol/min",
+      "graphNodes": "nodes/s",
+      "graphAvg": "avg",
+      "graphStddev": "\u03c3"
     },
     "about": {
       "title": "About Croissant",
