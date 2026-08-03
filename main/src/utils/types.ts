@@ -13,6 +13,7 @@ export type Solution = {
   raw: string;
   rawDisplay: string;
   karnDisplay: string;
+  abidDisplay?: string;
   algRaw: string;
   slices: number;
   moves: number;

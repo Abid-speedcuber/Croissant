@@ -1850,6 +1850,37 @@ class PositionSolver {
 		}
 		return out;
 	}
+	// Abid's notation is normal WCA with every interior slash replaced by a
+	// space; a leading or trailing slash (first/last non-whitespace char) and
+	// the ergonomic rater's slice-start marker are preserved verbatim. The
+	// marker is only present when `hasIndicator` is true (it is injected in
+	// place of the first separator before this is called).
+	static std::string abidSpacing(const std::string& alg, bool hasIndicator = false){
+		size_t markerAt = hasIndicator ? alg.find_first_of("/\\|") : std::string::npos;
+		size_t firstIdx = alg.find_first_not_of(" \t");
+		size_t lastIdx = alg.find_last_not_of(" \t");
+		if( firstIdx == std::string::npos || lastIdx == std::string::npos ) return alg;
+		std::string out;
+		out.reserve(alg.size());
+		for( size_t i=0; i<alg.size(); i++ ){
+			char ch = alg[i];
+			if( ch != '/' ){ out += ch; continue; }
+			bool leading = (i==firstIdx);
+			bool trailing = (i==lastIdx);
+			bool isMarker = (i==markerAt);
+			if( leading || trailing || isMarker ) out += ch;
+			else out += ' ';
+		}
+		return out;
+	}
+	// Replaces the first separator (slash, backslash, pipe or space) of an
+	// algorithm with the slice-start marker the ergonomic rater produced.
+	static std::string injectSliceIndicator(const std::string& alg, const std::string& indicator){
+		if( indicator.empty() ) return alg;
+		size_t sep = alg.find_first_of("/\\| ");
+		if( sep == std::string::npos ) return alg;
+		return alg.substr(0, sep) + indicator + alg.substr(sep+1);
+	}
 	void printsol(){
 		std::string out = "";
 		int tw=0, tu=0;
@@ -1909,18 +1940,22 @@ class PositionSolver {
 		if (karnotation || g_extendedOutput)
 			karnConverted = useSmartKarn ? karnifycs(rawAlg, fp.pos, generator) : karnify(rawAlg);
 		if (karnotation && !g_extendedOutput)
-			out = karnConverted;
+			out = (karnotation == 3) ? abidSpacing(rawAlg) : karnConverted;
 		std::string line = out + "  [" + std::to_string(tw);
 		if (metric != SLICE_METRIC) line += "|" + std::to_string(tu);
 		if (metric == ANGLE_METRIC) line += "|" + std::to_string(angle);
 		line += "]";
 		if (g_extendedOutput) {
 			line += "  " + karnConverted;
+			// The ergonomic rater runs once per cubeshape solution; its
+			// slice-start marker doubles as the first separator of the abid text.
+			std::string sliceMarker;
 			if (m_cubeshape) {
 				bool initialTopA = (fp.pos[0] >= 8);
 				try {
 					AlgRating rating = rateAlg(rawAlg, initialTopA, 34, 100, 38, 10);
 					if (rating.valid) {
+						sliceMarker = rating.sliceStart;
 						std::string safeSS = rating.sliceStart;
 						if (safeSS == "\\") safeSS = "\\\\";
 						else if (safeSS == "\"") safeSS = "\\\"";
@@ -1937,6 +1972,16 @@ class PositionSolver {
 						     + ",\"bn\":" + std::to_string(rating.bonus) + "}";
 					}
 				} catch (...) { }
+			}
+			// Abid notation (karnotation == 3) is produced HERE, solver-side, so
+			// each streamed line arrives already converted. The frontend must not
+			// re-implement a notation converter for live output — an extra IPC or
+			// JS pass over every solution is slower than solving the position.
+			if (karnotation == 3) {
+				std::string abidAlg = sliceMarker.empty()
+					? rawAlg
+					: injectSliceIndicator(rawAlg, sliceMarker);
+				line += "  " + abidSpacing(abidAlg, !sliceMarker.empty());
 			}
 		}
 		line += " \n";
@@ -2220,6 +2265,7 @@ void help(){
 	std::cout<<"   -k0    Output algs numerically (default)."<<std::endl;
 	std::cout<<"   -k1    Output algs in karn."<<std::endl;
 	std::cout<<"   -k2    Output algs in smart (cubeshape-aware) karn."<<std::endl;
+	std::cout<<"   -k3    Output algs in Abid's notation (WCA with barred digits, slashes as spaces)."<<std::endl;
 	std::cout<<"   -ob    Normalize ABF on both preABF and postABF."<<std::endl;
 	std::cout<<"   -oe    Normalize ABF on preABF only (the move before the first slice)."<<std::endl;
 	std::cout<<"   -os    Normalize ABF on postABF only (the move after the last slice)."<<std::endl;
@@ -2313,6 +2359,7 @@ int sq1optMain(int argc, char* argv[]){
 				case 'K':
 					if (argv[i][2] == '0') karnotation = 0;
 					else if (argv[i][2] == '2') karnotation = 2;
+					else if (argv[i][2] == '3') karnotation = 3;
 					else karnotation = 1;
 					break;
 				case 'n':

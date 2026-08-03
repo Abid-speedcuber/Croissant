@@ -19,10 +19,6 @@
 * {
   box-sizing: border-box;
 }
-::selection {
-  background: #14b8a6;
-  color: #0d1117;
-}
 html,
 body,
 #root {
@@ -32,6 +28,11 @@ body,
 body {
   margin: 0;
   background: #11151c;
+  user-select: none;
+}
+input,
+textarea {
+  user-select: text;
 }
 .app {
   height: 100dvh;
@@ -1706,6 +1707,10 @@ body {
 }
 .page-switcher-inputshadow {
   visibility: hidden;
+}
+.page-switcher-input::selection {
+  background: #14b8a6;
+  color: #0d1117;
 }
 .page-switcher-total {
   color: #718198;

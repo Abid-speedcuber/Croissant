@@ -275,6 +275,28 @@ export function nextOutputMode(mode: OutputMode): OutputMode {
   return OUTPUT_MODES[(OUTPUT_MODES.indexOf(mode) + 1) % OUTPUT_MODES.length];
 }
 
+/*
+ * NOTATION-CONVERSION POLICY — READ BEFORE ADDING A FRONTEND CONVERTER
+ *
+ * ALL notation conversion (WCA -> karn, WCA -> abid) happens SOLVER-SIDE
+ * (see -k1/-k2/-k3 in src-tauri/native/sq1opt.cpp, `printsol`). The solver
+ * emits each solution line already carrying the raw WCA alg, the karn text,
+ * and (with -k3) the abid text, so the frontend can render any mode from the
+ * streamed line with ZERO conversion.
+ *
+ * This is deliberate: for live streaming, an extra IPC round-trip (or a JS
+ * pass) per solution line costs MORE than the solver needs to find solutions.
+ * Do NOT "helpfully" add a frontend converter that re-derives karn/abid from
+ * the raw alg while solutions are streaming.
+ *
+ * The functions below are the exception, not the rule. They exist ONLY for
+ *  1. `abidify`/`abidSpacing` fallbacks when displaying rows that were solved
+ *     WITHOUT -k3 (older data, or a solve run in a different output mode), and
+ *  2. `abidify`, which maps digits to the Kompact font's private-use-area
+ *     barred-digit glyphs. That is FONT RENDERING (tied to the app's font),
+ *     not notation conversion, so it stays in the frontend.
+ */
+
 /**
  * Abid's notation: normal (WCA) notation with Abid's negative number
  * representation (barred digits via abidify). The only difference from plain

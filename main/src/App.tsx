@@ -1293,6 +1293,7 @@ export default function App() {
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     if (smartKarn) flags.push("-k2");
+    if (outputMode === "abid") flags.push("-k3");
     return [lastSolvePosition.current || positionString(cubeState), ...flags].join(" ");
   };
   const applyRunConfig = (key: string) => {
@@ -1314,6 +1315,7 @@ export default function App() {
     setLimit("-X", setMaxX, setMaxXValue); setLimit("-Y", setMaxY, setMaxYValue); setLimit("-Z", setMaxTotal, setMaxTotalValue);
     setIgnoreTransforms(flags.includes("-x"));
     if (flags.includes("-k2")) setOutputMode("cskarn");
+    else if (flags.includes("-k3")) setOutputMode("abid");
     solutionsRef.current = [];
     outputLinesRef.current = [];
     seenRaw.current.clear();
@@ -1394,14 +1396,19 @@ export default function App() {
     if (lb < 0 || rb < 0) return { rawDisplay: line, karnDisplay: line };
     const rawAlg = line.slice(0, lb).trim();
     let karnDisplay = line;
-    try {
-      const converted = await tauri()?.core?.invoke<string>("karnify", {
-        input: rawAlg,
-        position: smartKarn && !lastSolveCubeShape.current ? startPosition : null,
-        generator,
-      });
-      if (converted) karnDisplay = `${converted}  ${line.slice(lb).trim()}`;
-    } catch { /* retain numeric output */ }
+    // Only round-trip through the karnify IPC when karn output is actually
+    // shown — in "abid"/"normal" modes the streamed lines already carry every
+    // display we need, and any extra invoke per line is pure overhead.
+    if (karn) {
+      try {
+        const converted = await tauri()?.core?.invoke<string>("karnify", {
+          input: rawAlg,
+          position: smartKarn && !lastSolveCubeShape.current ? startPosition : null,
+          generator,
+        });
+        if (converted) karnDisplay = `${converted}  ${line.slice(lb).trim()}`;
+      } catch { /* retain numeric output */ }
+    }
     return {
       rawDisplay: injectSliceIndicator(line, sliceStart),
       karnDisplay: injectSliceIndicator(karnDisplay, sliceStart),
@@ -1683,20 +1690,30 @@ export default function App() {
     const metricsPart = line.slice(lb, rb + 1);
     const afterMetrics = line.slice(rb + 1).trim();
     let rating: RatingResult | undefined, sliceStart: string | undefined;
-    let rawDisplay: string, karnDisplay: string;
+    let rawDisplay: string, karnDisplay: string, abidDisplay: string | undefined;
     if (afterMetrics) {
-      const rateStart = afterMetrics.indexOf(" R{");
-      const karnEnd = rateStart >= 0 ? rateStart : afterMetrics.length;
-      const karnified = afterMetrics.slice(0, karnEnd).trim();
-      if (rateStart >= 0) {
+      // Extended line layout: <karn>  R{...rating...}  <abid>. Every field is
+      // separated by two spaces, and the karn/abid texts themselves only ever
+      // contain single spaces, so a plain split on two spaces recovers the
+      // fields. The abid field is emitted only when the solve ran with -k3;
+      // the rating block only appears for cubeshape solves. Either may be
+      // absent, but the karn field is always present in extended output.
+      const fields = afterMetrics.split("  ");
+      const karnified = fields[0].trim();
+      let abidified: string | undefined;
+      if (fields[1] && fields[1].startsWith("R{")) {
         try {
-          const raw = JSON.parse(afterMetrics.slice(rateStart + 2));
+          const raw = JSON.parse(fields[1].slice(1));
           rating = { finalScore: raw.f, sliceStart: raw.ss, phase1: raw.p1, phase2: raw.p2, phase3: raw.p3, phase4: raw.p4, ergoUp: raw.eu, ergoDown: raw.ed, sliceCount: raw.sc, movement: raw.mv, bonus: raw.bn, valid: true };
           if (rating.valid) sliceStart = ratingSliceStart(rating);
         } catch { /* unrated */ }
+        abidified = fields.slice(2).join("  ") || undefined;
+      } else {
+        abidified = fields.slice(1).join("  ") || undefined;
       }
       rawDisplay = injectSliceIndicator(rawAlg + "  " + metricsPart, sliceStart);
       karnDisplay = injectSliceIndicator(karnified + "  " + metricsPart, sliceStart);
+      if (abidified) abidDisplay = abidified + "  " + metricsPart;
     } else {
       // Legacy format (no extended data): use IPC fallback
       if (lastSolveCubeShape.current && tauri()?.core?.invoke) {
@@ -1712,7 +1729,7 @@ export default function App() {
       karnDisplay = pair.karnDisplay;
     }
     const displayAlg = lineAlg(outputMode === "abid"
-      ? abidSpacing(normalizeLine(karn ? karnDisplay : rawDisplay, normalize), !!sliceStart)
+      ? (abidDisplay ? normalizeLine(abidDisplay, normalize) : abidSpacing(normalizeLine(karn ? karnDisplay : rawDisplay, normalize), !!sliceStart))
       : normalizeLine(karn ? karnDisplay : rawDisplay, normalize));
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
@@ -1723,7 +1740,7 @@ export default function App() {
     }
     const counts = parseSolutionCounts(line);
     const cleanLine = rawAlg + "  " + metricsPart;
-    const row: Solution = { raw: cleanLine, rawDisplay, karnDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart };
+    const row: Solution = { raw: cleanLine, rawDisplay, karnDisplay, abidDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart };
     addSolution(row);
     addOutputLine({ raw: rawDisplay, karn: karnDisplay, isSolution: true, algRaw: rawAlg, sliceStart });
   };
@@ -1752,6 +1769,7 @@ export default function App() {
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     if (smartKarn) flags.push("-k2");
+    if (outputMode === "abid") flags.push("-k3");
     if (debugOutput) flags.push("-v5");
     stopped.current = false;
     solutionsRef.current = [];
@@ -2020,11 +2038,19 @@ export default function App() {
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
   if (ignoreTransforms) commandFlags.push("-x");
   if (smartKarn) commandFlags.push("-k2");
+  if (outputMode === "abid") commandFlags.push("-k3");
   const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   const showErgo = runCubeShape;
   const solutionDisplayText = (solution: Solution) => {
+    if (outputMode === "abid") {
+      // Prefer the abid text the solver already emitted with -k3 (it carries
+      // the slice-start marker); only fall back to the JS converter for rows
+      // that were produced before abid output existed or in another mode.
+      if (solution.abidDisplay) return normalizeLine(solution.abidDisplay, normalize);
+      return abidSpacing(normalizeLine(solution.rawDisplay, normalize), !!solution.sliceStart);
+    }
     const base = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
-    return outputMode === "abid" ? abidSpacing(base, !!solution.sliceStart) : base;
+    return base;
   };
   const displaySolution = (solution: Solution): DisplaySolution => {
     const display = solutionDisplayText(solution);
