@@ -466,9 +466,6 @@ function Cube({
         width={300}
         height={500}
         style={{
-          width: 231,
-          height: 385,
-          transform: "none",
           cursor: hovered !== -1 ? "pointer" : "default",
         }}
         onMouseMove={(e) => {
