@@ -1,5 +1,16 @@
 :root {
   --header-h: 52px;
+  /*
+   * Responsive breakpoints. Toggle the magic numbers here in one place; the
+   * JS in App.tsx reads these via getComputedStyle and the .bp-* / .tall-viewport
+   * / .panel-* classes below follow automatically.
+   */
+  --bp-tall: 810px;        /* viewport height >= this  -> .tall-viewport */
+  --bp-wide: 860px;        /* viewport width <= this   -> .bp-720 */
+  --bp-semi: 620px;        /* viewport width <= this   -> .bp-620 */
+  --bp-narrow: 460px;      /* viewport width <= this   -> .bp-460 */
+  --bp-panel: 520px;       /* options panel width <= this -> .panel-narrow, > this -> .panel-wide */
+  --bp-panel-tiny: 360px;  /* options panel width <= this -> .panel-tiny */
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   color: #e8ecf4;
   background: #11151c;
@@ -247,7 +258,6 @@ body {
 }
 .options-panel {
   grid-area: options;
-  container-type: inline-size;
 }
 .terminal-shell {
   grid-area: terminal;
@@ -256,20 +266,25 @@ body {
 /*
  * BREAKPOINT LEGEND
  *
+ * All thresholds are defined as CSS variables in :root (--bp-tall, --bp-wide,
+ * --bp-semi, --bp-narrow, --bp-panel, --bp-panel-tiny). The JS in App.tsx reads
+ * those variables and toggles the classes below on :root.
+ *
  * Width classes (toggled on :root based on window.innerWidth / zoom):
- *   (none)   = Wide:              > 860px
- *   bp-720   = Semi-wide:         621px – 860px
- *   bp-620   = Semi-narrow:       461px – 620px
- *   bp-460   = Narrow:            ≤ 460px
+ *   (none)   = Wide:              > var(--bp-wide)
+ *   bp-720   = Semi-wide:         var(--bp-semi)+1 .. var(--bp-wide)
+ *   bp-620   = Semi-narrow:       var(--bp-narrow)+1 .. var(--bp-semi)
+ *   bp-460   = Narrow:            <= var(--bp-narrow)
  *
  * Height class (toggled on :root based on window.innerHeight / zoom):
- *   (none)               = Not tall:  < 810px
- *   tall-viewport        = Tall:      ≥ 810px
+ *   (none)               = Not tall:  < var(--bp-tall)
+ *   tall-viewport        = Tall:      >= var(--bp-tall)
  *
- * Container queries (on .options-panel, which has container-type: inline-size):
- *   @container (max-width: 520px)  = Narrow options panel  (forces limit-grid to 2-col)
- *   @container (min-width: 521px)  = Wide options panel    (select-grid goes 4-col)
- *   @container (max-width: 360px)  = Tiny options panel    (select-grid/check-grid to 1-col)
+ * Options panel classes (toggled by ResizeObserver in App.tsx based on the
+ * panel's own width, matching the old @container queries):
+ *   panel-narrow         = panel width <= var(--bp-panel)  (limit-grid 2-col)
+ *   panel-wide           = panel width >  var(--bp-panel)  (select-grid 4-col)
+ *   panel-tiny           = panel width <= var(--bp-panel-tiny) (select-grid/check-grid 1-col)
  *
  * Common combinations:
  *   Wide + tall          :  .tall-viewport only
@@ -281,7 +296,7 @@ body {
  *   Semi-narrow + not-tall: .bp-720.bp-620
  *   Narrow + not-tall    :  .bp-720.bp-620.bp-460
  *
- *   Note: At narrow widths (bp-720 and below, i.e. ≤860px), the layout collapses to single-column
+ *   Note: At narrow widths (bp-720 and below, i.e. <= var(--bp-wide)), the layout collapses to single-column
  *   mobile mode regardless of height, so tall vs not-tall barely matters.
  */
 
@@ -297,7 +312,7 @@ body {
   overflow: auto;
 }
 :root.tall-viewport:not(.bp-720) .options-panel {
-  padding: 18px max(16px, calc((100vw - 860px) * 0.7)) 18px 16px;
+  padding: 18px max(16px, calc((100vw - var(--bp-wide)) * 0.7)) 18px 16px;
 }
 :root.tall-viewport:not(.bp-720) .options-panel .select-grid {
   gap: 26px;
@@ -732,7 +747,7 @@ body {
 .terminal-head,
 .solution {
   display: grid;
-  grid-template-columns: 72px 1fr 48px;
+  grid-template-columns: 72px minmax(0, 1fr) 48px;
   align-items: center;
   min-height: 24px;
   padding: 0 9px;
@@ -757,13 +772,34 @@ body {
   background: #162130;
 }
 .solution code {
+  min-width: 0;
   overflow: visible;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   user-select: text;
 }
 .empty {
   color: #718198;
   padding: 24px;
+}
+.toast {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  z-index: 90;
+  transform: translateX(-50%);
+  padding: 9px 16px;
+  background: #1a2433;
+  border: 1px solid #40516a;
+  border-radius: 7px;
+  color: #cfe2ff;
+  font-size: 12px;
+  box-shadow: 0 10px 26px #0008;
+  animation: toast-in 0.18s ease-out;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 .shade,
 .modal-shade {
@@ -1240,7 +1276,7 @@ body {
 }
 :root.bp-720 .mobile-output-open .output-tools {
   min-height: 42px;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 6px 10px;
   border-radius: 0;
 }
@@ -1347,37 +1383,31 @@ body {
   min-height: 0;
 }
 
-@container (max-width: 520px) {
-  .limit-grid {
-    grid-template-columns: 1fr 1fr;
-  }
+.options-panel.panel-narrow .limit-grid {
+  grid-template-columns: 1fr 1fr;
 }
-@container (min-width: 521px) {
-  .select-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.options-panel.panel-wide .select-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 :root.tall-viewport .select-grid,
 :root.tall-viewport .limit-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-@container (max-width: 360px) {
-  .select-grid {
-    grid-template-columns: 1fr;
-  }
-  .inline-all-optimal {
-    grid-column: auto;
-  }
-  .limit-grid {
-    grid-template-columns: 1fr;
-  }
-  .limit-grid label:nth-child(1),
-  .limit-grid label:nth-child(2),
-  .limit-grid label:nth-child(3),
-  .limit-grid label:nth-child(4) {
-    grid-column: auto;
-  }
+.options-panel.panel-tiny .select-grid {
+  grid-template-columns: 1fr;
+}
+.options-panel.panel-tiny .inline-all-optimal {
+  grid-column: auto;
+}
+.options-panel.panel-tiny .limit-grid {
+  grid-template-columns: 1fr;
+}
+.options-panel.panel-tiny .limit-grid label:nth-child(1),
+.options-panel.panel-tiny .limit-grid label:nth-child(2),
+.options-panel.panel-tiny .limit-grid label:nth-child(3),
+.options-panel.panel-tiny .limit-grid label:nth-child(4) {
+  grid-column: auto;
 }
 
 :root.bp-620 .select-grid {
@@ -1738,23 +1768,23 @@ body {
 }
 .terminal.metric-move .terminal-head,
 .terminal.metric-move .solution {
-  grid-template-columns: 72px 1fr 48px 48px;
+  grid-template-columns: 72px minmax(0, 1fr) 48px 48px;
 }
 .terminal.metric-angle .terminal-head,
 .terminal.metric-angle .solution {
-  grid-template-columns: 72px 1fr 48px 48px 48px;
+  grid-template-columns: 72px minmax(0, 1fr) 48px 48px 48px;
 }
 .terminal.metric-slice.with-ergo .terminal-head,
 .terminal.metric-slice.with-ergo .solution {
-  grid-template-columns: 72px 1fr 48px 52px;
+  grid-template-columns: 72px minmax(0, 1fr) 48px 52px;
 }
 .terminal.metric-move.with-ergo .terminal-head,
 .terminal.metric-move.with-ergo .solution {
-  grid-template-columns: 72px 1fr 48px 48px 52px;
+  grid-template-columns: 72px minmax(0, 1fr) 48px 48px 52px;
 }
 .terminal.metric-angle.with-ergo .terminal-head,
 .terminal.metric-angle.with-ergo .solution {
-  grid-template-columns: 72px 1fr 48px 48px 48px 52px;
+  grid-template-columns: 72px minmax(0, 1fr) 48px 48px 48px 52px;
 }
 .compact-number {
   width: 48px;

@@ -18,10 +18,60 @@ import { t, LangCode, getLang, setLang } from './i18n';
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
 const OFFLOAD_CHUNK = 5000;
+const TABLE_COL_WIDTHS = {
+  wide: { hash: 72, num: 48, ergo: 52, minSol: 150 },
+  compact: { hash: 34, num: 42, ergo: 50, minSol: 88 },
+};
+const computeTableCols = (
+  width: number, metric: string, showErgo: boolean, compact: boolean,
+): { hash: boolean; angle: boolean; move: boolean; slices: boolean; ergo: boolean; template: string } => {
+  const sizes = compact ? TABLE_COL_WIDTHS.compact : TABLE_COL_WIDTHS.wide;
+  const w = (key: string) => (key === "hash" ? sizes.hash : key === "ergo" ? sizes.ergo : sizes.num);
+  const want = new Set<string>(["hash"]);
+  if (metric === "Angle") want.add("angle");
+  if (metric !== "Slice") want.add("move");
+  want.add("slices");
+  if (showErgo) want.add("ergo");
+  const keepPriority = ["ergo", "angle", "move", "slices", "hash"];
+  const cols = [...want];
+  const total = (list: string[]) => list.reduce((sum, key) => sum + w(key), 0) + sizes.minSol;
+  while (cols.length > 1 && total(cols) > width) {
+    const drop = keepPriority.slice().reverse().find((key) => cols.includes(key));
+    if (!drop) break;
+    cols.splice(cols.indexOf(drop), 1);
+  }
+  const template = ["hash", "solution", "angle", "move", "slices", "ergo"]
+    .map((key) => (key === "solution" ? "minmax(0, 1fr)" : cols.includes(key) ? `${w(key)}px` : null))
+    .filter((part): part is string => !!part)
+    .join(" ");
+  return {
+    hash: cols.includes("hash"),
+    angle: cols.includes("angle"),
+    move: cols.includes("move"),
+    slices: cols.includes("slices"),
+    ergo: cols.includes("ergo"),
+    template,
+  };
+};
 const computeTotalPages = (total: number, pageSize: number) => {
   const raw = Math.max(1, Math.ceil(total / pageSize));
   const remainder = total % pageSize;
   return remainder > 0 && remainder < pageSize * 0.1 ? Math.max(1, raw - 1) : raw;
+};
+const readBreakpoints = () => {
+  const cs = getComputedStyle(document.documentElement);
+  const read = (name: string) => {
+    const value = parseFloat(cs.getPropertyValue(name));
+    return Number.isFinite(value) ? value : 0;
+  };
+  return {
+    tall: read("--bp-tall"),
+    wide: read("--bp-wide"),
+    semi: read("--bp-semi"),
+    narrow: read("--bp-narrow"),
+    panel: read("--bp-panel"),
+    panelTiny: read("--bp-panel-tiny"),
+  };
 };
 const solved = [
   0, 0, 8, 1, 1, 9, 2, 2, 10, 3, 3, 11, 12, 4, 4, 13, 5, 5, 14, 6, 6, 15, 7, 7,
@@ -499,8 +549,10 @@ export default function App() {
   const favoritesReady = useRef(false);
   const favShadeStartRef = useRef<EventTarget | null>(null);
   const favShadeEndRef = useRef<EventTarget | null>(null);
+  const toastTimerRef = useRef<number | undefined>(undefined);
   const [menu, setMenu] = useState(false),
     [lang, setLangState] = useState<LangCode>(getLang()),
+    [toast, setToast] = useState<string | null>(null),
     [modal, setModal] = useState<ModalType>(null),
     [modeMenu, setModeMenu] = useState(false),
     [openDropdown, setOpenDropdown] = useState<string | null>(null),
@@ -533,6 +585,7 @@ export default function App() {
     [undo, setUndo] = useState<string[]>([]), [redo, setRedo] = useState<string[]>([]),
     [tableView, setTableView] = useState(false), [expanded, setExpanded] = useState(false),
     [mobileOptionsOpen, setMobileOptionsOpen] = useState(false), [mobileOutputOpen, setMobileOutputOpen] = useState(false),
+    [tableWidth, setTableWidth] = useState(0),
     [zoom, setZoom] = useState(1),
     [abidNotation, setAbidNotation] = useState(false),
     [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false),
@@ -750,6 +803,7 @@ export default function App() {
   const cubeColumnRef = useRef<HTMLDivElement>(null);
   const tableMetricRef = useRef("Slice");
   const mainGridRef = useRef<HTMLDivElement>(null);
+  const optionsPanelRef = useRef<HTMLDivElement>(null);
   const useLessRamRef = useRef(false);
   const pageRef = useRef(0);
   const pageSizeRef = useRef(1000);
@@ -763,21 +817,25 @@ export default function App() {
 
   useEffect(() => {
     const el = document.documentElement;
-    const update = () => el.classList.toggle("tall-viewport", window.innerHeight / zoomRef.current >= 810);
+    const update = () => {
+      const bp = readBreakpoints();
+      el.classList.toggle("tall-viewport", window.innerHeight / zoomRef.current >= bp.tall);
+    };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
   useEffect(() => {
     zoomRef.current = zoom;
-    document.documentElement.classList.toggle("tall-viewport", window.innerHeight / zoom >= 810);
+    document.documentElement.classList.toggle("tall-viewport", window.innerHeight / zoom >= readBreakpoints().tall);
   }, [zoom]);
   useEffect(() => {
     const updateBreakpoints = () => {
       const effW = window.innerWidth / zoomRef.current;
-      document.documentElement.classList.toggle("bp-720", effW <= 860);
-      document.documentElement.classList.toggle("bp-620", effW <= 620);
-      document.documentElement.classList.toggle("bp-460", effW <= 460);
+      const bp = readBreakpoints();
+      document.documentElement.classList.toggle("bp-720", effW <= bp.wide);
+      document.documentElement.classList.toggle("bp-620", effW <= bp.semi);
+      document.documentElement.classList.toggle("bp-460", effW <= bp.narrow);
     };
     updateBreakpoints();
     window.addEventListener("resize", updateBreakpoints);
@@ -786,9 +844,10 @@ export default function App() {
   useEffect(() => {
     const update = () => {
       const effW = window.innerWidth / zoomRef.current;
-      document.documentElement.classList.toggle("bp-720", effW <= 860);
-      document.documentElement.classList.toggle("bp-620", effW <= 620);
-      document.documentElement.classList.toggle("bp-460", effW <= 460);
+      const bp = readBreakpoints();
+      document.documentElement.classList.toggle("bp-720", effW <= bp.wide);
+      document.documentElement.classList.toggle("bp-620", effW <= bp.semi);
+      document.documentElement.classList.toggle("bp-460", effW <= bp.narrow);
     };
     update();
   }, [zoom]);
@@ -828,6 +887,30 @@ export default function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [modal, favoritesOpen]);
+  useEffect(() => {
+    const node = tableContainerRef.current;
+    if (!node || !tableView) return;
+    const measure = () => setTableWidth(node.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [tableView]);
+  useEffect(() => {
+    const panel = optionsPanelRef.current;
+    if (!panel) return;
+    const update = () => {
+      const width = panel.clientWidth;
+      const bp = readBreakpoints();
+      panel.classList.toggle("panel-narrow", width <= bp.panel);
+      panel.classList.toggle("panel-wide", width > bp.panel);
+      panel.classList.toggle("panel-tiny", width <= bp.panelTiny);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (!modeControlRef.current?.contains(event.target as Node)) {
@@ -2170,7 +2253,7 @@ export default function App() {
     }
   };
   const renderOptionsPanel = () => (
-    <div className="options-panel">
+    <div className="options-panel" ref={optionsPanelRef}>
       <div className="mobile-modal-head">
         <b>{t('options.heading')}</b>
         <button aria-label={t('btn.closeOptions')} onClick={() => setMobileOptionsOpen(false)}><Icon name="close" /></button>
@@ -2238,7 +2321,9 @@ export default function App() {
     const searchDepth = progressDepthRef.current;
     return { elapsed, solutionCount, nodesSearched, searchDepth };
   };
-  const renderOutputShell = () => (
+  const renderOutputShell = () => {
+    const tableCols = tableView ? computeTableCols(tableWidth, tableMetricRef.current, showErgo, document.documentElement.classList.contains("bp-720")) : null;
+    return (
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
       <div className="output-tools">
         <div className="output-tools-left">
@@ -2325,16 +2410,16 @@ export default function App() {
         <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || (useLessRam && isRestoring)} title={t('btn.nextPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}><Icon name="chevronRight" /></button>
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
-      {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
-        <div className="terminal-head"><span>{t('table.hash')}</span><b>{t('table.solution')}</b>{tableMetricRef.current === "Angle" && <span>{t('table.angle')}</span>}{tableMetricRef.current !== "Slice" && <span>{t('table.moves')}</span>}<span>{t('table.slices')}</span>{showErgo && <span>{t('table.ergo')}</span>}</div>
+      {tableView && tableCols ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
+        <div className="terminal-head" style={{ gridTemplateColumns: tableCols.template }}>{tableCols.hash && <span>{t('table.hash')}</span>}<b>{t('table.solution')}</b>{tableCols.angle && tableMetricRef.current === "Angle" && <span>{t('table.angle')}</span>}{tableCols.move && tableMetricRef.current !== "Slice" && <span>{t('table.moves')}</span>}{tableCols.slices && <span>{t('table.slices')}</span>}{tableCols.ergo && showErgo && <span>{t('table.ergo')}</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
-          return <div className="solution" key={x.raw} onMouseDown={(event) => {
+          return <div className="solution" style={{ gridTemplateColumns: tableCols.template }} key={x.raw} onMouseDown={(event) => {
             if (event.button !== 0 && event.button !== 2) return;
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation || outputMode === "abid" ? "abid" : ""}>{abidNotation || outputMode === "abid" ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={abidNotation || outputMode === "abid" ? "abid" : ""}>{abidNotation || outputMode === "abid" ? abidify(x.alg) : x.alg}</code>{tableCols.angle && tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
@@ -2354,7 +2439,8 @@ export default function App() {
         {statusLines.map((line, index) => <span key={`status-${index}-${line}`} className="terminal-line terminal-line-final">{line}</span>)}
       </div>}
     </div>
-  );
+    );
+  };
   return (
     <div className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
@@ -2397,6 +2483,7 @@ export default function App() {
           )}
         </div>
       </header>
+      {toast && <div className="toast" role="status">{toast}</div>}
       <div className="inputbar">
         <div className="mode-control" ref={modeControlRef}>
           <button className="mode" title={tooltips.inputMode} onMouseDown={(event) => event.preventDefault()} onClick={cycleMode}>
@@ -2515,7 +2602,13 @@ export default function App() {
       {modal && <Modal type={modal} close={() => history.back()} settings={{
         abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
-        setLanguage: (code) => { setLang(code); setLangState(code); },
+        setLanguage: (code) => {
+          setLang(code);
+          setLangState(code);
+          setToast(t('toast.languageSet'));
+          if (toastTimerRef.current !== undefined) window.clearTimeout(toastTimerRef.current);
+          toastTimerRef.current = window.setTimeout(() => setToast(null), 2600);
+        },
         pageSize, setPageSize, showAll, setShowAll, pageSizeOptions: PAGE_SIZE_OPTIONS,
         useLessRam, setUseLessRam,
         onRequestShowAll: () => setShowAllConfirm(true),

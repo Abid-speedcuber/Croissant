@@ -109,6 +109,9 @@
     "abid": "Abid"
   },
   "outputNotation": "Notation:",
+  "toast": {
+    "languageSet": "Language set to English"
+  },
   "filter": {
     "find": "Find",
     "noInput": "No input",
