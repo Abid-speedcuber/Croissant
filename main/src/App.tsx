@@ -12,6 +12,7 @@ import {
   ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips,
 } from "./utils";
 import { Modal } from './components/Modal';
+import { Icon } from './components/Icon';
 import { DiskSpaceModal } from './components/DiskSpaceModal';
 import { t, LangCode, getLang, setLang } from './i18n';
 
@@ -59,7 +60,7 @@ function OptionDropdown({ id, label, title, value, options, disabled, open, setO
           onClick={() => !disabled && setOpen(open ? null : id)}
         >
           <span>{value}</span>
-          <span className="option-dropdown-arrow">▾</span>
+          <span className="option-dropdown-arrow"><Icon name="chevronDown" size={10} /></span>
         </button>
         {open && !disabled && (
           <div className="option-dropdown-menu" role="listbox">
@@ -2108,7 +2109,7 @@ export default function App() {
     <div className="options-panel">
       <div className="mobile-modal-head">
         <b>{t('options.heading')}</b>
-        <button aria-label={t('btn.closeOptions')} onClick={() => setMobileOptionsOpen(false)}>✕</button>
+        <button aria-label={t('btn.closeOptions')} onClick={() => setMobileOptionsOpen(false)}><Icon name="close" /></button>
       </div>
       <h2>{t('options.heading')}</h2>
       <div className="select-grid">
@@ -2190,17 +2191,17 @@ export default function App() {
           <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setKarn((k) => !k)}>{karn ? t('karnSelect.karn') : t('karnSelect.normal')}</span></span>
         </div>
         <div className="output-tools-right">
-          {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}>⏱</button>}
+          {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}><Icon name="timer" /></button>}
           <button
             className={`filter-trigger ${filterOpen || filterActive ? "active" : ""}`}
             title="Find"
             disabled={running || !totalCount}
             onClick={() => setFilterOpen((v) => !v)}
-          >⌕</button>
-          <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}>⧉</button>
-          <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}>{tableView ? "▤" : "⊞"}</button>
-          <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}>×</button>
-          <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}>{expanded ? "–" : "⤢"}</button>
+          ><Icon name="search" /></button>
+          <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}><Icon name="copy" /></button>
+          <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}><Icon name={tableView ? "list" : "grid"} /></button>
+          <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}><Icon name="close" /></button>
+          <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}><Icon name={expanded ? "collapse" : "expand"} /></button>
         </div>
       </div>
       {filterOpen && <div className="filter-overlay" role="search">
@@ -2236,13 +2237,13 @@ export default function App() {
           aria-pressed={filterRegexMode}
           onClick={() => setFilterRegexMode((v) => !v)}
         >.*</button>
-        <button type="button" className="filter-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setFilterOpen(false)}>✕</button>
+        <button type="button" className="filter-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setFilterOpen(false)}><Icon name="close" /></button>
       </div>}
-      {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}>⊞</button>}
-      {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}>⌄</button>}
+      {!followTerminal && !tableView && completedWhilePaused && <button className="terminal-follow-button" title={t('btn.switchTableView')} onClick={() => { switchToTableMode(); setCompletedWhilePaused(false); }}><Icon name="grid" /></button>}
+      {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}><Icon name="chevronDown" /></button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
       {!showAll && totalPages > 1 && <div className={`page-switcher${pageSwitcherOpaque ? " page-switcher-opaque" : ""}`} ref={pageSwitcherRef}>
-        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0 || (useLessRam && isRestoring)} title={t('btn.prevPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}>‹</button>
+        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0 || (useLessRam && isRestoring)} title={t('btn.prevPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}><Icon name="chevronLeft" /></button>
         <div className="page-switcher-center">
           <span className="page-switcher-inputwrap">
             <input
@@ -2267,7 +2268,7 @@ export default function App() {
           </span>
           <span className="page-switcher-total">/ {totalPages}</span>
         </div>
-        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || (useLessRam && isRestoring)} title={t('btn.nextPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}>›</button>
+        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || (useLessRam && isRestoring)} title={t('btn.nextPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}><Icon name="chevronRight" /></button>
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
       {tableView ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
@@ -2308,9 +2309,9 @@ export default function App() {
           <b>{t('app.brand')}</b><sub> &nbsp; &nbsp; {t('app.byline')}</sub>
         </div>
         <div className="top-menu-wrap">
-          <button className="top-favorites-button" title={t('btn.favorites')} onClick={() => { setFavoritesOpen(true); setFavoritesOpening(true); }}>♥</button>
+          <button className="top-favorites-button" title={t('btn.favorites')} onClick={() => { setFavoritesOpen(true); setFavoritesOpening(true); }}><Icon name="heart" /></button>
           <button className="top-menu-button" aria-label={t('btn.openMenu')} aria-expanded={menu} title={tooltips.menu} onMouseDown={(event) => event.preventDefault()} onClick={() => setMenu((value) => !value)}>
-            ⋮
+            <Icon name="dots" />
           </button>
           {menu && (
             <div className="top-menu" onClick={(event) => event.stopPropagation()}>
@@ -2357,7 +2358,7 @@ export default function App() {
               setModeMenu((v) => !v);
             }}
           >
-            ▾
+            <Icon name="chevronDown" size={10} />
           </button>
           {modeMenu && (
             <div className="mode-menu">
@@ -2469,7 +2470,7 @@ export default function App() {
       {modal === "settings" && diskOpen && <DiskSpaceModal onClose={() => setDiskOpen(false)} deleteOnQuit={deleteTablesOnQuit} setDeleteOnQuit={setDeleteTablesOnQuit} solutions={solutions} onClearSolutions={clearSolutions} />}
       {showAllConfirm && <div className="modal-shade modal-shade-top" onClick={() => setShowAllConfirm(false)}>
         <div className="modal modal-confirm" onClick={(event) => event.stopPropagation()}>
-          <button className="modal-close" onClick={() => setShowAllConfirm(false)}>✕</button>
+          <button className="modal-close" onClick={() => setShowAllConfirm(false)}><Icon name="close" /></button>
           <h2>{t('modal.showAll.title')}</h2>
           <p>{t('modal.showAll.warning')}</p>
           <div className="modal-confirm-actions">
@@ -2486,7 +2487,7 @@ export default function App() {
         favShadeEndRef.current = null;
       }}>
         <div ref={favModalRef} className={"modal favorites-modal" + (favoritesClosing ? " closing" : "") + (favoritesOpening ? " opening" : "")} style={favoritesClosing ? { transformOrigin: `${favClosingOriginRef.current.x}% ${favClosingOriginRef.current.y}%` } : undefined} onAnimationEnd={favoritesClosing ? onFavCloseAnimEnd : favoritesOpening ? onFavOpenAnimEnd : undefined} onClick={(event) => event.stopPropagation()}>
-          <button className="modal-close" onClick={beginCloseFavorites}>✕</button>
+          <button className="modal-close" onClick={beginCloseFavorites}><Icon name="close" /></button>
           <h2>{t('favorites.heading')}</h2>
           {!!totalCount && <button className="favorite-save" onClick={() => void (async () => {
             const key = currentRunKey();
@@ -2506,14 +2507,14 @@ export default function App() {
               <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
               <div className="favorite-actions">
                 <button title={t('btn.applySetup')} onClick={() => applyRunConfig(key)}>{t('btn.applySetup')}</button>
-                <button title={t('btn.copyAllAlgs')} onClick={() => void navigator.clipboard.writeText(bin.algorithms.map(lineWithoutBracket).join("\n"))}>⧉</button>
+                <button title={t('btn.copyAllAlgs')} onClick={() => void navigator.clipboard.writeText(bin.algorithms.map(lineWithoutBracket).join("\n"))}><Icon name="copy" /></button>
                 <button title={t('btn.deleteBin')} onClick={() => {
                   const timer = window.setTimeout(() => {
                     setPendingDeletes((old) => { const next = { ...old }; delete next[binDeleteKey]; return next; });
                     setFavorites((old) => { const next = { ...old }; delete next[key]; return next; });
                   }, 5000);
                   setPendingDeletes((old) => ({ ...old, [binDeleteKey]: timer }));
-                }}>🗑</button>
+                }}><Icon name="trash" /></button>
               </div>
               </>}
             </div>
@@ -2524,7 +2525,7 @@ export default function App() {
                 return <li key={`${alg}-${i}`} className={isPending ? "favorite-alg-deleted" : ""}>
                   {isPending ? <><span>{t('favorites.algDeleted')}</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[deleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; }); }}>{t('favorites.undo')}</button>?</> : <>
                     <code>{alg}</code>
-                    <button className="favorite-alg-copy" title={t('btn.copyAlgSmall')} onClick={() => void navigator.clipboard.writeText(lineWithoutBracket(alg))}>⧉</button>
+                    <button className="favorite-alg-copy" title={t('btn.copyAlgSmall')} onClick={() => void navigator.clipboard.writeText(lineWithoutBracket(alg))}><Icon name="copy" size={12} /></button>
                     <button className="favorite-alg-remove" title={t('btn.remove')} onClick={() => {
                       const timer = window.setTimeout(() => {
                         setPendingDeletes((old) => { const next = { ...old }; delete next[deleteKey]; return next; });
@@ -2537,7 +2538,7 @@ export default function App() {
                         });
                       }, 5000);
                       setPendingDeletes((old) => ({ ...old, [deleteKey]: timer }));
-                    }}>✕</button>
+                    }}><Icon name="close" size={12} /></button>
                   </>}
                 </li>;
               })}

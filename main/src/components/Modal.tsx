@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { t, LANGUAGES, LangCode } from "../i18n";
 import type { Modal } from "../utils";
+import { Icon } from "./Icon";
 
 export function Modal({
   type,
@@ -203,7 +204,7 @@ export function Modal({
         <div className="modal-section-title">{t('modal.howToUse.sectionSettings')}</div>
         <p>
           {t('modal.howToUse.descSettingsOpen').split('⋮')[0]}
-          <strong>⋮</strong>
+          <strong className="howto-icon"><Icon name="dots" size={12} /></strong>
           {t('modal.howToUse.descSettingsOpen').split('⋮')[1]}
         </p>
         <ul>
@@ -241,7 +242,7 @@ export function Modal({
         <div className="modal-section-title">{t('modal.howToUse.sectionFavorites')}</div>
         <p>
           {t('modal.howToUse.favIntro').split('♥')[0]}
-          <strong>♥</strong>
+          <strong className="howto-icon"><Icon name="heart" size={12} /></strong>
           {t('modal.howToUse.favIntro').split('♥')[1]}
         </p>
         <p>{t('modal.howToUse.favAdd')}</p>
@@ -254,9 +255,9 @@ export function Modal({
         <ul>
           <li>{t('modal.howToUse.favApply').split('Apply setup')[0]}<strong>Apply setup</strong>{t('modal.howToUse.favApply').split('Apply setup')[1]}</li>
           <li>{t('modal.howToUse.favRename').split('✏')[0]}<strong>✏</strong>{t('modal.howToUse.favRename').split('✏')[1]}</li>
-          <li><strong>⧉</strong>{t('modal.howToUse.favCopy').split('⧉')[1]}</li>
-          <li><strong>🗑</strong>{t('modal.howToUse.favDelete').split('🗑')[1]}</li>
-          <li>{t('modal.howToUse.favRemove').split('✕')[0]}<strong>✕</strong>{t('modal.howToUse.favRemove').split('✕')[1]}</li>
+          <li><strong className="howto-icon"><Icon name="copy" size={12} /></strong>{t('modal.howToUse.favCopy').split('⧉')[1]}</li>
+          <li><strong className="howto-icon"><Icon name="trash" size={12} /></strong>{t('modal.howToUse.favDelete').split('🗑')[1]}</li>
+          <li>{t('modal.howToUse.favRemove').split('✕')[0]}<strong className="howto-icon"><Icon name="close" size={12} /></strong>{t('modal.howToUse.favRemove').split('✕')[1]}</li>
         </ul>
         <p>{t('modal.howToUse.favStorage')}</p>
       </div>
@@ -273,7 +274,7 @@ export function Modal({
     }}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={close}>
-          ✕
+          <Icon name="close" />
         </button>
         {content}
       </div>
