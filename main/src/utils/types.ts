@@ -49,12 +49,14 @@ export type TwoGenStatus = { compatibility: number; cornersTwo: boolean; corners
 
 export type DisplaySolution = Solution & { display: string; alg: string };
 
+export type DropdownOption = { value: string; label: string };
+
 export type DropdownProps = {
   id: string;
   label: string;
   title: string;
   value: string;
-  options: string[];
+  options: DropdownOption[];
   disabled?: boolean;
   open: boolean;
   setOpen: (id: string | null) => void;

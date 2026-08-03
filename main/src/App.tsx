@@ -14,10 +14,14 @@ import {
 import { Modal } from './components/Modal';
 import { Icon } from './components/Icon';
 import { DiskSpaceModal } from './components/DiskSpaceModal';
-import { t, LangCode, getLang, setLang } from './i18n';
+import { t, tList, LangCode, getLang, setLang } from './i18n';
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
 const OFFLOAD_CHUNK = 5000;
+const LEGACY_METRIC: Record<string, string> = { Slice: "es", Move: "move", Angle: "ea", es: "es", move: "move", ea: "ea" };
+const LEGACY_TWO: Record<string, string> = { None: "none", "Pseudo 2 Gen": "p2g", "2 Gen": "2g", none: "none", p2g: "p2g", "2g": "2g" };
+const LEGACY_ANGLE: Record<string, string> = { None: "none", Both: "nb", Top: "nu", Bottom: "nd", none: "none", nb: "nb", nu: "nu", nd: "nd" };
+const LEGACY_NORMALIZE: Record<string, string> = { None: "none", Both: "both", PreABF: "pre", PostABF: "post", none: "none", both: "both", pre: "pre", post: "post" };
 const TABLE_COL_WIDTHS = {
   wide: { hash: 72, num: 48, ergo: 52, minSol: 150 },
   compact: { hash: 34, num: 42, ergo: 50, minSol: 88 },
@@ -28,8 +32,8 @@ const computeTableCols = (
   const sizes = compact ? TABLE_COL_WIDTHS.compact : TABLE_COL_WIDTHS.wide;
   const w = (key: string) => (key === "hash" ? sizes.hash : key === "ergo" ? sizes.ergo : sizes.num);
   const want = new Set<string>(["hash"]);
-  if (metric === "Angle") want.add("angle");
-  if (metric !== "Slice") want.add("move");
+  if (metric === "ea") want.add("angle");
+  if (metric !== "es") want.add("move");
   want.add("slices");
   if (showErgo) want.add("ergo");
   const keepPriority = ["ergo", "angle", "move", "slices", "hash"];
@@ -97,6 +101,7 @@ const side = [
 const colors = ["#333", "#fff", "#f00", "#00f", "#ff8600", "#0f0", "#888"];
 
 function OptionDropdown({ id, label, title, value, options, disabled, open, setOpen, onChange }: DropdownProps) {
+  const current = options.find((option) => option.value === value)?.label ?? value;
   return (
     <label className="option-dropdown-label" title={title}>
       {label}
@@ -109,25 +114,25 @@ function OptionDropdown({ id, label, title, value, options, disabled, open, setO
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => !disabled && setOpen(open ? null : id)}
         >
-          <span>{value}</span>
+          <span>{current}</span>
           <span className="option-dropdown-arrow"><Icon name="chevronDown" size={10} /></span>
         </button>
         {open && !disabled && (
           <div className="option-dropdown-menu" role="listbox">
             {options.map((option) => (
               <button
-                key={option}
+                key={option.value}
                 type="button"
                 role="option"
-                aria-selected={option === value}
-                className={option === value ? "selected" : ""}
+                aria-selected={option.value === value}
+                className={option.value === value ? "selected" : ""}
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  onChange(option);
+                  onChange(option.value);
                   setOpen(null);
                 }}
               >
-                {option}
+                {option.label}
               </button>
             ))}
           </div>
@@ -555,10 +560,10 @@ export default function App() {
     [input, setInput] = useState(""),
     [mode, setMode] = useState("SCRAMBLE"),
     [cubeState, setCubeState] = useState<CubeState>({ position: [...solved], partial: Array(24).fill(0), middle: 1, middlePartial: 0 }),
-    [metric, setMetric] = useState("Slice"),
-    [two, setTwo] = useState("None"),
-    [angle, setAngle] = useState("None"),
-    [normalize, setNormalize] = useState("None"),
+    [metric, setMetric] = useState("es"),
+    [two, setTwo] = useState("none"),
+    [angle, setAngle] = useState("none"),
+    [normalize, setNormalize] = useState("none"),
     [all, setAll] = useState(true),
     [generator, setGenerator] = useState(false),
     [cubeShapeMemory, setCubeShapeMemory] = useState(false),
@@ -1299,15 +1304,15 @@ export default function App() {
   const applyRunConfig = (key: string) => {
     const [position, ...flags] = key.split(/\s+/).filter(Boolean), parsed = parsePosition(position || "");
     if (parsed) restore(position);
-    setMetric(flags.includes("-es") ? "Slice" : flags.includes("-ea") ? "Angle" : "Move");
+    setMetric(flags.includes("-es") ? "es" : flags.includes("-ea") ? "ea" : "move");
     const allFlag = flags.find((flag) => /^-a\d*$/.test(flag));
     setAll(Boolean(allFlag)); setSuboptimal(allFlag && allFlag.length > 2 ? Number(allFlag.slice(2)) : 0);
     const depthFlag = flags.find((flag) => flag.startsWith("-d")); setDepths(depthFlag?.slice(2) || "");
     setGenerator(flags.includes("-g"));
-    setTwo(flags.includes("-2") ? "2 Gen" : flags.includes("-p") ? "Pseudo 2 Gen" : "None");
+    setTwo(flags.includes("-2") ? "2g" : flags.includes("-p") ? "p2g" : "none");
     setCubeShapeMemory(flags.includes("-c"));
     if (flags.includes("-m") !== ignoreMiddle) { ignoreHistory.current = true; toggleIgnoreMiddle(flags.includes("-m")); ignoreHistory.current = false; }
-    setAngle(flags.includes("-nb") ? "Both" : flags.includes("-nu") ? "Top" : flags.includes("-nd") ? "Bottom" : "None");
+    setAngle(flags.includes("-nb") ? "nb" : flags.includes("-nu") ? "nu" : flags.includes("-nd") ? "nd" : "none");
     const setLimit = (prefix: string, setEnabled: (v: boolean) => void, setValue: (v: number) => void) => {
       const flag = flags.find((value) => value.startsWith(prefix)); setEnabled(Boolean(flag));
       if (flag) setValue(Number(flag.slice(2)));
@@ -1769,8 +1774,8 @@ export default function App() {
       void native.core.invoke("stop_solver").catch(() => undefined);
       return;
     }
-    if ((two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
-        (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)))) return;
+    if ((two === "2g" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
+        (two === "p2g" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)))) return;
     openMobileOutput();
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
@@ -1927,11 +1932,11 @@ export default function App() {
       if (typeof value.abidNotation === "boolean") setAbidNotation(value.abidNotation);
       if (typeof value.ignoreTransforms === "boolean") setIgnoreTransforms(value.ignoreTransforms);
       if (typeof value.debugOutput === "boolean") setDebugOutput(value.debugOutput);
-      if (typeof value.normalize === "string") setNormalize(value.normalize);
+      if (typeof value.normalize === "string") setNormalize(LEGACY_NORMALIZE[value.normalize] ?? "none");
       if (typeof value.mode === "string") setMode(value.mode);
-      if (typeof value.metric === "string") setMetric(value.metric);
-      if (typeof value.two === "string") setTwo(value.two);
-      if (typeof value.angle === "string") setAngle(value.angle);
+      if (typeof value.metric === "string") setMetric(LEGACY_METRIC[value.metric] ?? "es");
+      if (typeof value.two === "string") setTwo(LEGACY_TWO[value.two] ?? "none");
+      if (typeof value.angle === "string") setAngle(LEGACY_ANGLE[value.angle] ?? "none");
       if (typeof value.all === "boolean") setAll(value.all);
       if (typeof value.suboptimal === "number") setSuboptimal(value.suboptimal);
       if (typeof value.depths === "string") setDepths(value.depths);
@@ -1983,7 +1988,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     if (!tauri()?.core?.invoke) return;
-    const specificAngleBot = angle === "Both" || angle === "Bottom";
+    const specificAngleBot = angle === "nb" || angle === "nd";
     void tauri()!.core!.invoke<TwoGenStatus>("two_gen_status", { position: rawPosition(cubeState), specificAngleBot })
       .then((status) => { if (!cancelled) setTwoGenStatus(status); })
       .catch((err) => console.error("two_gen_status invoke failed:", err));
@@ -2025,12 +2030,12 @@ export default function App() {
       unlisten?.();
     };
   }, []);
-  const cubeshapeBlockedBy2Gen = (two === "2 Gen" && !twoGenStatus.cornersTwo) ||
-    (two === "Pseudo 2 Gen" && !twoGenStatus.cornersPseudo);
+  const cubeshapeBlockedBy2Gen = (two === "2g" && !twoGenStatus.cornersTwo) ||
+    (two === "p2g" && !twoGenStatus.cornersPseudo);
   const cubeshapeForced = !isGoodSquares(cubeState) || cubeshapeBlockedBy2Gen;
   const cubeShape = cubeShapeMemory && !cubeshapeForced;
-  const twoGenBlocked = (two === "2 Gen" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
-    (two === "Pseudo 2 Gen" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
+  const twoGenBlocked = (two === "2g" && (twoGenStatus.compatibility < 2 || (cubeShape && !twoGenStatus.cornersTwo))) ||
+    (two === "p2g" && (twoGenStatus.compatibility < 1 || (cubeShape && !twoGenStatus.cornersPseudo)));
   const cubeshapeDisableReason = cubeshapeBlockedBy2Gen
     ? t('errors.no2GenCorners')
     : !inCubeshape(cubeState) ? (() => {
@@ -2286,10 +2291,10 @@ export default function App() {
       </div>
       <h2>{t('options.heading')}</h2>
       <div className="select-grid">
-        <OptionDropdown id="metric" label={t('options.metric')} title={tooltips.metric} value={metric} options={["Slice", "Move", "Angle"]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
-        <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={["None", "Pseudo 2 Gen", "2 Gen"]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
-        <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={["None", "Both", "Top", "Bottom"]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
-        <OptionDropdown id="normalize" label={t('options.normalizeABF')} title={tooltips.normalize} value={normalize} options={["None", "Both", "PreABF", "PostABF"]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
+        <OptionDropdown id="metric" label={t('options.metric')} title={tooltips.metric} value={metric} options={[{ value: "es", label: tList('options.metricValues')[0] }, { value: "move", label: tList('options.metricValues')[1] }, { value: "ea", label: tList('options.metricValues')[2] }]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
+        <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={[{ value: "none", label: tList('options.twoGenValues')[0] }, { value: "p2g", label: tList('options.twoGenValues')[1] }, { value: "2g", label: tList('options.twoGenValues')[2] }]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
+        <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={[{ value: "none", label: tList('options.lockValues')[0] }, { value: "nb", label: tList('options.lockValues')[1] }, { value: "nu", label: tList('options.lockValues')[2] }, { value: "nd", label: tList('options.lockValues')[3] }]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+        <OptionDropdown id="normalize" label={t('options.normalizeABF')} title={tooltips.normalize} value={normalize} options={[{ value: "none", label: tList('options.normalizeValues')[0] }, { value: "both", label: tList('options.normalizeValues')[1] }, { value: "pre", label: tList('options.normalizeValues')[2] }, { value: "post", label: tList('options.normalizeValues')[3] }]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">
         <span className="generator-toggle">{t('options.output')} <span className="generator-toggle-value" title={tooltips.generator} onClick={() => !running && setGenerator((g) => !g)}>{generator ? t('options.outputValueScramble') : t('options.outputValueSolution')}</span></span>
@@ -2436,7 +2441,7 @@ export default function App() {
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
       {tableView && tableCols ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
-        <div className="terminal-head" style={{ gridTemplateColumns: tableCols.template }}>{tableCols.hash && <span>{t('table.hash')}</span>}<b>{t('table.solution')}</b>{tableCols.angle && tableMetricRef.current === "Angle" && <span>{t('table.angle')}</span>}{tableCols.move && tableMetricRef.current !== "Slice" && <span>{t('table.moves')}</span>}{tableCols.slices && <span>{t('table.slices')}</span>}{tableCols.ergo && showErgo && <span>{t('table.ergo')}</span>}</div>
+        <div className="terminal-head" style={{ gridTemplateColumns: tableCols.template }}>{tableCols.hash && <span>{t('table.hash')}</span>}<b>{t('table.solution')}</b>{tableCols.angle && tableMetricRef.current === "ea" && <span>{t('table.angle')}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{t('table.moves')}</span>}{tableCols.slices && <span>{t('table.slices')}</span>}{tableCols.ergo && showErgo && <span>{t('table.ergo')}</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
           return <div className="solution" style={{ gridTemplateColumns: tableCols.template }} key={x.raw} onMouseDown={(event) => {
@@ -2444,7 +2449,7 @@ export default function App() {
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : x.alg}</code>{tableCols.angle && tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : x.alg}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}

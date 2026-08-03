@@ -25,6 +25,16 @@ export function t(path: string): string {
   return typeof val === 'string' ? val : path;
 }
 
+export function tList(path: string): string[] {
+  const keys = path.split('.');
+  let val: any = translations[currentLang];
+  for (const k of keys) {
+    if (val == null || typeof val !== 'object') return [];
+    val = val[k];
+  }
+  return Array.isArray(val) ? val.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
 export function setLang(code: LangCode) {
   currentLang = code;
   try { localStorage.setItem(STORAGE_KEY, code); } catch {}

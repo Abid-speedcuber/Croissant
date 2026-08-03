@@ -104,18 +104,18 @@ export function solverFlags(options: {
   maxY: boolean; maxYValue: number; maxTotal: boolean; maxTotalValue: number;
 }) {
   const flags: string[] = [];
-  if (options.metric === "Slice") flags.push("-es");
-  if (options.metric === "Angle") flags.push("-ea");
+  if (options.metric === "es") flags.push("-es");
+  if (options.metric === "ea") flags.push("-ea");
   if (options.all) flags.push(options.suboptimal && !validDepths(options.depths) ? "-a" + options.suboptimal : "-a");
   if (validDepths(options.depths)) flags.push("-d" + options.depths.replace(/\s/g, ""));
   if (options.generator) flags.push("-g");
-  if (options.two === "2 Gen") flags.push("-2");
-  if (options.two === "Pseudo 2 Gen") flags.push("-p");
+  if (options.two === "2g") flags.push("-2");
+  if (options.two === "p2g") flags.push("-p");
   if (options.cubeshape) flags.push("-c");
   if (options.ignoreEquator) flags.push("-m");
-  if (options.angle === "Both") flags.push("-nb");
-  if (options.angle === "Top") flags.push("-nu");
-  if (options.angle === "Bottom") flags.push("-nd");
+  if (options.angle === "nb") flags.push("-nb");
+  if (options.angle === "nu") flags.push("-nu");
+  if (options.angle === "nd") flags.push("-nd");
   if (options.maxX) flags.push("-X" + options.maxXValue);
   if (options.maxY) flags.push("-Y" + options.maxYValue);
   if (options.maxTotal) flags.push("-Z" + options.maxTotalValue);
@@ -450,7 +450,7 @@ export function medianNormalize(rows: Solution[]) {
 }
 
 export function normalizeLine(line: string, normalize: string) {
-  if (normalize === "None") return line;
+  if (normalize === "none") return line;
   const lb = line.lastIndexOf("["), alg = (lb > 0 ? line.slice(0, lb) : line).trim(), bracket = lb > 0 ? "  " + line.slice(lb).trim() : "";
   const norm = (block: string) => block.replace(/(-?\d)(,?)(-?\d)/, (_, a, comma, b) => {
     const n = (v: string) => { const x = ((Number(v) % 3) + 3) % 3; return x === 2 ? -1 : x; };
@@ -460,8 +460,8 @@ export function normalizeLine(line: string, normalize: string) {
   if (!separators.length) { const one = norm(alg); return one === "0,0" || one === "00" ? bracket.trimStart() : one + bracket; }
   const firstAt = separators[0].index!, lastAt = separators[separators.length - 1].index!;
   let first = alg.slice(0, firstAt), middle = alg.slice(firstAt, lastAt + 1), last = alg.slice(lastAt + 1);
-  if (normalize === "Both" || normalize === "PreABF") first = norm(first);
-  if (normalize === "Both" || normalize === "PostABF") last = norm(last);
+  if (normalize === "both" || normalize === "pre") first = norm(first);
+  if (normalize === "both" || normalize === "post") last = norm(last);
   if (first === "0,0" || first === "00") { first = ""; middle = middle.replace(/^\s/, ""); }
   if (last === "0,0" || last === "00") { last = ""; middle = middle.replace(/\s$/, ""); }
   return first + middle + last + bracket;
