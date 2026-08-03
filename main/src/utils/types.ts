@@ -5,7 +5,7 @@ export type CubeState = {
   middlePartial: number;
 };
 
-export type Modal = "settings" | "how" | "about" | "debug" | null;
+export type Modal = "settings" | "how" | "about" | "debug" | "notation" | null;
 
 export type FavoriteBin = { name: string; algorithms: string[] };
 

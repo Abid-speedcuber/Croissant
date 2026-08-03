@@ -8,7 +8,7 @@ import {
   DisplaySolution, DropdownProps, CubeActions, TauriGlobal,
   twistable, getLayerR, getParityOdd, isGoodSquares, inCubeshape, doMove, tauri, validDepths, solverFlags,
   positionString, rawPosition, parsePosition, invertScramble, addCommas, applyNumericAlgorithm,
-  abidify, abidSpacing, OutputMode, OUTPUT_MODES, nextOutputMode, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
+  abidify, abidSpacing, notationStyle, isKarnMode, OutputMode, OUTPUT_MODES, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
   ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips,
 } from "./utils";
 import { Modal } from './components/Modal';
@@ -590,7 +590,7 @@ export default function App() {
     [page, setPage] = useState(0),
     [pageInput, setPageInput] = useState("1");
   const [useLessRam, _setUseLessRam] = useState(false);
-  const karn = outputMode === "karn" || outputMode === "cskarn";
+  const karn = isKarnMode(outputMode);
   const smartKarn = outputMode === "cskarn";
   const [offloadedTotal, setOffloadedTotal] = useState(0);
   const [pendingTailCount, setPendingTailCount] = useState(0);
@@ -1293,6 +1293,7 @@ export default function App() {
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     if (smartKarn) flags.push("-k2");
+    if (outputMode === "karn") flags.push("-k1");
     if (outputMode === "abid") flags.push("-k3");
     return [lastSolvePosition.current || positionString(cubeState), ...flags].join(" ");
   };
@@ -1314,7 +1315,8 @@ export default function App() {
     };
     setLimit("-X", setMaxX, setMaxXValue); setLimit("-Y", setMaxY, setMaxYValue); setLimit("-Z", setMaxTotal, setMaxTotalValue);
     setIgnoreTransforms(flags.includes("-x"));
-    if (flags.includes("-k2")) setOutputMode("cskarn");
+    if (flags.includes("-k1")) setOutputMode("karn");
+    else if (flags.includes("-k2")) setOutputMode("cskarn");
     else if (flags.includes("-k3")) setOutputMode("abid");
     solutionsRef.current = [];
     outputLinesRef.current = [];
@@ -1659,6 +1661,14 @@ export default function App() {
       if (offloadPendingRef.current) { offloadPendingRef.current = false; void syncOffload(); }
     }
   };
+  // Renders a solution line in the current outputMode. Shared by the live
+  // stream (dedup key), the solution rows, the terminal and the table so the
+  // same algorithm always renders identically everywhere.
+  const buildDisplayText = (rawDisplay: string, karnDisplay: string, abidDisplay: string | undefined, sliceStart: string | undefined) => {
+    const base = normalizeLine(karn ? karnDisplay : rawDisplay, normalize);
+    if (outputMode === "abid" && abidDisplay) return normalizeLine(abidDisplay, normalize);
+    return notationStyle(base, outputMode, !!sliceStart);
+  };
   const receiveSolverLine = async (line: string, startPosition: string, runId: number) => {
     if (stopped.current) return;
     if (runId !== solveRunId.current) return;
@@ -1728,9 +1738,7 @@ export default function App() {
       rawDisplay = pair.rawDisplay;
       karnDisplay = pair.karnDisplay;
     }
-    const displayAlg = lineAlg(outputMode === "abid"
-      ? (abidDisplay ? normalizeLine(abidDisplay, normalize) : abidSpacing(normalizeLine(karn ? karnDisplay : rawDisplay, normalize), !!sliceStart))
-      : normalizeLine(karn ? karnDisplay : rawDisplay, normalize));
+    const displayAlg = lineAlg(buildDisplayText(rawDisplay, karnDisplay, abidDisplay, sliceStart));
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
     if (seenRaw.current.size === 1) {
@@ -1769,6 +1777,7 @@ export default function App() {
     const flags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     if (smartKarn) flags.push("-k2");
+    if (outputMode === "karn") flags.push("-k1");
     if (outputMode === "abid") flags.push("-k3");
     if (debugOutput) flags.push("-v5");
     stopped.current = false;
@@ -1913,9 +1922,11 @@ export default function App() {
   useEffect(() => {
     void loadSettings().then((value) => {
       if (!value) { queueMicrotask(() => { settingsReady.current = true; }); return; }
-      if (typeof value.outputMode === "string" && OUTPUT_MODES.includes(value.outputMode as OutputMode)) setOutputMode(value.outputMode as OutputMode);
-      else if (typeof value.smartKarn === "boolean" && typeof value.karn === "boolean") setOutputMode(value.smartKarn ? "cskarn" : value.karn ? "karn" : "normal");
-      else if (typeof value.karn === "boolean") setOutputMode(value.karn ? "karn" : "normal");
+      if (typeof value.outputMode === "string") {
+        const restored = value.outputMode === "normal" ? "default" : value.outputMode;
+        if (OUTPUT_MODES.includes(restored as OutputMode)) setOutputMode(restored as OutputMode);
+      } else if (typeof value.smartKarn === "boolean" && typeof value.karn === "boolean") setOutputMode(value.smartKarn ? "cskarn" : value.karn ? "karn" : "default");
+      else if (typeof value.karn === "boolean") setOutputMode(value.karn ? "karn" : "default");
       if (typeof value.abidNotation === "boolean") setAbidNotation(value.abidNotation);
       if (typeof value.ignoreTransforms === "boolean") setIgnoreTransforms(value.ignoreTransforms);
       if (typeof value.debugOutput === "boolean") setDebugOutput(value.debugOutput);
@@ -2038,20 +2049,12 @@ export default function App() {
   const commandFlags = solverFlags({ metric, all, suboptimal, depths, generator, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
   if (ignoreTransforms) commandFlags.push("-x");
   if (smartKarn) commandFlags.push("-k2");
+  if (outputMode === "karn") commandFlags.push("-k1");
   if (outputMode === "abid") commandFlags.push("-k3");
   const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   const showErgo = runCubeShape;
-  const solutionDisplayText = (solution: Solution) => {
-    if (outputMode === "abid") {
-      // Prefer the abid text the solver already emitted with -k3 (it carries
-      // the slice-start marker); only fall back to the JS converter for rows
-      // that were produced before abid output existed or in another mode.
-      if (solution.abidDisplay) return normalizeLine(solution.abidDisplay, normalize);
-      return abidSpacing(normalizeLine(solution.rawDisplay, normalize), !!solution.sliceStart);
-    }
-    const base = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
-    return base;
-  };
+  const solutionDisplayText = (solution: Solution) =>
+    buildDisplayText(solution.rawDisplay, solution.karnDisplay, solution.abidDisplay, solution.sliceStart);
   const displaySolution = (solution: Solution): DisplaySolution => {
     const display = solutionDisplayText(solution);
     return { ...solution, display, alg: lineAlg(display) };
@@ -2216,16 +2219,19 @@ export default function App() {
       : "";
     return { key: `sol-${solution.raw}-${index}`, text: solution.display + suffix, solution };
   });
+  const outputLineText = (entry: OutputLine) => entry.isSolution ? notationStyle(karn ? entry.karn : entry.raw, outputMode, !!entry.sliceStart) : entry.raw;
+  const notationCleanClass = outputMode === "clean" ? "notation-clean" : "";
   const terminalNonSolutions = outputLines
     .filter((entry) => !entry.isSolution)
-    .map((entry, index) => ({ key: `line-${index}-${entry.raw}`, text: outputMode === "abid" ? abidSpacing(entry.raw, !!entry.sliceStart) : karn ? entry.karn : entry.raw }));
+    .map((entry, index) => ({ key: `line-${index}-${entry.raw}`, text: outputLineText(entry) }));
   const copyTerminalText = () => {
-    const lines = outputLines.map((entry) => outputMode === "abid" ? abidSpacing(entry.raw, !!entry.sliceStart) : karn ? entry.karn : entry.raw);
+    const lines = outputLines.map(outputLineText);
     void navigator.clipboard.writeText(lines.join("\n"));
     setStatusLines((old) => [...old, t('terminal.copied')].slice(-8));
   };
   const renderSolutionText = (text: string) => {
-    if (!abidNotation && outputMode !== "abid") return text;
+    const showBarred = outputMode === "abid" || (karn && abidNotation);
+    if (!showBarred) return text;
     const lb = text.lastIndexOf("[");
     if (lb <= 0) return <span className="abid-inline">{abidify(text)}</span>;
     return <><span className="abid-inline">{abidify(text.slice(0, lb).trim())}</span>{"  " + text.slice(lb).trim()}</>;
@@ -2350,7 +2356,7 @@ export default function App() {
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
       <div className="output-tools">
         <div className="output-tools-left">
-          <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setOutputMode(nextOutputMode(outputMode))}>{t('karnSelect.' + outputMode)}</span></span>
+          <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setModal("notation")}>{t('karnSelect.' + outputMode)}</span></span>
         </div>
         <div className="output-tools-right">
           {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}><Icon name="timer" /></button>}
@@ -2442,7 +2448,7 @@ export default function App() {
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={abidNotation || outputMode === "abid" ? "abid" : ""}>{abidNotation || outputMode === "abid" ? abidify(x.alg) : x.alg}</code>{tableCols.angle && tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : x.alg}</code>{tableCols.angle && tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
@@ -2451,8 +2457,8 @@ export default function App() {
         {useLessRam && isRestoring && <span className="terminal-line terminal-line-status">{t('terminal.loadingPage')}</span>}
         {!outputLines.length && !totalCount && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {filterActive && !filterResults!.length && <span className="terminal-line terminal-line-empty">{t('filter.noMatches')}</span>}
-        {terminalNonSolutions.map((line) => <span key={line.key} className="terminal-line terminal-line-status">{line.text || " "}</span>)}
-        {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"}`}
+        {terminalNonSolutions.map((line) => <span key={line.key} className={`terminal-line terminal-line-status ${notationCleanClass}`}>{line.text || " "}</span>)}
+        {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"} ${notationCleanClass}`}
           onMouseDown={(event) => {
             if (event.button !== 0) return;
             event.preventDefault();
@@ -2623,7 +2629,7 @@ export default function App() {
       </div>}
       {createPortal(<>
       {modal && <Modal type={modal} close={() => history.back()} settings={{
-        abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
+        ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
         setLanguage: (code) => {
           setLang(code);
@@ -2636,6 +2642,8 @@ export default function App() {
         useLessRam, setUseLessRam,
         onRequestShowAll: () => setShowAllConfirm(true),
         onOpenDiskSpace: () => setDiskOpen(true),
+      }} notation={{
+        outputMode, setOutputMode, abidNotation, setAbidNotation, disabled: running,
       }} debugStats={modal === "debug" ? computeDebugStats() : null} liveDebug={modal === "debug" ? () => ({
         now: performance.now(),
         running: runningRef.current,

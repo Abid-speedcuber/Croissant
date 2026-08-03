@@ -791,6 +791,10 @@ textarea {
   overflow-wrap: anywhere;
   user-select: text;
 }
+.notation-clean,
+.notation-clean code {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
 .empty {
   color: #718198;
   padding: 24px;
@@ -952,6 +956,33 @@ textarea {
 }
 .modal-check span {
   color: #dce5f2;
+}
+.modal-check:has(input:disabled) span {
+  opacity: 0.5;
+}
+.modal-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.modal-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.modal-radio input {
+  margin: 0;
+}
+.modal-radio span {
+  color: #dce5f2;
+}
+.modal-radio:has(input:disabled) span {
+  opacity: 0.5;
 }
 .settings-slider {
   display: flex;

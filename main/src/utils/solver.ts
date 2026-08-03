@@ -267,12 +267,16 @@ export function applyNumericAlgorithm(state: CubeState, text: string): CubeState
   return twistable(current.position) ? current : undefined;
 }
 
-export type OutputMode = "normal" | "karn" | "cskarn" | "abid";
+// The effective output format for solutions. The numeric styles (default,
+// clean, wca, abid) render the raw WCA algorithm with a simple frontend
+// presentation pass (see toClean/toWCA/abidSpacing below); karn/cskarn render
+// the karn text the solver already emitted with -k1/-k2.
+export type OutputMode = "default" | "clean" | "wca" | "abid" | "karn" | "cskarn";
 
-export const OUTPUT_MODES: OutputMode[] = ["normal", "karn", "cskarn", "abid"];
+export const OUTPUT_MODES: OutputMode[] = ["default", "clean", "wca", "abid", "karn", "cskarn"];
 
-export function nextOutputMode(mode: OutputMode): OutputMode {
-  return OUTPUT_MODES[(OUTPUT_MODES.indexOf(mode) + 1) % OUTPUT_MODES.length];
+export function isKarnMode(mode: OutputMode): boolean {
+  return mode === "karn" || mode === "cskarn";
 }
 
 /*
@@ -349,6 +353,48 @@ export function abidify(text: string) {
     else result += text[i++];
   }
   return result;
+}
+
+// Split a display line into its algorithm part and the "[counts]" suffix.
+const splitMetrics = (text: string): [string, string] => {
+  const lb = text.lastIndexOf("[");
+  return lb > 0 ? [text.slice(0, lb), text.slice(lb)] : [text, ""];
+};
+
+// "Clean" numeric notation: strip all commas and put a space around every
+// separator (slash or the rater's slice-start marker), with no leading or
+// trailing whitespace. "/a,b/c,d/" -> "/ ab / cd /".
+export function toClean(text: string): string {
+  const [alg, rest] = splitMetrics(text);
+  return alg.replace(/,/g, "").replace(/([/\\|])/g, " $1 ").trim() + (rest ? "  " + rest : "");
+}
+
+// "WCA" numeric notation: parenthesize every pair and put a space after each
+// separator (slash or marker). "/a,b/c,d/" -> "/(a,b)/ (c,d)/".
+export function toWCA(text: string): string {
+  const [alg, rest] = splitMetrics(text);
+  const parts = alg.split(/([/\\|])/);
+  let out = "";
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (!part) continue;
+    if (/[/\\|]/.test(part)) out += part + (i < parts.length - 1 ? " " : "");
+    else out += "(" + part.trim() + ")";
+  }
+  return out.trimEnd() + (rest ? "  " + rest : "");
+}
+
+// Apply the presentation transform for a numeric OutputMode to a display line
+// (which may already carry the "[counts]" suffix and the rater's marker).
+// "default" passes the text through unchanged (the solver already spaces the
+// counts suffix with two spaces); clean/wca reproduce that same spacing.
+export function notationStyle(text: string, mode: OutputMode, hasIndicator?: boolean): string {
+  switch (mode) {
+    case "clean": return toClean(text);
+    case "wca": return toWCA(text);
+    case "abid": return abidSpacing(text, hasIndicator);
+    default: return text;
+  }
 }
 
 export function injectSliceIndicator(line: string, indicator?: string) {

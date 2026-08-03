@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { t, LANGUAGES, LangCode } from "../i18n";
 import type { Modal } from "../utils";
+import type { OutputMode } from "../utils";
 import { Icon } from "./Icon";
 import { DebugRateGraph, LiveDebugData } from "./DebugRateGraph";
 
@@ -8,13 +9,13 @@ export function Modal({
   type,
   close,
   settings,
+  notation,
   debugStats,
   liveDebug,
 }: {
   type: Exclude<Modal, null>;
   close: () => void;
   settings?: {
-    abidNotation: boolean; setAbidNotation: (value: boolean) => void;
     ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
     debugOutput: boolean; setDebugOutput: (value: boolean) => void;
     zoom: number; setZoom: (value: number) => void;
@@ -29,18 +30,20 @@ export function Modal({
     language?: LangCode;
     setLanguage?: (code: LangCode) => void;
   };
+  notation?: {
+    outputMode: OutputMode; setOutputMode: (value: OutputMode) => void;
+    abidNotation: boolean; setAbidNotation: (value: boolean) => void;
+    disabled: boolean;
+  };
   debugStats?: { elapsed: string; solutionCount: number; nodesSearched: number; searchDepth: number } | null;
   liveDebug?: (() => LiveDebugData) | null;
 }) {
+  const karnSelected = notation && (notation.outputMode === "karn" || notation.outputMode === "cskarn");
   const content =
     type === "settings" ? (
       <div className="modal-article">
         <h2>{t('modal.settings.title')}</h2>
         <div className="settings-list">
-          <label className="modal-check">
-            <input type="checkbox" checked={settings?.abidNotation ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setAbidNotation(e.target.checked)} />
-            <span>{t('modal.settings.abidNotation')}</span>
-          </label>
           <label className="modal-check">
             <input type="checkbox" checked={(settings?.ignoreTransforms || settings?.hasMaxTurn) ?? false} disabled={settings?.disabled || settings?.hasMaxTurn} onChange={(e) => settings?.setIgnoreTransforms(e.target.checked)} />
             <span>{t('modal.settings.ignoreTransforms')}</span>
@@ -78,6 +81,34 @@ export function Modal({
             ))}
           </select>
         </div>
+      </div>
+    ) : type === "notation" ? (
+      <div className="modal-article">
+        <h2>{t('modal.notation.title')}</h2>
+        <div className="modal-section-title">{t('modal.notation.numericTitle')}</div>
+        <div className="modal-radio-group">
+          {(["default", "clean", "wca", "abid"] as OutputMode[]).map((mode) => (
+            <label key={mode} className="modal-radio">
+              <input type="radio" name="notation-numeric" value={mode} checked={notation?.outputMode === mode} disabled={notation?.disabled} onChange={() => notation?.setOutputMode(mode)} />
+              <span>{t('modal.notation.' + mode)}</span>
+            </label>
+          ))}
+        </div>
+        <div className="modal-section-title">{t('modal.notation.karnTitle')}</div>
+        <div className="modal-radio-group">
+          <label className="modal-radio">
+            <input type="radio" name="notation-karn" value="karn" checked={notation?.outputMode === "karn"} disabled={notation?.disabled} onChange={() => notation?.setOutputMode("karn")} />
+            <span>{t('modal.notation.karnTraditional')}</span>
+          </label>
+          <label className="modal-radio">
+            <input type="radio" name="notation-karn" value="cskarn" checked={notation?.outputMode === "cskarn"} disabled={notation?.disabled} onChange={() => notation?.setOutputMode("cskarn")} />
+            <span>{t('modal.notation.karnSmart')}</span>
+          </label>
+        </div>
+        <label className="modal-check modal-notation-abid">
+          <input type="checkbox" checked={notation?.abidNotation ?? false} disabled={notation?.disabled || !karnSelected} onChange={(e) => notation?.setAbidNotation(e.target.checked)} />
+          <span>{t('modal.notation.abidNegatives')}</span>
+        </label>
       </div>
     ) : type === "debug" ? (
       <div className="modal-article">
@@ -205,7 +236,6 @@ export function Modal({
           {t('modal.howToUse.descSettingsOpen').split('⋮')[1]}
         </p>
         <ul>
-          <li><strong>{t('modal.howToUse.descAbidNotation').split(':')[0]}</strong>:{t('modal.howToUse.descAbidNotation').split(':').slice(1).join(':')}</li>
           <li><strong>{t('modal.howToUse.descIgnoreTransforms').split(':')[0]}</strong>:{t('modal.howToUse.descIgnoreTransforms').split(':').slice(1).join(':')}</li>
           <li><strong>{t('modal.howToUse.descDebugOutput').split(':')[0]}</strong>:{t('modal.howToUse.descDebugOutput').split(':').slice(1).join(':')}</li>
           <li><strong>{t('modal.howToUse.descUiScale').split(':')[0]}</strong>:{t('modal.howToUse.descUiScale').split(':').slice(1).join(':')}</li>

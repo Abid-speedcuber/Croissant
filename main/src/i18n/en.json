@@ -103,10 +103,12 @@
     "placeholderDepth": "e.g. 8,9"
   },
   "karnSelect": {
-    "normal": "Normal",
+    "default": "Default",
+    "clean": "Clean",
+    "wca": "WCA",
+    "abid": "Abid",
     "karn": "Karn",
-    "cskarn": "CS-karn",
-    "abid": "Abid"
+    "cskarn": "CS-karn"
   },
   "outputNotation": "Notation:",
   "toast": {
@@ -170,7 +172,6 @@
   "modal": {
     "settings": {
       "title": "Settings",
-      "abidNotation": "Use Abid's negative number representation",
       "ignoreTransforms": "Ignore move equivalences",
       "debugOutput": "Debug output",
       "uiScale": "UI scale",
@@ -179,6 +180,18 @@
       "pageSize": "Solutions per page",
       "showAll": "Show all the generated solutions in a single page",
       "useLessRam": "Use less RAM (offload solution pages to disk)"
+    },
+    "notation": {
+      "title": "Output notation",
+      "numericTitle": "Numeric notation",
+      "default": "Sq1opt default",
+      "clean": "Clean",
+      "wca": "WCA",
+      "abid": "Abid's notation",
+      "karnTitle": "Karnotation",
+      "karnTraditional": "Traditional Karn",
+      "karnSmart": "Smart Karn (CS-aware)",
+      "abidNegatives": "Use Abid's negative number representation"
     },
     "disk": {
       "manage": "Manage Disk Space",
@@ -267,7 +280,6 @@
       "descLimits": "Max top / bottom / total turns: cap how large layer turns can be.",
       "sectionSettings": "Settings",
       "descSettingsOpen": "Opened from the \u22ee menu in the top bar. Options:",
-      "descAbidNotation": "Use Abid's negative number representation: show negative numbers as barred digits. This is just a display setting.",
       "descIgnoreTransforms": "Ignore move equivalences: generate all possible algs, even with y2 algs.",
       "descDebugOutput": "Debug output: outputs internal solver states.",
       "descUiScale": "UI scale: adjust the interface size (50%\u2013200%).",
@@ -278,7 +290,7 @@
       "descContextMenu": "Right-click (or left-click in table view) on any solution to open a context menu:",
       "descCopyAlg": "\u29c9 Copy alg \u2014 copies the alg itself",
       "descAddFav": "\u2665 Add to Favorites Bin \u2014 saves the alg to a bin",
-      "outputTools1": "Notation dropdown \u2014 click to cycle Normal (WCA), Karn, CS.Karn (cubeshape-aware karnotation), or Abid (WCA with barred numbers and no interior slashes).",
+      "outputTools1": "Notation control \u2014 opens the output notation modal. Numeric: Sq1opt default, Clean (no commas, spaces around slices), WCA (parenthesized pairs), or Abid (WCA with barred numbers and no interior slashes). Karnotation: Traditional Karn or Smart Karn (cubeshape-aware). Use Abid's negative number representation applies to karnotation styles.",
       "outputTools2": "\u29c9 \u2014 copy all algs in the terminal to the clipboard.",
       "outputTools3": "\u229e / \u25a4 \u2014 switch between terminal and table view.",
       "outputTools4": "\u2922 \u2014 expand the terminal to full screen.",
