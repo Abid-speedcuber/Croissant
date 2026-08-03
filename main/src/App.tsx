@@ -530,7 +530,6 @@ export default function App() {
   const debugStatsRef = useRef<{ solutionTimestamps: number[] }>({ solutionTimestamps: [] });
   const rateHistoryRef = useRef<{ t: number; sol: number; node: number }[]>([]);
   const progressNodesRef = useRef(0);
-  const progressDepthRef = useRef(0);
   const progressRateRef = useRef(0);
   const lastProgressNodesRef = useRef(0);
   const lastProgressAtRef = useRef(0);
@@ -1674,7 +1673,7 @@ export default function App() {
     if (runId !== solveRunId.current) return;
     if (line.startsWith("__PROGRESS__")) {
       if (!solveStartTimeRef.current) solveStartTimeRef.current = performance.now();
-      const nm = line.match(/nodes=(\d+)/), dm = line.match(/depth=(\d+)/);
+      const nm = line.match(/nodes=(\d+)/);
       if (nm) {
         const nodes = parseInt(nm[1], 10);
         const now = performance.now();
@@ -1686,7 +1685,6 @@ export default function App() {
         lastProgressAtRef.current = now;
         progressNodesRef.current = nodes;
       }
-      if (dm) progressDepthRef.current = parseInt(dm[1], 10);
       return;
     }
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
@@ -1807,7 +1805,6 @@ export default function App() {
     debugStatsRef.current = { solutionTimestamps: [] };
     rateHistoryRef.current = [];
     progressNodesRef.current = 0;
-    progressDepthRef.current = 0;
     progressRateRef.current = 0;
     lastProgressNodesRef.current = 0;
     lastProgressAtRef.current = 0;
@@ -2342,13 +2339,12 @@ export default function App() {
   const computeDebugStats = () => {
     const now = performance.now();
     const start = solveStartTimeRef.current;
-    if (!start) return { elapsed: "—", solutionCount: 0, nodesSearched: 0, searchDepth: 0 };
+    if (!start) return { elapsed: "—", solutionCount: 0, nodesSearched: 0 };
     const end = runningRef.current ? now : (solveStopTimeRef.current || now);
     const elapsed = ((end - start) / 1000).toFixed(1);
     const solutionCount = totalCountRefs();
     const nodesSearched = progressNodesRef.current;
-    const searchDepth = progressDepthRef.current;
-    return { elapsed, solutionCount, nodesSearched, searchDepth };
+    return { elapsed, solutionCount, nodesSearched };
   };
   const renderOutputShell = () => {
     const tableCols = tableView ? computeTableCols(tableWidth, tableMetricRef.current, showErgo, document.documentElement.classList.contains("bp-720")) : null;

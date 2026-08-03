@@ -35,7 +35,7 @@ export function Modal({
     abidNotation: boolean; setAbidNotation: (value: boolean) => void;
     disabled: boolean;
   };
-  debugStats?: { elapsed: string; solutionCount: number; nodesSearched: number; searchDepth: number } | null;
+  debugStats?: { elapsed: string; solutionCount: number; nodesSearched: number } | null;
   liveDebug?: (() => LiveDebugData) | null;
 }) {
   const karnSelected = notation && (notation.outputMode === "karn" || notation.outputMode === "cskarn");
@@ -120,9 +120,7 @@ export function Modal({
           <span className="debug-value">{debugStats?.solutionCount ?? t('modal.debug.placeholder')}</span>
           <span className="debug-label">{t('modal.debug.nodesSearched')}</span>
           <span className="debug-value">{debugStats?.nodesSearched != null ? debugStats.nodesSearched.toLocaleString() : t('modal.debug.placeholder')}</span>
-          <span className="debug-label">{t('modal.debug.depth')}</span>
-          <span className="debug-value">{debugStats?.searchDepth ?? t('modal.debug.placeholder')}</span>
-        </div>
+          </div>
         {liveDebug && <DebugRateGraph
           getLive={liveDebug}
           solLabel={t('modal.debug.graphSolutions')}
