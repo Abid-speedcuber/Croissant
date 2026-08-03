@@ -6,6 +6,7 @@
 import { tauri } from "./utils/solver";
 import { isNativePlatform, solutionBytes } from "./storage";
 import { listTableEntries, deleteTableBlob, clearTableBlobs } from "./tableStore";
+import { t } from "./i18n";
 import type { TableEntry } from "./tableStore";
 import type { Solution } from "./utils/types";
 
@@ -15,18 +16,6 @@ export type DiskSpaceReport = {
   solutionBytes: number;
   tables: TableEntry[];
   total: number;
-};
-
-const TABLE_LABELS: Record<string, string> = {
-  "sq1stt.dat": "Move table for CS",
-  "sq1scte.dat": "Move table for edges",
-  "sq1sctc.dat": "Move table for corners",
-  "sq1p1u.dat": "Move-metric pruning table #1",
-  "sq1p2u.dat": "Move-metric pruning table #2",
-  "sq1p1a.dat": "Angle-metric pruning table #1",
-  "sq1p2a.dat": "Angle-metric pruning table #2",
-  "sq1p1w.dat": "Slice-metric pruning table #1",
-  "sq1p2w.dat": "Slice-metric pruning table #2",
 };
 
 const TABLE_ORDER = [
@@ -42,7 +31,9 @@ const TABLE_ORDER = [
 ];
 
 export function tableLabel(name: string): string {
-  return TABLE_LABELS[name] ?? name;
+  const key = `modal.disk.tables.${name.replace(/\./g, "_")}`;
+  const label = t(key);
+  return label === key ? name : label;
 }
 
 function sortTables(tables: TableEntry[]): TableEntry[] {

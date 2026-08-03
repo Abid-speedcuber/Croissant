@@ -1,9 +1,81 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { t, LANGUAGES, LangCode } from "../i18n";
 import type { Modal } from "../utils";
 import type { OutputMode } from "../utils";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 import { DebugRateGraph, LiveDebugData } from "./DebugRateGraph";
+
+const LINKS: Record<string, string> = {
+  jaap: "https://www.jaapsch.net/puzzles/",
+  github: "https://github.com/qqwref",
+  wca: "https://www.worldcubeassociation.org/persons/2006GOTT01",
+  here: "https://github.com/abid/croissant/blob/main/docs/sq1opt_old.txt",
+  abid: "https://www.worldcubeassociation.org/persons/2024ASHR02",
+  matt: "https://www.worldcubeassociation.org/persons/2023MAOS01",
+};
+
+// Translated strings may embed <strong>, <em>, <link:name> and <icon:name>
+// tags. Splitting on these universal tags (instead of English words) lets
+// translations reorder words freely without breaking the styling.
+function renderMarkup(src: string): ReactNode {
+  const tokens: (string | { closing: boolean; kind: string; name?: string })[] = [];
+  const re = /<(\/)?(strong|em|link:([a-z]+)|icon:([a-z]+))>/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    if (m.index > last) tokens.push(src.slice(last, m.index));
+    tokens.push({ closing: !!m[1], kind: m[2], name: m[3] ?? m[4] });
+    last = re.lastIndex;
+  }
+  if (last < src.length) tokens.push(src.slice(last));
+
+  const build = (i: number, stop?: string): { nodes: ReactNode[]; next: number } => {
+    const nodes: ReactNode[] = [];
+    while (i < tokens.length) {
+      const tok = tokens[i];
+      if (typeof tok === "string") {
+        nodes.push(tok);
+        i++;
+        continue;
+      }
+      if (tok.closing) {
+        if (tok.kind === stop) return { nodes, next: i + 1 };
+        i++;
+        continue;
+      }
+      if (tok.kind === "strong" || tok.kind === "em") {
+        const sub = build(i + 1, tok.kind);
+        nodes.push(
+          tok.kind === "strong"
+            ? <strong key={nodes.length}>{sub.nodes}</strong>
+            : <em key={nodes.length}>{sub.nodes}</em>,
+        );
+        i = sub.next;
+        continue;
+      }
+      if (tok.kind.startsWith("link:")) {
+        const sub = build(i + 1, tok.kind);
+        nodes.push(
+          <a key={nodes.length} href={LINKS[tok.name ?? ""]} target="_blank" rel="noreferrer">{sub.nodes}</a>,
+        );
+        i = sub.next;
+        continue;
+      }
+      if (tok.kind.startsWith("icon:")) {
+        nodes.push(
+          <strong key={nodes.length} className="howto-icon">
+            <Icon name={tok.name as IconName} size={12} />
+          </strong>,
+        );
+        i++;
+        continue;
+      }
+      i++;
+    }
+    return { nodes, next: i };
+  };
+  return <>{build(0).nodes}</>;
+}
 
 export function Modal({
   type,
@@ -132,156 +204,97 @@ export function Modal({
     ) : type === "about" ? (
       <div className="modal-article">
         <h2>{t('modal.about.title')}</h2>
-        <p>
-          {t('modal.about.p1').split(t('modal.about.linkJaap'))[0]}
-          <a href="https://www.jaapsch.net/puzzles/" target="_blank" rel="noreferrer">{t('modal.about.linkJaap')}</a>
-          {t('modal.about.p1').split(t('modal.about.linkJaap'))[1]}
-        </p>
-        <p>
-          {t('modal.about.p2').split(`(${t('modal.about.linkGithub')}, ${t('modal.about.linkWCA')})`)[0]}
-          {'('}
-          <a href="https://github.com/qqwref" target="_blank" rel="noreferrer">{t('modal.about.linkGithub')}</a>
-          {', '}
-          <a href="https://www.worldcubeassociation.org/persons/2006GOTT01" target="_blank" rel="noreferrer">{t('modal.about.linkWCA')}</a>
-          {')' + t('modal.about.p2').split(`(${t('modal.about.linkGithub')}, ${t('modal.about.linkWCA')})`)[1]}
-        </p>
-        <p>
-          {t('modal.about.p3').split(t('modal.about.linkHere'))[0]}
-          <a href="https://github.com/abid/croissant/blob/main/docs/sq1opt_old.txt" target="_blank" rel="noreferrer">{t('modal.about.linkHere')}</a>
-          {t('modal.about.p3').split(t('modal.about.linkHere'))[1]}
-        </p>
-        <p>
-          {t('modal.about.p4').split('v3')[0]}
-          <strong>v3</strong>
-          {t('modal.about.p4').split('v3').slice(1).join('v3')}
-        </p>
+        <p>{renderMarkup(t('modal.about.p1'))}</p>
+        <p>{renderMarkup(t('modal.about.p2'))}</p>
+        <p>{renderMarkup(t('modal.about.p3'))}</p>
+        <p>{renderMarkup(t('modal.about.p4'))}</p>
         <ul>
           <li>{t('modal.about.li1')}</li>
           <li>{t('modal.about.li2')}</li>
           <li>{t('modal.about.li3')}</li>
           <li>{t('modal.about.li4')}</li>
         </ul>
-        <p>
-          {t('modal.about.p5').split(t('modal.about.linkAbid'))[0]}
-          <a href="https://www.worldcubeassociation.org/persons/2024ASHR02" target="_blank" rel="noreferrer">{t('modal.about.linkAbid')}</a>
-          {t('modal.about.p5').split(t('modal.about.linkAbid'))[1].split(t('modal.about.linkMatt'))[0]}
-          <a href="https://www.worldcubeassociation.org/persons/2023MAOS01" target="_blank" rel="noreferrer">{t('modal.about.linkMatt')}</a>
-          {t('modal.about.p5').split(t('modal.about.linkAbid'))[1].split(t('modal.about.linkMatt'))[1]}
-        </p>
+        <p>{renderMarkup(t('modal.about.p5'))}</p>
       </div>
     ) : (
       <div className="modal-article how-to-use">
         <h2>{t('modal.howToUse.title')}</h2>
         <div className="modal-section-title">{t('modal.howToUse.sectionKeyboard')}</div>
         <ul>
-          <li><strong>Z</strong>{t('modal.howToUse.shortcut1').split('Z')[1].split('Y')[0]}<strong>Y</strong>{t('modal.howToUse.shortcut1').split('Y')[1]}</li>
-          <li><strong>Esc</strong>{t('modal.howToUse.shortcut2').replace('Esc', '')}</li>
-          <li><strong>Ctrl + Enter</strong>{t('modal.howToUse.shortcut3').replace('Ctrl + Enter', '')}</li>
-          <li><strong>Ctrl + Z</strong>{t('modal.howToUse.shortcut4').split('Ctrl + Z')[1].split('Ctrl + Y')[0]}<strong>Ctrl + Y</strong>{t('modal.howToUse.shortcut4').split('Ctrl + Y')[1]}</li>
-          <li><strong>Ctrl + =</strong>{t('modal.howToUse.shortcut5').split('Ctrl + =')[1].split('Ctrl + -')[0]}<strong>Ctrl + -</strong>{t('modal.howToUse.shortcut5').split('Ctrl + -')[1]}</li>
-          <li><strong>Ctrl + 0</strong>{t('modal.howToUse.shortcut6').replace('Ctrl + 0', '')}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcut1'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcut2'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcut3'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcut4'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcut5'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcut6'))}</li>
         </ul>
-        <p>
-          {t('modal.howToUse.swapHint').split('swap')[0]}
-          <strong>swap</strong>
-          {t('modal.howToUse.swapHint').split('swap')[1]}
-        </p>
+        <p>{renderMarkup(t('modal.howToUse.swapHint'))}</p>
         <ul>
-          <li><strong>J</strong>{t('modal.howToUse.shortcutJ').split('J')[1].split('F')[0]}<strong>F</strong>{t('modal.howToUse.shortcutJ').split('F')[1]}</li>
-          <li><strong>S</strong>{t('modal.howToUse.shortcutS').split('S')[1].split('L')[0]}<strong>L</strong>{t('modal.howToUse.shortcutS').split('L')[1]}</li>
-          <li><strong>I</strong>{t('modal.howToUse.shortcutI').split('I')[1].split('K')[0]}<strong>K</strong>{t('modal.howToUse.shortcutI').split('K')[1]}</li>
-          <li><strong>H</strong>{t('modal.howToUse.shortcutH').split('H')[1].split('G')[0]}<strong>G</strong>{t('modal.howToUse.shortcutH').split('G')[1]}</li>
-          <li><strong>W</strong>{t('modal.howToUse.shortcutW').split('W')[1].split('O')[0]}<strong>O</strong>{t('modal.howToUse.shortcutW').split('O')[1]}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcutJ'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcutS'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcutI'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcutH'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.shortcutW'))}</li>
         </ul>
         <div className="modal-section-title">{t('modal.howToUse.sectionScrambleInput')}</div>
-        <p>
-          {t('modal.howToUse.applyHint').split('Apply')[0]}
-          <strong>Apply</strong>
-          {t('modal.howToUse.applyHint').split('Apply')[1]}
-        </p>
+        <p>{renderMarkup(t('modal.howToUse.applyHint'))}</p>
         <p>{t('modal.howToUse.modeHint')}</p>
         <ul>
-          <li><strong>{t('modal.howToUse.modeScram').split(':')[0]}</strong>:{t('modal.howToUse.modeScram').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.modeAlg').split(':')[0]}</strong>:{t('modal.howToUse.modeAlg').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.modePos').split(':')[0]}</strong>:{t('modal.howToUse.modePos').split(':').slice(1).join(':')}</li>
+          <li>{renderMarkup(t('modal.howToUse.modeScram'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.modeAlg'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.modePos'))}</li>
         </ul>
-        <p>
-          {t('modal.howToUse.enterHint').split('Shift + Enter')[0].split('Enter')[0]}
-          <strong>Enter</strong>
-          {t('modal.howToUse.enterHint').split('Shift + Enter')[0].split('Enter')[1]}
-          <strong>Shift + Enter</strong>
-          {t('modal.howToUse.enterHint').split('Shift + Enter')[1]}
-        </p>
+        <p>{renderMarkup(t('modal.howToUse.enterHint'))}</p>
         <div className="modal-section-title">{t('modal.howToUse.sectionOptions')}</div>
         <p>{t('modal.howToUse.hoverHint')}</p>
         <ul>
-          <li><strong>{t('modal.howToUse.descOutput').split(':')[0]}</strong>:{t('modal.howToUse.descOutput').split(':').slice(1).join(':').split('Solution')[0]}<em>Solution</em>{t('modal.howToUse.descOutput').split('Solution')[1].split('Scramble')[0]}<em>Scramble</em>{t('modal.howToUse.descOutput').split('Scramble')[1]}</li>
-          <li><strong>{t('modal.howToUse.descMetric').split(':')[0]}</strong>:{t('modal.howToUse.descMetric').split(':').slice(1).join(':').split('Slice')[0]}<strong>Slice</strong>{t('modal.howToUse.descMetric').split('Slice')[1].split('Move')[0]}<strong>Move</strong>{t('modal.howToUse.descMetric').split('Move')[1].split('Angle')[0]}<strong>Angle</strong>{t('modal.howToUse.descMetric').split('Angle')[1]}</li>
-          <li><strong>{t('modal.howToUse.desc2Gen').split(':')[0]}</strong>:{t('modal.howToUse.desc2Gen').split(':').slice(1).join(':')}</li>
-          <li>
-            <strong>{t('modal.howToUse.descAll').split(':')[0]}</strong>:{t('modal.howToUse.descAll').split(':').slice(1).join(':').split('−/+')[0]}<strong>−</strong>/<strong>+</strong>{t('modal.howToUse.descAll').split('−/+')[1]}
-          </li>
-          <li><strong>{t('modal.howToUse.descDepths').split(':')[0]}</strong>:{t('modal.howToUse.descDepths').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.descCubeshape').split(':')[0]}</strong>:{t('modal.howToUse.descCubeshape').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.descAngle').split(':')[0]}</strong>:{t('modal.howToUse.descAngle').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.descNormalize').split(':')[0]}</strong>:{t('modal.howToUse.descNormalize').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.descLimits').split(':')[0]}</strong>:{t('modal.howToUse.descLimits').split(':').slice(1).join(':')}</li>
+          <li>{renderMarkup(t('modal.howToUse.descOutput'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descMetric'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.desc2Gen'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descAll'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descDepths'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descCubeshape'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descAngle'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descNormalize'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descLimits'))}</li>
         </ul>
         <div className="modal-section-title">{t('modal.howToUse.sectionSettings')}</div>
-        <p>
-          {t('modal.howToUse.descSettingsOpen').split('⋮')[0]}
-          <strong className="howto-icon"><Icon name="dots" size={12} /></strong>
-          {t('modal.howToUse.descSettingsOpen').split('⋮')[1]}
-        </p>
+        <p>{renderMarkup(t('modal.howToUse.descSettingsOpen'))}</p>
         <ul>
-          <li><strong>{t('modal.howToUse.descIgnoreTransforms').split(':')[0]}</strong>:{t('modal.howToUse.descIgnoreTransforms').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.descDebugOutput').split(':')[0]}</strong>:{t('modal.howToUse.descDebugOutput').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.descUiScale').split(':')[0]}</strong>:{t('modal.howToUse.descUiScale').split(':').slice(1).join(':')}</li>
+          <li>{renderMarkup(t('modal.howToUse.descIgnoreTransforms'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descDebugOutput'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descUiScale'))}</li>
         </ul>
         <div className="modal-section-title">{t('modal.howToUse.sectionOutput')}</div>
         <p>{t('modal.howToUse.outputIntro')}</p>
         <ul>
-          <li><strong>{t('modal.howToUse.descTerminalView').split(':')[0]}</strong>:{t('modal.howToUse.descTerminalView').split(':').slice(1).join(':')}</li>
-          <li><strong>{t('modal.howToUse.descTableView').split(':')[0]}</strong>:{t('modal.howToUse.descTableView').split(':').slice(1).join(':')}</li>
+          <li>{renderMarkup(t('modal.howToUse.descTerminalView'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descTableView'))}</li>
         </ul>
         <p>{t('modal.howToUse.descContextMenu')}</p>
         <ul>
-          <li><strong>{t('modal.howToUse.descCopyAlg').split('—')[0].trimEnd()}</strong>{' — '}{t('modal.howToUse.descCopyAlg').split('—').slice(1).join('—').trimStart()}</li>
-          <li><strong>{t('modal.howToUse.descAddFav').split('—')[0].trimEnd()}</strong>{' — '}{t('modal.howToUse.descAddFav').split('—').slice(1).join('—').trimStart()}</li>
+          <li>{renderMarkup(t('modal.howToUse.descCopyAlg'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.descAddFav'))}</li>
         </ul>
-        <p>Other buttons in the terminal area:</p>
+        <p>{t('modal.howToUse.otherButtons')}</p>
         <ul>
           <li>{t('modal.howToUse.outputTools1')}</li>
-          <li><strong>{t('modal.howToUse.outputTools2').split('—')[0].trimEnd()}</strong>{' — '}{t('modal.howToUse.outputTools2').split('—').slice(1).join('—').trimStart()}</li>
-          <li><strong>{t('modal.howToUse.outputTools3').split(' / ')[0].trim()}</strong>{' / '}<strong>{t('modal.howToUse.outputTools3').split(' / ')[1].split(' —')[0].trim()}</strong>{' ' + t('modal.howToUse.outputTools3').split('—').slice(1).join('—').trimStart()}</li>
-          <li><strong>{t('modal.howToUse.outputTools4').split('—')[0].trimEnd()}</strong>{' — '}{t('modal.howToUse.outputTools4').split('—').slice(1).join('—').trimStart()}</li>
+          <li>{renderMarkup(t('modal.howToUse.outputTools2'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.outputTools3'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.outputTools4'))}</li>
         </ul>
-        <p>
-          {t('modal.howToUse.descErgo').split('Stay in cubeshape')[0]}
-          <strong>Stay in cubeshape</strong>
-          {t('modal.howToUse.descErgo').split('Stay in cubeshape')[1].split('ergonomics')[0]}
-          <strong>ergonomics</strong>
-          {t('modal.howToUse.descErgo').split('Stay in cubeshape')[1].split('ergonomics')[1]}
-        </p>
+        <p>{renderMarkup(t('modal.howToUse.descErgo'))}</p>
         <div className="modal-section-title">{t('modal.howToUse.sectionFavorites')}</div>
-        <p>
-          {t('modal.howToUse.favIntro').split('♥')[0]}
-          <strong className="howto-icon"><Icon name="heart" size={12} /></strong>
-          {t('modal.howToUse.favIntro').split('♥')[1]}
-        </p>
+        <p>{renderMarkup(t('modal.howToUse.favIntro'))}</p>
         <p>{t('modal.howToUse.favAdd')}</p>
-        <p>
-          {t('modal.howToUse.favBinId').split('configurations')[0]}
-          <strong>configurations</strong>
-          {t('modal.howToUse.favBinId').split('configurations')[1]}
-        </p>
+        <p>{renderMarkup(t('modal.howToUse.favBinId'))}</p>
         <p>{t('modal.howToUse.favInside')}</p>
         <ul>
-          <li>{t('modal.howToUse.favApply').split('Apply setup')[0]}<strong>Apply setup</strong>{t('modal.howToUse.favApply').split('Apply setup')[1]}</li>
-          <li>{t('modal.howToUse.favRename').split('✏')[0]}<strong>✏</strong>{t('modal.howToUse.favRename').split('✏')[1]}</li>
-          <li><strong className="howto-icon"><Icon name="copy" size={12} /></strong>{t('modal.howToUse.favCopy').split('⧉')[1]}</li>
-          <li><strong className="howto-icon"><Icon name="trash" size={12} /></strong>{t('modal.howToUse.favDelete').split('🗑')[1]}</li>
-          <li>{t('modal.howToUse.favRemove').split('✕')[0]}<strong className="howto-icon"><Icon name="close" size={12} /></strong>{t('modal.howToUse.favRemove').split('✕')[1]}</li>
+          <li>{renderMarkup(t('modal.howToUse.favApply'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.favRename'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.favCopy'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.favDelete'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.favRemove'))}</li>
         </ul>
         <p>{t('modal.howToUse.favStorage')}</p>
       </div>

@@ -1,4 +1,5 @@
 import { CubeState, RatingResult, Solution, TauriGlobal } from "./types";
+import { t } from "../i18n";
 
 export function twistable(p: number[]) {
   return p[0] !== p[11] && p[5] !== p[6] && p[12] !== p[23] && p[17] !== p[18];
@@ -468,23 +469,23 @@ export function normalizeLine(line: string, normalize: string) {
 }
 
 export const tooltips = {
-  menu: "Menu",
-  inputMode: "Switch input mode: Scramble, Alg, or Position.",
-  modeMenu: "Choose input mode.",
-  apply: "Apply the input. Shift+Enter first resets the cube to solved.",
-  reset: "Reset  [Esc]",
-  metric: "Choose how move length is counted: Slice, Move, or Angle metric.",
-  twoGen: "Restrict solving to 2 Gen or Pseudo 2 Gen move sets.",
-  angle: "Lock the pre-ABF angle move to +/-1 or 0.",
-  normalize: "Control which ABF moves are normalized in the output.",
-  all: "Find all optimal solutions, or optimal plus extra depths.",
-  suboptimal: "Extra moves beyond optimal to also find.",
-  generator: "Output algs that set up the case from solved instead of solving it.",
-  cubeshape: "Only generate algs that keep the puzzle in cubeshape throughout.",
-  ignoreEquator: "Ignore equator states. Equivalent to clicking the middle bar until it is gray.",
-  karn: "Click to cycle the output notation: Normal (WCA), Karn, CS-aware Karn, or Abid (no-slashes).",
-  maxX: "Limit the maximum top-layer turn in either direction (0-6).",
-  maxY: "Limit the maximum bottom-layer turn in either direction (0-6).",
-  maxTotal: "Limit the maximum combined |top|+|bottom| turn per move pair (1-12).",
-  depths: "Comma-separated list of depths to search, e.g. 8,9.",
+  menu: t('tooltips.menu'),
+  inputMode: t('tooltips.inputMode'),
+  modeMenu: t('tooltips.modeMenu'),
+  apply: t('tooltips.apply'),
+  reset: t('tooltips.reset'),
+  metric: t('tooltips.metric'),
+  twoGen: t('tooltips.twoGen'),
+  angle: t('tooltips.angle'),
+  normalize: t('tooltips.normalize'),
+  all: t('tooltips.all'),
+  suboptimal: t('tooltips.suboptimal'),
+  generator: t('tooltips.generator'),
+  cubeshape: t('tooltips.cubeshape'),
+  ignoreEquator: t('tooltips.ignoreEquator'),
+  karn: t('tooltips.karn'),
+  maxX: t('tooltips.maxX'),
+  maxY: t('tooltips.maxY'),
+  maxTotal: t('tooltips.maxTotal'),
+  depths: t('tooltips.depths'),
 };

@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 type WebChannel<T> = { onmessage: (message: T) => void };
 
 type WorkerEvent =
@@ -34,7 +36,7 @@ function attachWorkerEvents(worker: Worker) {
     else request.resolve(event.data.result);
   };
   worker.onerror = (event) => {
-    const error = new Error(event.message || "The Square-1 WASM worker failed.");
+    const error = new Error(event.message || t('status.workerFailed'));
     for (const [id, request] of pending) {
       pending.delete(id);
       request.reject(error);
@@ -69,7 +71,7 @@ function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise
   if (command === "stop_solver") {
     solveWorker?.terminate();
     solveWorker = undefined;
-    rejectMatchingRequests((request) => !!request.solve, new Error("The solver worker was stopped."));
+    rejectMatchingRequests((request) => !!request.solve, new Error(t('status.workerStopped')));
     return Promise.resolve(undefined as T);
   }
 

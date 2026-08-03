@@ -482,10 +482,10 @@ function Cube({
         onContextMenu={(e) => e.preventDefault()}
       />
       <button className="cube-reset" onClick={() => invoke("reset")}>
-        Reset
+        {t('btn.resetCube')}
       </button>
       <button className="cube-options" onClick={onOptions}>
-        Options
+        {t('btn.options')}
       </button>
     </div>
   );
@@ -1865,7 +1865,12 @@ export default function App() {
       if (shouldAutoTable) setTableBusyMessage(t('table.busyBuilding'));
       flushSolutionState();
       const count = totalCountRefs();
-      const status = `${stopped.current ? t('status.stopped') : result.code === 0 ? t('status.done') : t('status.error')} — ${count} solution${count === 1 ? "" : "s"} found in ${((performance.now() - startedAt) / 1000).toFixed(2)}s.`;
+      const stateLabel = stopped.current ? t('status.stopped') : result.code === 0 ? t('status.done') : t('status.error');
+      const status = t('status.summary')
+        .replace('{{state}}', stateLabel)
+        .replace('{{count}}', String(count))
+        .replace('{{plural}}', count === 1 ? "" : "s")
+        .replace('{{time}}', ((performance.now() - startedAt) / 1000).toFixed(2));
       setStatusLines(!useLessRamRef.current && lastSolveCubeShape.current && count ? [t('status.ranked').replace('{{count}}', String(count))] : [status]);
       // Intentional feature by Abid: only auto-switch to table view when 2+ solutions
       // exist, since table view is only useful for comparing/organizing output.
@@ -2428,7 +2433,7 @@ export default function App() {
               autoCapitalize="off"
               spellCheck={false}
               value={pageInput}
-              aria-label={t('btn.goToPage')}
+              aria-label={t('btn.pageNumber')}
               onBlur={() => { pageInputFocused.current = false; commitPageInput(); }}
               onChange={(event) => setPageInput(event.target.value.replace(/\D/g, "").slice(0, 6))}
               onKeyDown={(event) => { if (event.key === "Enter") commitPageInput(); }}
@@ -2590,7 +2595,7 @@ export default function App() {
             onOptions={() => setMobileOptionsOpen(true)}
           />
           <div className="moves">
-            <button title={t('cube.titleUp')} onClick={() => cubeActions.current?.up()}>U′</button>
+            <button title={t('cube.titleUp')} onClick={() => cubeActions.current?.up()}>{t('btn.up')}</button>
             <button
               className="slice"
               title={t('cube.titleSlice')}
@@ -2598,9 +2603,9 @@ export default function App() {
             >
               {t('btn.slice')}
             </button>
-            <button title={t('cube.titleU')} onClick={() => cubeActions.current?.u()}>U</button>
-            <button title={t('cube.titleD')} onClick={() => cubeActions.current?.d()}>D</button>
-            <button title={t('cube.titleDp')} onClick={() => cubeActions.current?.dp()}>D′</button>
+            <button title={t('cube.titleU')} onClick={() => cubeActions.current?.u()}>{t('btn.u')}</button>
+            <button title={t('cube.titleD')} onClick={() => cubeActions.current?.d()}>{t('btn.d')}</button>
+            <button title={t('cube.titleDp')} onClick={() => cubeActions.current?.dp()}>{t('btn.dp')}</button>
           </div>
           <div className="undo">
             <button title={t('cube.titleUndo')} disabled={!undo.length || running} onClick={doUndo}>{t('btn.undo')}</button>
@@ -2620,7 +2625,7 @@ export default function App() {
         <button onClick={() => {
           const key = currentRunKey();
           setFavorites((old) => ({ ...old, [key]: {
-            name: old[key]?.name || `Position ${Object.keys(old).length + 1}`,
+            name: old[key]?.name || t('favorites.defaultName').replace('{{count}}', String(Object.keys(old).length + 1)),
             algorithms: Array.from(new Set([...(old[key]?.algorithms || []), contextMenu.alg])),
           } }));
           setContextMenu(null);
@@ -2680,7 +2685,7 @@ export default function App() {
             const key = currentRunKey();
             const algs = await collectAllDisplays();
             setFavorites((old) => ({ ...old, [key]: {
-              name: old[key]?.name || `Position ${Object.keys(old).length + 1}`,
+              name: old[key]?.name || t('favorites.defaultName').replace('{{count}}', String(Object.keys(old).length + 1)),
               algorithms: Array.from(new Set([...(old[key]?.algorithms || []), ...algs])),
             } }));
           })()}>{t('btn.saveSolutions')}</button>}
@@ -2691,7 +2696,7 @@ export default function App() {
             return <section className={`favorite-bin${isBinPending ? " favorite-bin-deleted" : ""}`} key={key}>
             <div className="favorite-bin-head">
               {isBinPending ? <><span>{t('favorites.binDeleted')}</span> <button className="favorite-undo" onClick={() => { clearTimeout(pendingDeletes[binDeleteKey]); setPendingDeletes((old) => { const next = { ...old }; delete next[binDeleteKey]; return next; }); }}>{t('favorites.undo')}</button>?</> : <>
-              <input value={bin.name} aria-label="Favorite name" onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
+              <input value={bin.name} aria-label={t('favorites.nameLabel')} onChange={(event) => setFavorites((old) => ({ ...old, [key]: { ...old[key], name: event.target.value } }))} />
               <div className="favorite-actions">
                 <button title={t('btn.applySetup')} onClick={() => applyRunConfig(key)}>{t('btn.applySetup')}</button>
                 <button title={t('btn.copyAllAlgs')} onClick={() => void navigator.clipboard.writeText(bin.algorithms.map(lineWithoutBracket).join("\n"))}><Icon name="copy" /></button>
