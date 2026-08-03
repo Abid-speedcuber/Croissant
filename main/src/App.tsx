@@ -539,7 +539,6 @@ export default function App() {
   const lastProgressNodesRef = useRef(0);
   const lastProgressAtRef = useRef(0);
   const lineQueue = useRef<Promise<void>>(Promise.resolve());
-  const outputIdleTimer = useRef<number | undefined>(undefined);
   const renderFrame = useRef<number | undefined>(undefined);
   const runningRef = useRef(false);
   const solveRunId = useRef(0);
@@ -625,7 +624,6 @@ export default function App() {
   const [completedWhilePaused, setCompletedWhilePaused] = useState(false);
   const [tableBusyMessage, setTableBusyMessage] = useState("");
   const [tableBusyTick, setTableBusyTick] = useState(0);
-  const [outputToolsFaded, setOutputToolsFaded] = useState(false);
   const [debugTick, setDebugTick] = useState(0);
   // Search/filter panel for narrowing the terminal & table down to matching algs.
   const [filterOpen, setFilterOpen] = useState(false);
@@ -1267,25 +1265,6 @@ export default function App() {
     return () => clearInterval(id);
   }, [modal]);
 
-  const armOutputToolFade = () => {
-    if (outputIdleTimer.current !== undefined) window.clearTimeout(outputIdleTimer.current);
-    outputIdleTimer.current = window.setTimeout(() => setOutputToolsFaded(true), 1500);
-  };
-  const markOutputToolsActive = () => {
-    setOutputToolsFaded(false);
-    if (solutionsRef.current.length) armOutputToolFade();
-  };
-  useEffect(() => {
-    if (!solutions.length) {
-      setOutputToolsFaded(false);
-      return;
-    }
-    setOutputToolsFaded(false);
-    armOutputToolFade();
-    return () => {
-      if (outputIdleTimer.current !== undefined) window.clearTimeout(outputIdleTimer.current);
-    };
-  }, [solutions.length]);
   const toggleIgnoreMiddle = (checked: boolean) => {
     const current = stateRef.current;
     if (checked && current.middle !== 0) preIgnoreMiddle.current = current.middle;
@@ -2359,7 +2338,7 @@ export default function App() {
   const renderOutputShell = () => {
     const tableCols = tableView ? computeTableCols(tableWidth, tableMetricRef.current, showErgo, document.documentElement.classList.contains("bp-720")) : null;
     return (
-    <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
+    <div className="terminal-shell">
       <div className="output-tools">
         <div className="output-tools-left">
           <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setModal("notation")}>{t('karnSelect.' + outputMode)}</span></span>

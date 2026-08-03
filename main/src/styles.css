@@ -1537,12 +1537,6 @@ textarea {
   align-items: center;
   gap: 4px;
 }
-.terminal-shell.tools-faded .output-tools {
-  opacity: 1;
-}
-.terminal-shell.tools-faded .output-tools:hover {
-  opacity: 1;
-}
 .output-tools button {
   display: flex;
   align-items: center;
