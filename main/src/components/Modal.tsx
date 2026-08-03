@@ -14,7 +14,6 @@ export function Modal({
   type: Exclude<Modal, null>;
   close: () => void;
   settings?: {
-    smartKarn: boolean; setSmartKarn: (value: boolean) => void;
     abidNotation: boolean; setAbidNotation: (value: boolean) => void;
     ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
     debugOutput: boolean; setDebugOutput: (value: boolean) => void;
@@ -38,10 +37,6 @@ export function Modal({
       <div className="modal-article">
         <h2>{t('modal.settings.title')}</h2>
         <div className="settings-list">
-          <label className="modal-check">
-            <input type="checkbox" checked={settings?.smartKarn ?? true} disabled={settings?.disabled} onChange={(e) => settings?.setSmartKarn(e.target.checked)} />
-            <span>{t('modal.settings.smartKarn')}</span>
-          </label>
           <label className="modal-check">
             <input type="checkbox" checked={settings?.abidNotation ?? false} disabled={settings?.disabled} onChange={(e) => settings?.setAbidNotation(e.target.checked)} />
             <span>{t('modal.settings.abidNotation')}</span>
@@ -210,7 +205,6 @@ export function Modal({
           {t('modal.howToUse.descSettingsOpen').split('⋮')[1]}
         </p>
         <ul>
-          <li><strong>{t('modal.howToUse.descSmartKarn').split(':')[0]}</strong>:{t('modal.howToUse.descSmartKarn').split(':').slice(1).join(':')}</li>
           <li><strong>{t('modal.howToUse.descAbidNotation').split(':')[0]}</strong>:{t('modal.howToUse.descAbidNotation').split(':').slice(1).join(':')}</li>
           <li><strong>{t('modal.howToUse.descIgnoreTransforms').split(':')[0]}</strong>:{t('modal.howToUse.descIgnoreTransforms').split(':').slice(1).join(':')}</li>
           <li><strong>{t('modal.howToUse.descDebugOutput').split(':')[0]}</strong>:{t('modal.howToUse.descDebugOutput').split(':').slice(1).join(':')}</li>
@@ -229,7 +223,7 @@ export function Modal({
         </ul>
         <p>Other buttons in the terminal area:</p>
         <ul>
-          <li><strong>{t('modal.howToUse.outputTools1').split(' / ')[0].split(' ')[0]}</strong>{' / '}<strong>{t('modal.howToUse.outputTools1').split(' / ')[1].split(' ')[0]}</strong>{t('modal.howToUse.outputTools1').split('Normal / Karn')[1]}</li>
+          <li>{t('modal.howToUse.outputTools1')}</li>
           <li><strong>{t('modal.howToUse.outputTools2').split('—')[0].trimEnd()}</strong>{' — '}{t('modal.howToUse.outputTools2').split('—').slice(1).join('—').trimStart()}</li>
           <li><strong>{t('modal.howToUse.outputTools3').split(' / ')[0].trim()}</strong>{' / '}<strong>{t('modal.howToUse.outputTools3').split(' / ')[1].split(' —')[0].trim()}</strong>{' ' + t('modal.howToUse.outputTools3').split('—').slice(1).join('—').trimStart()}</li>
           <li><strong>{t('modal.howToUse.outputTools4').split('—')[0].trimEnd()}</strong>{' — '}{t('modal.howToUse.outputTools4').split('—').slice(1).join('—').trimStart()}</li>

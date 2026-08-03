@@ -22,7 +22,7 @@ export type Solution = {
   sliceStart?: string;
 };
 
-export type OutputLine = { raw: string; karn: string; isSolution: boolean; algRaw?: string };
+export type OutputLine = { raw: string; karn: string; isSolution: boolean; algRaw?: string; sliceStart?: string };
 
 export type RatingResult = {
   finalScore?: number;

@@ -8,7 +8,7 @@ import {
   DisplaySolution, DropdownProps, CubeActions, TauriGlobal,
   twistable, getLayerR, getParityOdd, isGoodSquares, inCubeshape, doMove, tauri, validDepths, solverFlags,
   positionString, rawPosition, parsePosition, invertScramble, addCommas, applyNumericAlgorithm,
-  abidify, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
+  abidify, abidSpacing, OutputMode, OUTPUT_MODES, nextOutputMode, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
   ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips,
 } from "./utils";
 import { Modal } from './components/Modal';
@@ -515,7 +515,7 @@ export default function App() {
     [generator, setGenerator] = useState(false),
     [cubeShapeMemory, setCubeShapeMemory] = useState(false),
     [ignoreMiddle, setIgnoreMiddle] = useState(false),
-    [karn, setKarn] = useState(true),
+    [outputMode, setOutputMode] = useState<OutputMode>("cskarn"),
     [outputLines, setOutputLines] = useState<OutputLine[]>([]),
     [statusLines, setStatusLines] = useState<string[]>([]),
     [solutions, setSolutions] = useState<Solution[]>([]),
@@ -534,12 +534,14 @@ export default function App() {
     [tableView, setTableView] = useState(false), [expanded, setExpanded] = useState(false),
     [mobileOptionsOpen, setMobileOptionsOpen] = useState(false), [mobileOutputOpen, setMobileOutputOpen] = useState(false),
     [zoom, setZoom] = useState(1),
-    [smartKarn, setSmartKarn] = useState(true), [abidNotation, setAbidNotation] = useState(false),
+    [abidNotation, setAbidNotation] = useState(false),
     [ignoreTransforms, setIgnoreTransforms] = useState(false), [debugOutput, setDebugOutput] = useState(false),
     [pageSize, setPageSize] = useState(1000), [showAll, setShowAll] = useState(false),
     [page, setPage] = useState(0),
     [pageInput, setPageInput] = useState("1");
   const [useLessRam, _setUseLessRam] = useState(false);
+  const karn = outputMode === "karn" || outputMode === "cskarn";
+  const smartKarn = outputMode === "cskarn";
   const [offloadedTotal, setOffloadedTotal] = useState(0);
   const [pendingTailCount, setPendingTailCount] = useState(0);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -1231,7 +1233,7 @@ export default function App() {
     };
     setLimit("-X", setMaxX, setMaxXValue); setLimit("-Y", setMaxY, setMaxYValue); setLimit("-Z", setMaxTotal, setMaxTotalValue);
     setIgnoreTransforms(flags.includes("-x"));
-    setSmartKarn(flags.includes("-k2"));
+    if (flags.includes("-k2")) setOutputMode("cskarn");
     solutionsRef.current = [];
     outputLinesRef.current = [];
     seenRaw.current.clear();
@@ -1629,7 +1631,9 @@ export default function App() {
       rawDisplay = pair.rawDisplay;
       karnDisplay = pair.karnDisplay;
     }
-    const displayAlg = lineAlg(normalizeLine(karn ? karnDisplay : rawDisplay, normalize));
+    const displayAlg = lineAlg(outputMode === "abid"
+      ? abidSpacing(normalizeLine(karn ? karnDisplay : rawDisplay, normalize), !!sliceStart)
+      : normalizeLine(karn ? karnDisplay : rawDisplay, normalize));
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
     if (seenRaw.current.size === 1) {
@@ -1641,7 +1645,7 @@ export default function App() {
     const cleanLine = rawAlg + "  " + metricsPart;
     const row: Solution = { raw: cleanLine, rawDisplay, karnDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart };
     addSolution(row);
-    addOutputLine({ raw: rawDisplay, karn: karnDisplay, isSolution: true, algRaw: rawAlg });
+    addOutputLine({ raw: rawDisplay, karn: karnDisplay, isSolution: true, algRaw: rawAlg, sliceStart });
   };
   const solve = async () => {
     const native = tauri();
@@ -1811,11 +1815,12 @@ export default function App() {
   useEffect(() => {
     void loadSettings().then((value) => {
       if (!value) { queueMicrotask(() => { settingsReady.current = true; }); return; }
-      if (typeof value.smartKarn === "boolean") setSmartKarn(value.smartKarn);
+      if (typeof value.outputMode === "string" && OUTPUT_MODES.includes(value.outputMode as OutputMode)) setOutputMode(value.outputMode as OutputMode);
+      else if (typeof value.smartKarn === "boolean" && typeof value.karn === "boolean") setOutputMode(value.smartKarn ? "cskarn" : value.karn ? "karn" : "normal");
+      else if (typeof value.karn === "boolean") setOutputMode(value.karn ? "karn" : "normal");
       if (typeof value.abidNotation === "boolean") setAbidNotation(value.abidNotation);
       if (typeof value.ignoreTransforms === "boolean") setIgnoreTransforms(value.ignoreTransforms);
       if (typeof value.debugOutput === "boolean") setDebugOutput(value.debugOutput);
-      if (typeof value.karn === "boolean") setKarn(value.karn);
       if (typeof value.normalize === "string") setNormalize(value.normalize);
       if (typeof value.mode === "string") setMode(value.mode);
       if (typeof value.metric === "string") setMetric(value.metric);
@@ -1847,12 +1852,12 @@ export default function App() {
   useEffect(() => {
     if (!settingsReady.current) return;
     void saveSettings({
-      smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode,
+      outputMode, abidNotation, ignoreTransforms, debugOutput, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape: cubeShapeMemory, ignoreMiddle,
       maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam,
       deleteTablesOnQuitV2,
     });
-  }, [smartKarn, abidNotation, ignoreTransforms, debugOutput, karn, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam, deleteTablesOnQuit]);
+  }, [outputMode, abidNotation, ignoreTransforms, debugOutput, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam, deleteTablesOnQuit]);
   useEffect(() => {
     if (!solutions.length || running) return;
     let cancelled = false;
@@ -1868,7 +1873,7 @@ export default function App() {
     return () => { cancelled = true; };
     // Rebuild only when karnification inputs change, not when solution rows arrive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [smartKarn, generator]);
+  }, [outputMode, generator]);
   useEffect(() => {
     let cancelled = false;
     if (!tauri()?.core?.invoke) return;
@@ -1937,8 +1942,12 @@ export default function App() {
   if (smartKarn) commandFlags.push("-k2");
   const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   const showErgo = runCubeShape;
+  const solutionDisplayText = (solution: Solution) => {
+    const base = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
+    return outputMode === "abid" ? abidSpacing(base, !!solution.sliceStart) : base;
+  };
   const displaySolution = (solution: Solution): DisplaySolution => {
-    const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
+    const display = solutionDisplayText(solution);
     return { ...solution, display, alg: lineAlg(display) };
   };
   // Abbreviates large counts to 3 sig figs with a k/m/b suffix, trimming trailing zeros
@@ -2019,7 +2028,7 @@ export default function App() {
     const timer = window.setTimeout(() => { void runFilterSearch(filterQuery, id); }, 400);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterOpen, filterQuery, filterMatchCase, filterRegexMode, karn, normalize]);
+  }, [filterOpen, filterQuery, filterMatchCase, filterRegexMode, outputMode, normalize]);
   // Pagination targets the filtered set (already fully materialized in memory
   // by runFilterSearch) rather than the raw total when a filter is active.
   const activeTotalCount = filterActive ? filterResults!.length : totalCount;
@@ -2064,7 +2073,7 @@ export default function App() {
     const seen = new Set<string>();
     const out: string[] = [];
     const add = (solution: Solution) => {
-      const display = normalizeLine(karn ? solution.karnDisplay : solution.rawDisplay, normalize);
+      const display = solutionDisplayText(solution);
       const alg = lineAlg(display);
       if (seen.has(alg)) return;
       seen.add(alg);
@@ -2103,14 +2112,14 @@ export default function App() {
   });
   const terminalNonSolutions = outputLines
     .filter((entry) => !entry.isSolution)
-    .map((entry, index) => ({ key: `line-${index}-${entry.raw}`, text: karn ? entry.karn : entry.raw }));
+    .map((entry, index) => ({ key: `line-${index}-${entry.raw}`, text: outputMode === "abid" ? abidSpacing(entry.raw, !!entry.sliceStart) : karn ? entry.karn : entry.raw }));
   const copyTerminalText = () => {
-    const lines = outputLines.map((entry) => karn ? entry.karn : entry.raw);
+    const lines = outputLines.map((entry) => outputMode === "abid" ? abidSpacing(entry.raw, !!entry.sliceStart) : karn ? entry.karn : entry.raw);
     void navigator.clipboard.writeText(lines.join("\n"));
     setStatusLines((old) => [...old, t('terminal.copied')].slice(-8));
   };
   const renderSolutionText = (text: string) => {
-    if (!abidNotation) return text;
+    if (!abidNotation && outputMode !== "abid") return text;
     const lb = text.lastIndexOf("[");
     if (lb <= 0) return <span className="abid-inline">{abidify(text)}</span>;
     return <><span className="abid-inline">{abidify(text.slice(0, lb).trim())}</span>{"  " + text.slice(lb).trim()}</>;
@@ -2233,7 +2242,7 @@ export default function App() {
     <div className={`terminal-shell ${outputToolsFaded ? "tools-faded" : ""}`} onMouseMove={markOutputToolsActive} onMouseLeave={() => setOutputToolsFaded(true)}>
       <div className="output-tools">
         <div className="output-tools-left">
-          <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setKarn((k) => !k)}>{karn ? t('karnSelect.karn') : t('karnSelect.normal')}</span></span>
+          <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setOutputMode(nextOutputMode(outputMode))}>{t('karnSelect.' + outputMode)}</span></span>
         </div>
         <div className="output-tools-right">
           {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}><Icon name="timer" /></button>}
@@ -2325,7 +2334,7 @@ export default function App() {
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation ? "abid" : ""}>{abidNotation ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}><span>{pageStart + i + 1}</span><code className={abidNotation || outputMode === "abid" ? "abid" : ""}>{abidNotation || outputMode === "abid" ? abidify(x.alg) : x.alg}</code>{tableMetricRef.current === "Angle" && <span>{x.angle}</span>}{tableMetricRef.current !== "Slice" && <span>{x.moves}</span>}<span>{x.slices}</span>{showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
@@ -2504,7 +2513,7 @@ export default function App() {
       </div>}
       {createPortal(<>
       {modal && <Modal type={modal} close={() => history.back()} settings={{
-        smartKarn, setSmartKarn, abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
+        abidNotation, setAbidNotation, ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
         setLanguage: (code) => { setLang(code); setLangState(code); },
         pageSize, setPageSize, showAll, setShowAll, pageSizeOptions: PAGE_SIZE_OPTIONS,

@@ -267,6 +267,45 @@ export function applyNumericAlgorithm(state: CubeState, text: string): CubeState
   return twistable(current.position) ? current : undefined;
 }
 
+export type OutputMode = "normal" | "karn" | "cskarn" | "abid";
+
+export const OUTPUT_MODES: OutputMode[] = ["normal", "karn", "cskarn", "abid"];
+
+export function nextOutputMode(mode: OutputMode): OutputMode {
+  return OUTPUT_MODES[(OUTPUT_MODES.indexOf(mode) + 1) % OUTPUT_MODES.length];
+}
+
+/**
+ * Abid's notation: normal (WCA) notation with Abid's negative number
+ * representation (barred digits via abidify). The only difference from plain
+ * WCA-with-barred-numbers is the slashes: every slash becomes a space except
+ *  1. a leading slash  ("/3,0/4,0")
+ *  2. a trailing slash ("3,0/4,0/")
+ *  3. the slice-start marker inserted by the alg rater (upslice "/",
+ *     downslice "\", or neutral "|"). The rater always writes it in place of
+ *     the first separator, so hasIndicator tells us whether that first
+ *     separator is the rater's marker rather than a regular slash.
+ */
+export function abidSpacing(text: string, hasIndicator?: boolean) {
+  const lb = text.lastIndexOf("[");
+  const alg = lb > 0 ? text.slice(0, lb) : text;
+  const rest = lb > 0 ? text.slice(lb) : "";
+  const markerAt = hasIndicator ? alg.search(/[\/\\|]/) : -1;
+  const firstIdx = alg.length - alg.trimStart().length;
+  const lastIdx = alg.length - 1 - (alg.length - alg.trimEnd().length);
+  let out = "";
+  for (let i = 0; i < alg.length; i++) {
+    const ch = alg[i];
+    if (ch !== "/") { out += ch; continue; }
+    const leading = i === firstIdx;
+    const trailing = i === lastIdx;
+    const isMarker = i === markerAt;
+    if (leading || trailing || isMarker) out += ch;
+    else out += " ";
+  }
+  return out + rest;
+}
+
 export function abidify(text: string) {
   const normal = (digit: number) => String.fromCodePoint(0xe000 + digit);
   const single = (digit: number) => String.fromCodePoint(0xe006 + digit);
@@ -375,7 +414,7 @@ export const tooltips = {
   generator: "Output algs that set up the case from solved instead of solving it.",
   cubeshape: "Only generate algs that keep the puzzle in cubeshape throughout.",
   ignoreEquator: "Ignore equator states. Equivalent to clicking the middle bar until it is gray.",
-  karn: "Click to switch between WCA and Karn as output notation.",
+  karn: "Click to cycle the output notation: Normal (WCA), Karn, CS-aware Karn, or Abid (no-slashes).",
   maxX: "Limit the maximum top-layer turn in either direction (0-6).",
   maxY: "Limit the maximum bottom-layer turn in either direction (0-6).",
   maxTotal: "Limit the maximum combined |top|+|bottom| turn per move pair (1-12).",
