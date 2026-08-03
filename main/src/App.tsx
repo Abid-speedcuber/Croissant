@@ -2081,8 +2081,14 @@ export default function App() {
     }
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
+    // The true maximum (6 or 12) lives in the empty placeholder state, so any
+    // typed value above the accessible range falls back into that placeholder.
+    if (parsed > max) {
+      setEnabled(false);
+      return;
+    }
     setEnabled(true);
-    setValue(Math.min(max, Math.max(min, Math.trunc(parsed))));
+    setValue(Math.max(min, Math.trunc(parsed)));
   };
   const stepOptionalLimit = (enabled: boolean, value: number, dir: 1 | -1, min: number, max: number, setEnabled: (value: boolean) => void, setValue: (value: number) => void) => {
     // The empty placeholder mode represents the value one above max (6 or 12),
