@@ -50,6 +50,7 @@ To exclude layer rotations, divide by 12^2 to get a total of 435,891,456,000
 distinct positions.
 
 
+
 The Search Algorithm
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -90,6 +91,8 @@ the colourings are solved, then the original puzzle will have been solved
 too.
 
 
+
+
 Notation
 ~~~~~~~~
 
@@ -110,9 +113,17 @@ Twist Metric:  The length is simply the number of twists.
 Turn Metric:   The length is the number of (non-zero) turns and twists.
                  For example, (3,0) is one move, as is /, and /(6,6)/(-1,1)
                  is 6 moves.
-Turn metric is the default, but the program can use either. All algs will be
-shown with a number [n|m], where n is the twist metric and m is the turn
-metric.
+This version of the program can use either metric.
+
+Note that there is an equivalence. The move sequence
+  (a,b)/(c,d)/(e,f)
+has the same effect as the sequence
+  (6+a,6+b)/(d,c)/(6+e,6+f)
+The program will make use of this to reduce the number of moves to be
+searched at each stage. The bottom layer is never turned 6 or more, except
+possibly just before of just after the first twist. It is possible to switch
+this feature off, so that the search will take longer but will result in all
+move sequences that solve the position.
 
 We also need a notation for each position of the puzzle. All the corner
 pieces are denoted by letters, the edges by digits. On the solved puzzle,
@@ -157,19 +168,20 @@ Number   Colours
   8        GY
 
 
+
+
 Using the program
 ~~~~~~~~~~~~~~~~~
-
 Once you understand the notation, the program is fairly simple to use. Run
 the program from the DOS command line (on windows choose Accessories
 and Command Prompt) as follows:
    sq1optim <position>
 To abort the program while it is still searching, press Ctrl-C or Ctrl-Break.
 
-The position to be solved can be specified in two ways. Either by a sequence of moves, e.g. (1,0)/(3,0)/(6,-3)/(2,3), or by a position, e.g. A2B3C1D45E6F7G8H-.
-Note that by default, the move sequence you give will need to solve the
-position, not create it. You can change this behavior with the -g flag
-(see below).
+The position to be solved can be specified in two ways. Either by a sequence of
+moves, e.g. (1,0)/(3,0)/(6,-3)/(2,3), or by a position, e.g. A2B3C1D45E6F7G8H-.
+Note that there should be no spaces in a list of moves. If no position is
+supplied, a random position is generated.
 
 There are some optional command line switches you can use:
   -w     Use the Twist metric. By default, the Turn metric is used.
@@ -210,11 +222,9 @@ for subsequent runs. These files are:
   sq1p1w.dat    35,200KB   Colouring 1 pruning table, twist metric
   sq1p2w.dat    35,200KB   Colouring 2 pruning table, twist metric
 
-These files are stored in the directory where the program is, so it must
-be a writable directory.
+These files are stored in the directory where the program is, so it must be a
+writable directory.
 
-Examples
-~~~~~~~~
 
 Example 1:
    sq1optim A2B3C1D45E6F7G8H/
@@ -258,7 +268,7 @@ Example 6:
 It will try to find the shortest sequence (twists+turns) that has the same
 effect as the given sequence. It will only find solutions with an even number
 of twists, because the middle layer is not ignored. As this is the move
-sequence produced in example 1, it should have the same effect as:
+sequence produced in example 1, this search has the same effect as:
    sq1optim A2B3C1D45E6F7G8H/
 
 
@@ -274,6 +284,7 @@ Example 8:
 Generate five random scrambles, with no extraneous output.
 
 
+
 Results
 ~~~~~~~
 Most of the results that I have found using this program are on my web site.
@@ -283,11 +294,16 @@ with a program such as this. It is known that it takes at most 13 twists to
 solve any position (or 12 if the middle layer is ignored).
 
 
+
+
+
+
+
 Revision History
 ~~~~~~~~~~~~~~~~
-   August    2003, Version 1.00
-12 September 2003, Version 1.01,  minor bugfix
-10 March     2011, Version 1.02,  extra output settings, generator sequences, help
+   August    2003: Version 1.00
+12 September 2003: Version 1.01,  minor bugfix
+10 March     2011: Version 1.02,  extra output settings, generator sequences, help
 
 I could not have done this without Mike Godfrey, who wrote a similar solver.
 He told me about the colour schemes, and showed that it was possible and
@@ -297,18 +313,9 @@ worthwhile to write such a program.
 Jaap's Puzzle Page:  http://www.jaapsch.net/puzzles/
 
 ----------------------------------------------------------------------------
-This program was written by Jaap Scherphuis, copyright August 2003-2011,
-and Michael Gottlieb, copyright 2023-2024.
+This program was written by Jaap Scherphuis, copyright August 2003.
 It may not be sold. It may be freely distributed provided this
 documentation is provided in some form without changes to the text.
-Called the Read tool with the following input: {"filePath":"sq1opt_old.txt"}
-SQUARE-1 OPTIMISER version 1.0
-~~~~~~~~~~~~~~~~~~
-by Jaap Scherphuis, jaapsch@yahoo.com, copyright 2003-2011.
 
-This program implements a search algorithm to find optimal move sequences to
-solve a given position in the Square 1 puzzle.
-
-It requires at least 75MB RAM.
-
-The end of file placeholder for sq1opt_old.txt; the full content is included in this repo as a patch in the docs/ directory.
+The program can be downloaded from Jaap's Puzzle Page:
+http://www.jaapsch.net/puzzles/

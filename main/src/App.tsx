@@ -554,6 +554,7 @@ export default function App() {
     [lang, setLangState] = useState<LangCode>(getLang()),
     [toast, setToast] = useState<string | null>(null),
     [modal, setModal] = useState<ModalType>(null),
+    [modalStack, setModalStack] = useState<ModalType[]>([]),
     [modeMenu, setModeMenu] = useState(false),
     [openDropdown, setOpenDropdown] = useState<string | null>(null),
     [input, setInput] = useState(""),
@@ -884,7 +885,14 @@ export default function App() {
       history.pushState({ modal: true }, "");
     }
     const onPop = () => {
-      setModal(null);
+      setModalStack((stack) => {
+        if (stack.length > 0) {
+          setModal(stack[stack.length - 1]);
+          return stack.slice(0, -1);
+        }
+        setModal(null);
+        return stack;
+      });
       setShowAllConfirm(false);
       setFavoritesOpen(false);
       setFavoritesClosing(false);
@@ -892,6 +900,10 @@ export default function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [modal, favoritesOpen]);
+  const navigateModal = (next: Exclude<ModalType, null>) => {
+    if (modal) setModalStack((stack) => [...stack, modal]);
+    setModal(next);
+  };
   useEffect(() => {
     const node = tableContainerRef.current;
     if (!node || !tableView) return;
@@ -2649,7 +2661,11 @@ export default function App() {
         }}>{t('btn.addFavorite')}</button>
       </div>}
       {createPortal(<>
-      {modal && <Modal type={modal} close={() => history.back()} settings={{
+      {modal && <Modal type={modal} close={() => history.back()} docNav={{
+        openSq1optV2: () => navigateModal("sq1optv2"),
+        openSq1optV1: () => navigateModal("sq1optv1"),
+        openHowToUse: () => setModal("how"),
+      }} settings={{
         ignoreTransforms, setIgnoreTransforms,
         debugOutput, setDebugOutput, zoom, setZoom, disabled: running, hasMaxTurn: maxX || maxY || maxTotal, language: lang,
         setLanguage: (code) => {

@@ -9,7 +9,6 @@ const LINKS: Record<string, string> = {
   jaap: "https://www.jaapsch.net/puzzles/",
   github: "https://github.com/qqwref",
   wca: "https://www.worldcubeassociation.org/persons/2006GOTT01",
-  here: "https://github.com/abid/croissant/blob/main/docs/sq1opt_old.txt",
   abid: "https://www.worldcubeassociation.org/persons/2024ASHR02",
   matt: "https://www.worldcubeassociation.org/persons/2023MAOS01",
 };
@@ -17,9 +16,9 @@ const LINKS: Record<string, string> = {
 // Translated strings may embed <strong>, <em>, <link:name> and <icon:name>
 // tags. Splitting on these universal tags (instead of English words) lets
 // translations reorder words freely without breaking the styling.
-function renderMarkup(src: string): ReactNode {
+function renderMarkup(src: string, linkHandlers?: Record<string, () => void>): ReactNode {
   const tokens: (string | { closing: boolean; kind: string; name?: string })[] = [];
-  const re = /<(\/)?(strong|em|link:([a-z]+)|icon:([a-z]+))>/g;
+  const re = /<(\/)?(strong|em|link:([a-zA-Z0-9]+)|icon:([a-zA-Z0-9]+))>/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src))) {
@@ -55,8 +54,13 @@ function renderMarkup(src: string): ReactNode {
       }
       if (tok.kind.startsWith("link:")) {
         const sub = build(i + 1, tok.kind);
+        const handler = linkHandlers?.[tok.name ?? ""];
         nodes.push(
-          <a key={nodes.length} href={LINKS[tok.name ?? ""]} target="_blank" rel="noreferrer">{sub.nodes}</a>,
+          handler ? (
+            <a key={nodes.length} href="#" className="modal-internal-link" onClick={(e) => { e.preventDefault(); handler(); }}>{sub.nodes}</a>
+          ) : (
+            <a key={nodes.length} href={LINKS[tok.name ?? ""]} target="_blank" rel="noreferrer">{sub.nodes}</a>
+          ),
         );
         i = sub.next;
         continue;
@@ -84,9 +88,15 @@ export function Modal({
   notation,
   debugStats,
   liveDebug,
+  docNav,
 }: {
   type: Exclude<Modal, null>;
   close: () => void;
+  docNav?: {
+    openSq1optV2: () => void;
+    openSq1optV1: () => void;
+    openHowToUse: () => void;
+  };
   settings?: {
     ignoreTransforms: boolean; setIgnoreTransforms: (value: boolean) => void;
     debugOutput: boolean; setDebugOutput: (value: boolean) => void;
@@ -111,6 +121,11 @@ export function Modal({
   liveDebug?: (() => LiveDebugData) | null;
 }) {
   const karnSelected = notation && (notation.outputMode === "karn" || notation.outputMode === "cskarn");
+  const docLinkHandlers: Record<string, () => void> = {
+    here: () => docNav?.openSq1optV2(),
+    sq1optOld: () => docNav?.openSq1optV1(),
+    howToUse: () => docNav?.openHowToUse(),
+  };
   const content =
     type === "settings" ? (
       <div className="modal-article">
@@ -206,7 +221,7 @@ export function Modal({
         <h2>{t('modal.about.title')}</h2>
         <p>{renderMarkup(t('modal.about.p1'))}</p>
         <p>{renderMarkup(t('modal.about.p2'))}</p>
-        <p>{renderMarkup(t('modal.about.p3'))}</p>
+        <p>{renderMarkup(t('modal.about.p3'), docLinkHandlers)}</p>
         <p>{renderMarkup(t('modal.about.p4'))}</p>
         <ul>
           <li>{t('modal.about.li1')}</li>
@@ -215,6 +230,12 @@ export function Modal({
           <li>{t('modal.about.li4')}</li>
         </ul>
         <p>{renderMarkup(t('modal.about.p5'))}</p>
+      </div>
+    ) : type === "sq1optv2" || type === "sq1optv1" ? (
+      <div className="modal-article doc-viewer">
+        <h2>{type === "sq1optv2" ? t('modal.sq1optv2.title') : t('modal.sq1optv1.title')}</h2>
+        <p className="doc-banner">{renderMarkup(t('modal.docBanner'), docLinkHandlers)}</p>
+        <pre className="doc-body">{renderMarkup(type === "sq1optv2" ? t('modal.sq1optv2.body') : t('modal.sq1optv1.body'), docLinkHandlers)}</pre>
       </div>
     ) : (
       <div className="modal-article how-to-use">
@@ -317,7 +338,7 @@ export function Modal({
       shadeStartRef.current = null;
       shadeEndRef.current = null;
     }}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={"modal" + (type === "sq1optv2" || type === "sq1optv1" ? " modal-doc" : "")} onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={close}>
           <Icon name="close" />
         </button>

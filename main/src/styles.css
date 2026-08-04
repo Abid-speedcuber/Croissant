@@ -904,6 +904,24 @@ textarea {
 .modal-article a {
   color: #8db8ff;
 }
+.modal-doc {
+  width: min(720px, calc(100vw - 30px));
+}
+.doc-banner {
+  color: #e8b968;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin: 0 0 4px !important;
+}
+.doc-body {
+  margin: 0;
+  font-family: monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .howto-icon {
   display: inline-flex;
   align-items: center;
