@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const main = resolve(root, "main");
-const wasmOut = resolve(main, "public/wasm");
+const outDir = process.env.BUILD_OUT_DIR
+  ? resolve(process.env.BUILD_OUT_DIR)
+  : resolve(main, "public");
+const wasmOut = resolve(outDir, "wasm");
 const localEmsdk = resolve(homedir(), ".local/share/emsdk");
 const localEmscripten = resolve(localEmsdk, "upstream/emscripten");
 const localEmsdkNode = resolve(localEmsdk, "node/22.16.0_64bit/bin/node");
@@ -68,7 +71,7 @@ run("emcc", [
   "-sEXPORTED_FUNCTIONS=['_main','_sq1opt_web_set_table_directory','_sq1opt_web_request_stop','_sq1_web_unkarnify_alloc','_sq1_web_karnify_alloc','_sq1_web_rate_algorithm_json_alloc','_sq1_web_two_gen_status_json_alloc','_sq1_web_free_string','_malloc','_free']",
   "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap','UTF8ToString','FS','HEAP32']",
   "-o",
-  "public/wasm/sq1opt.js",
+  resolve(wasmOut, "sq1opt.js"),
 ], { cwd: main });
 
 run("npx", [
@@ -77,7 +80,7 @@ run("npx", [
   "--mode",
   "web",
   "--outDir",
-  "../public",
+  outDir,
   "--emptyOutDir",
 ], {
   cwd: main,
