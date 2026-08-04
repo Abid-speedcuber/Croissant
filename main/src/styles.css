@@ -879,6 +879,8 @@ textarea {
   color: #aeb9cd;
   line-height: 1.7;
   box-shadow: 0 20px 60px #0008;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
 }
 .modal h2 {
   margin: 0 0 14px;
@@ -1185,6 +1187,18 @@ textarea {
 ::-webkit-scrollbar-track {
   background: #101722;
 }
+.modal::-webkit-scrollbar {
+  width: 6px;
+}
+.modal::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 12px 0;
+}
+.modal::-webkit-scrollbar-thumb {
+  background: #58708f;
+  border: none;
+  border-radius: 8px;
+}
 ::-webkit-scrollbar-thumb {
   background: #40516a;
   border: 2px solid #101722;
@@ -1192,6 +1206,12 @@ textarea {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #58708f;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .modal {
+    scrollbar-width: thin;
+    scrollbar-color: #40516a #101722;
+  }
 }
 :root.bp-720,
 :root.bp-720 body,
