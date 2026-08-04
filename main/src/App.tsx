@@ -825,7 +825,9 @@ export default function App() {
     const el = document.documentElement;
     const update = () => {
       const bp = readBreakpoints();
-      el.classList.toggle("tall-viewport", window.innerHeight / zoomRef.current >= bp.tall);
+      const tall = window.innerHeight / zoomRef.current >= bp.tall;
+      el.classList.toggle("tall-viewport", tall);
+      if (tall && window.innerWidth / zoomRef.current <= bp.wide) setMobileOutputOpen(false);
     };
     update();
     window.addEventListener("resize", update);
@@ -996,7 +998,10 @@ export default function App() {
     node.scrollTop = node.scrollHeight;
   };
   const openMobileOutput = () => {
-    setMobileOutputOpen(true);
+    const root = document.documentElement;
+    if (!(root.classList.contains("tall-viewport") && root.classList.contains("bp-720"))) {
+      setMobileOutputOpen(true);
+    }
     requestAnimationFrame(scrollTerminalToBottom);
   };
   // Intentional feature by Abid: temporarily switch the page-switcher pill to
@@ -2394,6 +2399,7 @@ export default function App() {
           ><Icon name="search" /></button>
           <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}><Icon name="copy" /></button>
           <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}><Icon name={tableView ? "list" : "grid"} /></button>
+          {running && <button className="terminal-stop" title={t('btn.stop')} aria-label={t('btn.stop')} onClick={() => void solve()}><Icon name="stop" /></button>}
           <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}><Icon name="close" /></button>
           <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}><Icon name={expanded ? "collapse" : "expand"} /></button>
         </div>

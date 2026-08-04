@@ -1573,6 +1573,18 @@ textarea {
 .output-tools button:hover {
   background: #345078;
 }
+.output-tools .terminal-stop {
+  display: none;
+  background: #b67818;
+  border-color: #d89b36;
+  color: #fff7e8;
+}
+.output-tools .terminal-stop:hover {
+  background: #c98a24;
+}
+.output-expanded .output-tools .terminal-stop {
+  display: flex;
+}
 .output-tools .generator-toggle {
   font-size: 11px;
 }
@@ -2132,4 +2144,43 @@ textarea {
   border-left: 0;
   border-radius: 0;
   overflow: auto;
+}
+:root.tall-viewport.bp-720 .main-grid {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(160px, 1fr);
+  grid-template-areas:
+    "cube"
+    "terminal";
+  overflow: hidden;
+}
+:root.tall-viewport.bp-720 .mobile-open-output {
+  display: none;
+}
+:root.tall-viewport.bp-720 .terminal-shell {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  grid-area: terminal;
+  min-height: 160px;
+  height: 100%;
+  overflow: hidden;
+}
+:root.tall-viewport.bp-720 .terminal-shell > .terminal {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  overflow: auto;
+  border-radius: 0 0 4px 4px;
+}
+:root.tall-viewport.bp-720 .mobile-floating-stop {
+  display: none;
+}
+:root.tall-viewport.bp-720 .output-expanded .main-grid {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "terminal";
+  min-height: 0;
+}
+:root.tall-viewport.bp-720 .output-expanded .cube-column {
+  display: none;
 }

@@ -1,7 +1,7 @@
 export type IconName =
   | "search" | "close" | "timer" | "copy" | "list" | "grid"
   | "expand" | "collapse" | "chevronDown" | "chevronLeft" | "chevronRight"
-  | "heart" | "dots" | "trash" | "negate";
+  | "heart" | "dots" | "trash" | "negate" | "stop";
 
 // Single source of truth for every UI icon so they share one stroke weight/style
 // instead of relying on inconsistent Unicode glyph rendering across platforms.
@@ -27,5 +27,6 @@ export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {
     case "heart": return <svg {...common}><path d="M12 21s-7.5-4.6-10-9.3C.5 8 2 4 6 4c2.2 0 3.7 1.2 6 3.4C14.3 5.2 15.8 4 18 4c4 0 5.5 4 4 7.7C19.5 16.4 12 21 12 21z" /></svg>;
     case "dots": return <svg {...common} fill="currentColor" stroke="none"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg>;
     case "trash": return <svg {...common}><polyline points="4 7 20 7" /><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" /><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" /></svg>;
+    case "stop": return <svg {...common} fill="currentColor" stroke="none"><rect x="5" y="5" width="14" height="14" rx="2.5" /></svg>;
   }
 }
