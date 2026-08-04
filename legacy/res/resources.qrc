@@ -1,0 +1,7 @@
+<RCC>
+    <qresource lang=".ttf" prefix="/">
+        <file>icon.ico</file>
+        <file alias="stylesheet.qss">../styles/stylesheet.qss</file>
+        <file>kompact-font.ttf</file>
+    </qresource>
+</RCC>

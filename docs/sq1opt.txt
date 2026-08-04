@@ -1,0 +1,241 @@
+SQUARE-1 OPTIMISER version 2.1
+~~~~~~~~~~~~~~~~~~
+by Jaap Scherphuis, jaapsch@yahoo.com, copyright 2003-2011
+and Michael Gottlieb, qqwref@gmail.com, copyright 2023-2024
+
+This program implements a search algorithm to find optimal and suboptimal
+algs for the Square-1.
+
+It requires at least 75MB RAM. To see more details and history, check out
+sq1opt_old.txt. This file is meant to be shorter and easier to get started
+with.
+
+Some of the new features since version 1 are:
+- Graphical helper to let you find algs without learning the input format
+- Generating suboptimal algs
+- Generating algs in 2gen or pseudo 2gen
+- Generating algs that stay in cube shape
+- Allowing partially defined pieces
+- Improved choice of moves in the first shown alg (e.g. preferring (-3,0)
+  to (3,6))
+- Automatically checking if the given position is valid and solvable
+- Optional output in Karnotation
+
+Using the Helper
+~~~~~~~~~~~~~~~~
+
+Open helper.html in your favorite browser to get started. You will see a
+Square-1 which you can move in a few ways. Click on the buttons at the top
+right to do moves, or use the keys ijfsl (similar to the virtual cube on
+qcube or csTimer) to do moves more quickly. You can also left click on a
+piece and then left click on another piece to swap them, if they're the same
+type. Finally, you can right click on a piece to change how partial it is:
+either the full piece is there, or any piece of that type and the same
+top/bottom sticker, or any piece of that type.
+
+Then, you can set up the options using the checkboxes and text field on the
+right. These will affect what algs are generated, how many algs are found,
+and how the algs are displayed to you. There is more info about these
+settings in the "Using the program" section below.
+
+Finally, all of that will be automatically modifying the "Command line
+input" box at the lower right. That's a code that you can paste into your
+command line window to find an alg for the position you're looking at. For
+a little more info on command lines, see "Using the program" below.
+
+Notation
+~~~~~~~~
+
+The standard notation uses slashes, denoted by /, and turns of the top and
+bottom layers, denoted by (x,y) where x and y are the multiples of 30
+degrees clockwise that the top and bottom layers (respectively) should be
+turned.
+
+This program can also output algs in Karnotation, which you can learn
+about here: https://www.youtube.com/watch?v=-vf8O4wbDnk. Be warned that
+algs in this notation are generally written without ABF on the start/end.
+
+There are generally two ways to count the length of a sequence:
+Twist Metric:  The length is simply the number of twists.
+                 For example, / is one move, and /(6,6)/(-1,1) is 2 moves.
+Turn Metric:   The length is the number of (non-zero) turns and twists.
+                 For example, (3,0) is one move, as is /, and /(6,6)/(-1,1)
+                 is 6 moves.
+Turn metric is the default, but the program can use either. All algs will be
+shown with a number [n|m], where n is the twist metric and m is the turn
+metric.
+
+We also need a notation for each position of the puzzle. All the corner
+pieces are denoted by letters, the edges by digits. On the solved puzzle,
+the top layer pieces are A1B2C3D4 reading clockwise from the front left
+corner, and the bottom pieces are 5E6F7G8H clockwise from the front edge.
+The solved position is then denoted by A1B2C3D45E6F7G8H. Any mixed
+position can be similarly coded, simply listing the pieces in the top
+layer clockwise from cut in the front of the middle layer, followed by the
+bottom layer pieces in a similar manner. If the shape of the middle layer
+should be considered, it can be denoted by appending a - or a / to indicate
+whether it is square or kite-shaped respectively.
+
+The solver also allows some or all pieces to be partially defined. That
+is, a piece could simply be "a top corner", or "any edge". This makes it
+possible to find algs for cubeshape, OBL, layer by layer, etc.
+U is a top corner, V is a bottom corner, W is any corner,
+X is a top edge,   Y is a bottom edge,   Z is any edge.
+
+
+Using the program
+~~~~~~~~~~~~~~~~~
+
+On Windows, you should be able to download the .exe file, and then run it
+through cmd (the Windows command line). Open cmd, then nagivate to the
+folder containing the command line using the change directory command
+"cd <folder>". When you're there, type in:
+   sq1opt.exe <position> <options>
+To abort the program while it is still searching, press Ctrl-C or
+Ctrl-Break.
+If you're on Linux, you will probably want to compile the code yourself,
+but you should know how to do that.
+
+You can either use the graphical helper to set up a position and options,
+and then just paste the command into your command line window, or you can
+write the command yourself as seen below.
+
+The position to be solved can be specified in two ways. Either by a
+sequence of moves, e.g. (1,0)/(3,0)/(6,-3)/(2,3), or by a position, e.g.
+A2B3C1D45E6F7G8H-.
+Note that by default, the move sequence you give will need to solve the
+position, not create it. You can change this behavior with the -g flag
+(see below).
+
+There are some optional command line switches you can use:
+  -w     Use the Twist metric. By default, the Turn metric is used. 
+  -a     Search for all best sequences, not just one. You can also add a
+           number (e.g. -a2) to find all sequences up to a certain number
+		   of moves from optimal (this can take a while).
+  -x     There is an equivalence where many algs of the same length can do
+           the same thing, just with a bunch of extra (6,6)s. By default,
+		   the search only finds what it thinks is the best alg out of
+		   those, but you can set this to ignore this and show ALL algs.
+		   There can be a lot of them.
+  -m     Ignore the middle layer. By default, the middle layer is only
+           ignored if you give a position with no middle layer character.
+  -b     Output the move sequence with (x,y) instead of the shorter x,y.
+  -r<n>  Solve n random positions. If n is 0 or missing, it will solve
+           random positions until you stop it.
+  -v<n>  Set verbosity level. -v0 is only the move sequence(s), -v7 is
+           full output.
+  -h     Display help.
+  -g     Input and output move sequences that generate the position,
+           instead of ones that solve it.
+  -i..   Use an input file to give the positions to solve. Each line in
+           the file contains one position or move sequence. The filename
+		   should immediately follow the -i switch without a space in
+		   between.
+  -2     2gen - look for algs that don't move the bottom layer.
+  -p     Pseudo 2gen - look for algs that move the bottom layer by at most
+           30 degrees (plus or minus 1).
+  -c     Look for algs that stay in cube shape the whole time.
+  -k     Output algs in Karnotation. This will ignore adjustments of U/D
+           before and after the alg, except for moves of plus or minus 1.
+  -X<n>  Only allow top layer turns of at most n in either direction.
+  -Y<n>  Only allow bottom layer turns of at most n in either direction.
+  -Z<n>  Only allow turns of at most n total turns - that is,
+           abs(x) + abs(y) <= n.
+
+
+When first run it calculates various tables which are stored in files
+for subsequent runs. These files are:
+
+  sq1stt.dat       115KB   Shape transition table
+  sq1scte.dat    1,509KB   Edge colouring transition table
+  sq1sctc.dat    1,509KB   Corner colouring transition table
+  sq1p1u.dat    35,200KB   Colouring 1 pruning table, turn metric
+  sq1p2u.dat    35,200KB   Colouring 2 pruning table, turn metric
+  sq1p1w.dat    35,200KB   Colouring 1 pruning table, twist metric
+  sq1p2w.dat    35,200KB   Colouring 2 pruning table, twist metric
+
+These files are stored in the directory where the program is, so it must
+be a writable directory.
+
+Examples
+~~~~~~~~
+
+Example 1:
+   sq1optim A2B3C1D45E6F7G8H/
+This searches for a sequence of moves that cycles 3 of the top layer edges
+(edges 1, 2  and 3) and puts any solution it finds on the screen. Note that
+only sequences with an even number of twists will be considered because the
+shape of the middle layer has been specified (kite-shaped) at the start.
+It will quickly find a [9|18] solution.
+
+
+Example 2:
+   sq1optim A2B3C1D45E6F7G8H
+As example 1, but now the middle layer is ignored. This time it finds
+a [8|16] solution. If we had used 
+   sq1optim A2B3C1D45E6F7G8H-
+then the search would concentrate specifically on sequences an even number
+of twists only, and it would have found the [8|16] solution slightly more
+quickly (this makes a bigger difference with more difficult positions).
+
+
+Example 3:
+   sq1optim -w A2B3C1D45E6F7G8H
+As example 2, but now a sequence with the fewest number of twists is
+found. It finds one of length [7|21].
+
+
+Example 4:
+   sq1optim -a -w A2B3C1D45E6F7G8H
+As example 3, but all non-equivalent sequences with 7 twists are listed. It
+shows 8 solutions, some of which are of length [7|20].
+
+
+Example 5:
+   sq1optim -a -w -x A2B3C1D45E6F7G8H
+As example 4, but it includes all solutions that are equivalent (to the
+previous 8) as well. Some solutions have length [7|19].
+
+
+Example 6:
+   sq1optim /(3,0)/(1,0)/(0,9)/(5,0)/(6,0)/(3,0)/(1,0)/(0,3)/(11,0)
+It will try to find the shortest sequence (twists+turns) that has the same
+effect as the given sequence. It will only find solutions with an even number
+of twists, because the middle layer is not ignored. As this is the move
+sequence produced in example 1, this search has the same effect as:
+   sq1optim A2B3C1D45E6F7G8H/
+
+
+Example 7:
+   sq1optim -m /(3,0)/(1,0)/(0,9)/(5,0)/(6,0)/(3,0)/(1,0)/(0,3)/(11,0)
+As above, but now it finds a solution with any number of twists because the
+middle layer is ignored. It is equivalent to example 2:
+   sq1optim A2B3C1D45E6F7G8H
+
+
+Example 8:
+   sq1optim -g -r5 -v0
+Generate five random scrambles, with no extraneous output.
+
+
+
+Version History
+~~~~~~~~~~~~~~~
+   August    2003, Jaap:    Version 1.00
+12 September 2003, Jaap:    Version 1.01,  minor bugfix
+10 March     2011, Jaap:    Version 1.02,  extra output settings,
+                                           generator sequences, help
+   June      2023, Michael: Version 2.00,  various outputs
+   September 2024, Michael: Version 2.10,  turn amount limits
+
+Jaap thanks Mike Godfrey for his previous work, and I similarly would like
+to thank Jaap for his.
+
+Jaap's Puzzle Page:  http://www.jaapsch.net/puzzles/
+qq's Homepage:  http://www.mzrg.com/
+
+----------------------------------------------------------------------------
+This program was written by Jaap Scherphuis, copyright August 2003-2011,
+and Michael Gottlieb, copyright 2023-2024.
+It may not be sold. It may be freely distributed provided this
+documentation is provided in some form without changes to the text.

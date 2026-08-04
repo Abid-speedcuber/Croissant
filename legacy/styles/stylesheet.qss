@@ -1,0 +1,856 @@
+/* ========== Main Window & Base Styling ========== */
+QMainWindow, QWidget {
+    background: --primary-bg;
+    color: --text-primary;
+    font-family: 'Segoe UI', Arial;
+    font-size: 13px;
+}
+
+/* ========== Options Panel Rows (div-style flex rows) ========== */
+QWidget#optionsInner {
+    background: transparent;
+    padding: 2px 0px;
+}
+
+/* --- base row --- */
+QWidget[objectName^="optionRow_"] {
+    background: transparent;
+    min-height: 28px;
+    max-height: 40px;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+QWidget#optionRowLeft {
+    background: transparent;
+    padding: 0;
+}
+
+QWidget#optionRowRight {
+    background: transparent;
+    padding: 0;
+    padding-right: 2px;
+}
+
+/* --- per-row overrides (you can customize each line here) --- */
+QWidget#optionRow_metric        { min-height: 28px; max-height: 32px; margin-bottom: 3px; }
+QWidget#optionRow_allopt        { min-height: 28px; }
+QWidget#optionRow_depths        { min-height: 28px; }
+QWidget#optionRow_generator     { min-height: 28px; margin-top: 3px; }
+QWidget#optionRow_2gen          { min-height: 28px; }
+
+QWidget#optionRow_cubeshape     { min-height: 28px; }
+QWidget#optionRow_ignoremid     { min-height: 28px; margin-bottom: 3px; }
+QWidget#optionRow_angle         { min-height: 28px; max-height: 32px; margin-top: 3px; }
+QWidget#optionRow_normalizeabf  { min-height: 28px; max-height: 32px; }
+QWidget#optionRow_maxx          { min-height: 28px; margin-top: 3px; }
+QWidget#optionRow_maxy          { min-height: 28px; }
+QWidget#optionRow_maxtotal      { min-height: 28px; }
+
+/* --- checkbox styling by name --- */
+QCheckBox#chkAllOptimal,
+QCheckBox#chkGenerator,
+
+QCheckBox#chkCubeshape,
+QCheckBox#chkIgnoreEquator,
+QCheckBox#chkKarnotation,
+QCheckBox#chkRankErgo,
+QCheckBox#chkMaxX,
+QCheckBox#chkMaxY,
+QCheckBox#chkMaxTotal {
+    font-size: 12px;
+    color: --text-secondary;
+    spacing: 6px;
+}
+
+QCheckBox#chkAllOptimal:disabled,
+QCheckBox#chkGenerator:disabled,
+QCheckBox#chkCubeshape:disabled,
+QCheckBox#chkIgnoreEquator:disabled,
+QCheckBox#chkKarnotation:disabled,
+QCheckBox#chkMaxX:disabled,
+QCheckBox#chkMaxY:disabled,
+QCheckBox#chkMaxTotal:disabled {
+    color: --text-disabled;
+}
+
+QCheckBox#chkDepths {
+    font-size: 12px;
+    color: --text-disabled;
+    spacing: 6px;
+}
+
+/* --- spinbox sizing by name --- */
+QSpinBox#spnSuboptimal,
+QSpinBox#spnMaxX,
+QSpinBox#spnMaxY,
+QSpinBox#spnMaxTotal {
+    min-width: 48px;
+    max-width: 48px;
+    min-height: 24px;
+    max-height: 24px;
+    font-size: 12px;
+}
+
+/* --- txtDepths sizing --- */
+QLineEdit#txtDepths {
+    min-width: 80px;
+    max-width: 80px;
+    min-height: 24px;
+    max-height: 24px;
+    font-size: 12px;
+}
+
+QLineEdit#txtDepths[inactive="true"] {
+    color: --text-disabled;
+    background: --disabled-bg;
+    border-color: --border-dark;
+}
+
+/* --- radio pill containers --- */
+QWidget#metricPill,
+QWidget#anglePill,
+QWidget#normalizeAbfPill,
+QWidget#twoGenPill {
+    background: --radio-pill-bg;
+    border-radius: 7px;
+    min-height: 24px;
+    max-height: 24px;
+}
+
+/* --- radio pill buttons base --- */
+QWidget#metricPill > QPushButton,
+QWidget#anglePill  > QPushButton,
+QWidget#normalizeAbfPill > QPushButton,
+QWidget#twoGenPill > QPushButton {
+    background: transparent;
+    border: none;
+    color: --radio-btn-text;
+    padding: 0px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 0;
+    min-width: 0;
+    min-height: 22px;
+    max-height: 22px;
+}
+
+/* --- first/last rounding --- */
+QWidget#metricPill > QPushButton#metricPill_first,
+QWidget#anglePill  > QPushButton#anglePill_first,
+QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_first,
+QWidget#twoGenPill > QPushButton#twoGenPill_first {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}
+
+QWidget#metricPill > QPushButton#metricPill_last,
+QWidget#anglePill  > QPushButton#anglePill_last,
+QWidget#normalizeAbfPill > QPushButton#normalizeAbfPill_last,
+QWidget#twoGenPill > QPushButton#twoGenPill_last {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+/* --- checked state --- */
+QWidget#metricPill > QPushButton:checked,
+QWidget#anglePill  > QPushButton:checked,
+QWidget#normalizeAbfPill > QPushButton:checked,
+QWidget#twoGenPill > QPushButton:checked {
+    background: --radio-btn-checked-bg;
+    color: --radio-btn-checked-text;
+    border-radius: 5px;
+    border: 1px solid --radio-btn-checked-border;
+}
+
+/* --- hover unchecked --- */
+QWidget#metricPill > QPushButton:hover:!checked,
+QWidget#anglePill  > QPushButton:hover:!checked,
+QWidget#normalizeAbfPill > QPushButton:hover:!checked,
+QWidget#twoGenPill > QPushButton:hover:!checked {
+    background: --radio-btn-hover-bg;
+    border-radius: 5px;
+}
+
+/* --- disabled state (whole pill disabled) --- */
+QWidget#metricPill > QPushButton:disabled,
+QWidget#anglePill  > QPushButton:disabled,
+QWidget#normalizeAbfPill > QPushButton:disabled,
+QWidget#twoGenPill > QPushButton:disabled {
+    background: transparent;
+    color: --text-disabled;
+    border: none;
+}
+
+QWidget#metricPill > QPushButton:checked:disabled,
+QWidget#anglePill  > QPushButton:checked:disabled,
+QWidget#normalizeAbfPill > QPushButton:checked:disabled,
+QWidget#twoGenPill > QPushButton:checked:disabled {
+    background: --disabled-bg;
+    color: --text-disabled;
+    border: 1px solid --border-dark;
+    border-radius: 5px;
+}
+
+/* --- radio row labels --- */
+QLabel#metricRadioRow_label,
+QLabel#angleRadioRow_label,
+QLabel#normalizeAbfRow_label,
+QLabel#twoGenRadioRow_label {
+    font-size: 12px;
+    color: --text-secondary;
+}
+
+/* ========== Settings Modal ========== */
+QWidget#settingsCard QCheckBox {
+    color: --text-primary;
+}
+
+QWidget#settingsCard QCheckBox:disabled {
+    color: --text-disabled;
+}
+
+/* ========== GroupBox ========== */
+QGroupBox {
+    border: 1px solid --border-group;
+    border-radius: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    color: --text-secondary;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px;
+}
+
+/* ========== CheckBox ========== */
+QCheckBox {
+    spacing: 6px;
+}
+QCheckBox::indicator {
+    width:14px;
+    height:14px;
+    border-radius:3px;
+    border:1px solid --checkbox-border;
+    background:--checkbox-bg;
+}
+
+QCheckBox::indicator:checked {
+    background: --checkbox-check-blue;
+    border-color: --checkbox-check-blue;
+}
+
+QCheckBox::indicator:checked:disabled {
+    background: --text-disabled;
+    border-color: --border-dark;
+}
+
+QCheckBox#chkRankErgo::indicator:checked:disabled {
+    background: --text-disabled;
+    border-color: --border-dark;
+}
+
+QCheckBox#chkRankErgo::indicator:checked {
+    background: --checkbox-check-orange;
+    border-color: --checkbox-check-orange;
+}
+
+QCheckBox:disabled,
+QCheckBox#chkAllOptimal:disabled,
+QCheckBox#chkGenerator:disabled,
+QCheckBox#chkCubeshape:disabled,
+QCheckBox#chkIgnoreEquator:disabled,
+QCheckBox#chkKarnotation:disabled,
+QCheckBox#chkMaxX:disabled,
+QCheckBox#chkMaxY:disabled,
+QCheckBox#chkMaxTotal:disabled {
+    color: --text-disabled;
+}
+
+QCheckBox::indicator:disabled {
+    border-color: --border-dark;
+    background: --disabled-bg;
+}
+
+/* ========== Input Fields (LineEdit & SpinBox) ========== */
+QLineEdit {
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
+    border-radius: 4px;
+    padding: 3px 6px;
+    color: --input-field-text;
+}
+
+QLineEdit:disabled {
+    color: --text-disabled;
+    background: --disabled-bg;
+    border-color: --border-dark;
+}
+
+QLineEdit#txtCommand {
+    font-family: monospace;
+    color: --text-cyan;
+    font-size: 12px;
+    border-radius: 0;
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-right: none;
+}
+
+QSpinBox {
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
+    border-radius: 4px;
+    padding: 2px 4px 2px 6px;
+    color: --input-field-text;
+    min-width: 48px;
+}
+
+QSpinBox:disabled {
+    color: --text-disabled;
+    background: --disabled-bg;
+    border-color: --border-dark;
+}
+
+QSpinBox::up-button   {
+    width: 0;
+    border: none;
+}
+
+QSpinBox::down-button {
+    width: 0;
+    border: none;
+}
+
+QSpinBox::up-arrow    {
+    width: 0;
+    height: 0;
+}
+
+QSpinBox::down-arrow  {
+    width: 0;
+    height: 0;
+}
+
+/* ========== TextEdit ========== */
+QTextEdit#txtOutput {
+    background: --secondary-bg;
+    border: 1px solid --border-group;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    color: --text-terminal;
+    padding: 4px;
+}
+
+QTextEdit#txtOutput > QWidget {
+    background: --secondary-bg;
+}
+
+/* ========== Buttons ========== */
+QPushButton {
+    background: --button-bg;
+    border: 1px solid --button-border;
+    border-radius: 5px;
+    padding: 5px 12px;
+    color: --button-text;
+}
+
+QPushButton:hover {
+    background: --hover-bg;
+    border-color: --button-border;
+}
+
+QPushButton:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QPushButton#btnSolve {
+    background: --button-solve-bg;
+    border-color: --button-solve-border;
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+QPushButton#btnSolve:hover {
+    background: --button-solve-hover;
+}
+
+QPushButton#btnSolve:disabled {
+    background: --stop-solve-disabled-bg;
+    border-color: --stop-solve-disabled-border;
+    color: --stop-solve-disabled-text;
+}
+
+QPushButton#btnCopy {
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
+    border-left: none;
+    border-radius: 4px;
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+    color: --text-secondary;
+    font-size: 14px;
+    padding: 0;
+    margin-right: 5px;
+}
+
+QPushButton#btnCopy:hover {
+    background: --hover-bg;
+    color: --button-text;
+}
+
+QPushButton#btnReset {
+    background: --button-reset-bg;
+    border: 1px solid --button-reset-border;
+    border-radius: 26px;
+    color: --text-secondary;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 0;
+    letter-spacing: -0.5px;
+}
+
+QPushButton#btnReset:hover {
+    background: --button-reset-hover;
+    border-color: --button-border;
+    color: --button-text;
+}
+
+QPushButton#btnReset:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QPushButton#btnUndo, QPushButton#btnRedo {
+    background: --button-bg;
+    border-color: --button-border;
+    color: --button-text;
+}
+
+/* Generic disabled state for all left-panel action buttons */
+QPushButton:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QPushButton#btnUndo:hover, QPushButton#btnRedo:hover {
+    background: --hover-bg;
+    border-color: --button-border;
+}
+
+QPushButton#btnUndo:pressed, QPushButton#btnRedo:pressed {
+    background: --pressed-bg;
+}
+
+QPushButton#btnUndo:disabled, QPushButton#btnRedo:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QPushButton#btnApplyScramble {
+    background: --tertiary-bg;
+    border: 1px solid --border-light;
+    border-radius: 4px;
+    color: --text-secondary;
+    padding: 4px 8px;
+}
+
+QPushButton#btnApplyScramble:hover {
+    background: --hover-bg;
+    border-color: --button-border;
+}
+
+QPushButton#btnScrambleMode {
+    background: #333350;
+    border: 1px solid --border-light;
+    border-radius: 0;
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-right: none;
+    color: #fff;
+    padding: 0 6px;
+    font-size: 11px;
+}
+
+QPushButton#btnScrambleMode:checked {
+    color: #fff;
+    background: #333350;
+}
+
+QPushButton#btnScrambleMode:hover {
+    background: --hover-bg;
+}
+
+/* ========== Input Bar Container (ALL spacing/sizing via QSS!) ========== */
+QWidget#inputBarOuter {
+    background: --input-panel-bg;
+    border-bottom: 1px solid --input-mode-border;
+    padding: 0px 12px;
+    min-height: 50px;
+    max-height: 50px;
+}
+
+QWidget#inputBarOuter QHBoxLayout {
+    spacing: 0px;
+    margin: 0px;
+}
+
+/* ========== Input Bar Buttons & Input ========== */
+QPushButton#btnInputMode {
+    background: --input-mode-bg;
+    border: 1px solid --input-mode-border;
+    border-radius: 9px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: none;
+    margin-left: 8px;
+    margin-right: 0;
+    color: --input-mode-text;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: bold;
+    height: 32px;
+    min-width: 82px;
+    max-width: 82px;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#btnInputMode:hover {
+    background: --input-mode-hover;
+    border-color: --input-mode-border;
+}
+
+QPushButton#btnInputModeArrow {
+    background: --input-arrow-bg;
+    border: 1px solid --input-arrow-border;
+    border-radius: 9px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    color: --input-mode-text;
+    padding: 0 6px;
+    margin-right: 10px;
+    font-size: 11px;
+    height: 32px;
+    min-width: 20px;
+    max-width: 20px;
+}
+
+QPushButton#btnInputModeArrow:hover {
+    background: --input-arrow-hover;
+    border-color: --input-arrow-border;
+}
+
+QPushButton#btnApply {
+    background: --input-apply-bg;
+    border: 1px solid --input-apply-border;
+    border-radius: 9px;
+    margin-left: 10px;
+    margin-right: 8px;
+    color: --input-apply-text;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 0 12px;
+    min-width: 45px;
+    max-width: 45px;
+    height: 32px;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#btnApply:hover {
+    background: --input-apply-hover;
+    border-color: --input-apply-border;
+    color: --input-apply-hover-text;
+}
+
+QPushButton#btnApply:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QPushButton#btnInputMode:disabled,
+QPushButton#btnInputModeArrow:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QLineEdit#txtMainInput:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+QLineEdit#txtMainInput {
+    border-radius: 9px;
+    border: 1px solid --input-field-border;
+    margin-left: 0px;
+    margin-right: 0px;
+    font-family: monospace;
+    font-size: 12px;
+    background: --input-field-bg;
+    color: --input-field-text;
+    padding: 4px 8px;
+    height: 25px;
+}
+
+QLineEdit#txtMainInput[hasError="true"] {
+    border-color: --text-error;
+}
+
+QPushButton#btnExpand, QPushButton#btnCopyTerminal, QPushButton#btnFavorites, QPushButton#btnTableMode {
+    background: --button-util-bg;
+    border: 1px solid --button-util-border;
+    border-radius: 4px;
+    color: --button-util-text;
+    font-size: 13px;
+    padding: 0;
+}
+
+QPushButton#btnExpand:hover, QPushButton#btnCopyTerminal:hover, QPushButton#btnFavorites:hover, QPushButton#btnTableMode:hover {
+    background: --button-util-hover-bg;
+    border-color: --button-util-hover-border;
+    color: --button-util-hover-text;
+}
+
+QPushButton#btnExpand:pressed, QPushButton#btnCopyTerminal:pressed, QPushButton#btnFavorites:pressed, QPushButton#btnTableMode:pressed {
+    background: --pressed-bg;
+}
+
+QPushButton#btnScrollToBottom {
+    background: #2a2a4a;
+    border: 1px solid #4a4a7a;
+    border-radius: 16px;
+    color: #aaaaff;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 0px;
+    margin: 0px;
+    text-align: center;
+}
+
+QPushButton#btnScrollToBottom:hover {
+    background: #3a3a6a;
+}
+
+/* ========== Left Panel & Cube Area ========== */
+QScrollArea#leftScroll {
+    background: --primary-bg;
+    border: none;
+}
+
+QWidget#leftPanel {
+    background: --primary-bg;
+}
+
+QWidget#cubeWithReset {
+    background: --primary-bg;
+    border-radius: 4px;
+    border: 1px solid --cube-with-reset-border;
+}
+
+QWidget#cubeWrapper {
+    background: --primary-bg;
+}
+
+QWidget#sq1Widget {
+    background: --primary-bg;
+    border-radius: 0px;
+}
+
+QPushButton#btnReset {
+    background: --button-reset-bg;
+    border: 1px solid --button-reset-border;
+    border-radius: 26px;
+    color: --text-secondary;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 0;
+    min-width: 52px;
+    max-width: 52px;
+    min-height: 52px;
+    max-height: 52px;
+    letter-spacing: -0.5px;
+}
+
+QPushButton#btnReset:hover {
+    background: --button-reset-hover;
+    border-color: --button-border;
+    color: --button-text;
+}
+
+QPushButton#btnReset:disabled {
+    background: --disabled-bg;
+    border-color: --border-dark;
+    color: --text-disabled;
+}
+
+/* ========== ProgressBar ========== */
+QProgressBar {
+    border: none;
+    background: --progress-bg;
+    border-radius: 3px;
+}
+
+QProgressBar::chunk {
+    background: --progress-fill;
+    border-radius: 3px;
+}
+
+/* ========== Labels ========== */
+QLabel#lblStatus {
+    color: --status-text;
+    font-size: 11px;
+}
+
+QLabel#lblScrambleError {
+    color: --text-error;
+    font-size: 11px;
+    padding: 2px 2px;
+}
+
+QLabel#lblCommandError  {
+    color: --text-error;
+    font-size: 11px;
+    padding: 2px 2px;
+}
+
+QLabel#lblSuboptLabel:disabled {
+    color: --text-disabled;
+}
+
+/* ========== ScrollBars ========== */
+QScrollBar:vertical {
+    background: --scrollbar-bg;
+    width: 8px;
+    border-radius: 4px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: --scrollbar-handle;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: --scrollbar-hover;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    border: 0;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QScrollBar:horizontal {
+    background: --scrollbar-bg;
+    height: 8px;
+    border-radius: 4px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background: --scrollbar-handle;
+    border-radius: 4px;
+    min-width: 24px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: --scrollbar-hover;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+    border: 0;
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+}
+
+/* ========== TableWidget ========== */
+QTableWidget#m_solutionTable {
+    background: --table-bg;
+    border: 1px solid --table-border;
+    border-radius: 4px;
+    gridline-color: --table-border;
+    font-family: monospace;
+    font-size: 12px;
+    color: --text-primary;
+}
+
+QTableWidget#m_solutionTable QHeaderView::section {
+    background: --table-header-bg;
+    color: --table-header-text;
+    border: none;
+    border-bottom: 1px solid --table-border;
+    padding: 4px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QTableWidget#m_solutionTable::item:selected {
+    background: --table-selected-bg;
+    color: --table-selected-text;
+}
+
+/* ========== TopBar ========== */
+QWidget#topBar {
+    background: --topbar-bg;
+    border-bottom: 2px solid --border-bottom;
+    min-height: 52px;
+    max-height: 52px;
+}
+
+QLabel#logoLabel {
+    background: transparent;
+    padding: 0;
+}
+
+QPushButton#btnAbout, QPushButton#btnHamburger {
+    background: --button-about-bg;
+    border: 1px solid --button-about-border;
+    border-radius: 15px;
+    color: --button-about-text;
+    font-size: 15px;
+    font-weight: bold;
+    padding: 0;
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+}
+
+QPushButton#btnAbout:hover, QPushButton#btnHamburger:hover {
+    background: --button-about-hover-bg;
+    border-color: --button-about-hover-border;
+    color: --button-about-hover-text;
+}
+
+/* ========== Tooltips ========== */
+QToolTip {
+    background: --tooltip-bg;
+    color: --tooltip-text;
+    border: 1px solid --tooltip-bg;
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 12px;
+    opacity: 230;
+}
+
+/* Qt5 does not support cursor: in QSS; cursors are set programmatically via setCursor(). */

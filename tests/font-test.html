@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kompact Font Tester</title>
+
+<style>
+    @font-face {
+        font-family: "Kompact";
+        src: url("./kompact-font.ttf") format("truetype");
+    }
+
+    body {
+        background: #111;
+        color: #eee;
+        font-family: Arial, sans-serif;
+        padding: 20px;
+    }
+
+    h1 {
+        margin-bottom: 10px;
+    }
+
+    textarea {
+        width: 100%;
+        height: 120px;
+        font-size: 32px;
+        padding: 10px;
+        margin-bottom: 20px;
+        background: #1e1e1e;
+        color: white;
+        border: 1px solid #444;
+        resize: vertical;
+    }
+
+    .preview {
+        font-family: "Kompact";
+        font-size: 48px;
+        background: #1b1b1b;
+        border: 1px solid #333;
+        padding: 20px;
+        min-height: 100px;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .pua-grid {
+        margin-top: 30px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+    }
+
+    .glyph {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        padding: 10px;
+        text-align: center;
+    }
+
+    .glyph-char {
+        font-family: "Kompact";
+        font-size: 48px;
+        margin-bottom: 8px;
+    }
+
+    .glyph-code {
+        font-size: 14px;
+        color: #aaa;
+    }
+
+    button {
+        padding: 10px 16px;
+        font-size: 16px;
+        cursor: pointer;
+        margin-bottom: 20px;
+    }
+</style>
+</head>
+<body>
+
+<h1>Kompact.ttf Font Tester</h1>
+
+<p>Type text below to test the font:</p>
+
+<textarea id="inputBox">
+Hello World
+&#xE000;&#xE001;&#xE002;
+</textarea>
+
+<div class="preview" id="preview"></div>
+
+<h2>PUA Glyphs (E000–E025)</h2>
+
+<button onclick="insertPUA()">Insert All PUA Characters Into Text Box</button>
+
+<div class="pua-grid" id="puaGrid"></div>
+
+<script>
+    const inputBox = document.getElementById("inputBox");
+    const preview = document.getElementById("preview");
+    const puaGrid = document.getElementById("puaGrid");
+
+    function updatePreview() {
+        preview.textContent = inputBox.value;
+    }
+
+    inputBox.addEventListener("input", updatePreview);
+    updatePreview();
+
+    for (let i = 0xE000; i <= 0xE025; i++) {
+        const char = String.fromCodePoint(i);
+
+        const div = document.createElement("div");
+        div.className = "glyph";
+
+        div.innerHTML = `
+            <div class="glyph-char">${char}</div>
+            <div class="glyph-code">U+${i.toString(16).toUpperCase()}</div>
+        `;
+
+        div.addEventListener("click", () => {
+            inputBox.value += char;
+            updatePreview();
+        });
+
+        puaGrid.appendChild(div);
+    }
+
+    function insertPUA() {
+        let chars = "";
+
+        for (let i = 0xE000; i <= 0xE025; i++) {
+            chars += String.fromCodePoint(i);
+        }
+
+        inputBox.value += "\n" + chars;
+        updatePreview();
+    }
+</script>
+
+</body>
+</html>

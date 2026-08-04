@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sq1 Formatter</title>
+
+<!-- MathJax for LaTeX rendering -->
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<style>
+@font-face { font-family: 'MyFont'; src: url('../main/public/kompact-font.ttf'); }
+body { font-family: "Noto Sans", "DejaVu Sans", Arial; padding: 20px; }
+textarea { width: 100%; height: 100px; margin-bottom: 10px; }
+button { padding: 10px 20px; }
+.output { margin-top: 20px; font-size: 22px; }
+#unicode {
+    font-family: "Noto Sans", "DejaVu Sans", monospace;
+    letter-spacing: 2px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+</style>
+</head>
+<body>
+
+<h2>Sq1 Scramble Formatter</h2>
+<textarea id="input" placeholder="Paste your scramble here..."></textarea>
+<button onclick="process()">Convert</button>
+
+<div class="output">
+<p><b>LaTeX Output:</b></p>
+<div id="latex"></div>
+
+<p><b>Custom Font Output:</b></p>
+<div id="custom" style="font-family: 'MyFont', monospace; font-size: 28px; letter-spacing: 2px; line-height: 1.6; white-space: pre-wrap;"></div>
+
+<p><b>Copyable Unicode Output:</b></p>
+<div id="unicode"></div>
+</div>
+
+<script>
+function overlineUnicode(str) {
+    return str.split('').map(c => c + '\u0305').join('');
+}
+
+function process() {
+    let input = document.getElementById('input').value.trim();
+
+    let leadingSlash = input.startsWith('/');
+    let trailingSlash = input.endsWith('/');
+
+    input = input.replace(/\//g, '');
+
+    let regex = /\((-?\d+),(-?\d+)\)/g;
+    let match;
+
+    let latexParts = [];
+    let unicodeParts = [];
+    let customParts = [];
+
+    while ((match = regex.exec(input)) !== null) {
+        let a = parseInt(match[1]);
+        let b = parseInt(match[2]);
+
+        // LATEX
+        let latexPair = '';
+        if (a < 0 && b < 0) {
+            latexPair = `\\overline{${Math.abs(a)}${Math.abs(b)}}`;
+        } else {
+            latexPair = `${a < 0 ? `\\bar{${Math.abs(a)}}` : a}${b < 0 ? `\\bar{${Math.abs(b)}}` : b}`;
+        }
+        latexParts.push(latexPair);
+
+        // CUSTOM FONT
+        let customPair = '';
+        const small = (n) => String.fromCodePoint(0xe000 + n);
+        const singleBar = (n) => String.fromCodePoint(0xe006 + n); // 1→e006, 2→e007...
+        const barRight = (n) => String.fromCodePoint(0xe00b + n); // 1→e00b, 2→e00c...
+        const barLeft = (n) => String.fromCodePoint(0xe010 + n); // 1→e010, 2→e011...
+        const mapDigits = (num, mapper) => String(num).split('').map(d => mapper(parseInt(d))).join('');
+
+        if (a < 0 && b < 0) {
+            customPair = mapDigits(Math.abs(a), barRight) + mapDigits(Math.abs(b), barLeft);
+        } else {
+            customPair = `${a < 0 ? mapDigits(Math.abs(a), singleBar) : mapDigits(Math.abs(a), small)}${b < 0 ? mapDigits(Math.abs(b), singleBar) : mapDigits(Math.abs(b), small)}`;
+        }
+        customParts.push(customPair);
+
+        // UNICODE
+        let unicodePair = '';
+        if (a < 0 && b < 0) {
+            unicodePair = overlineUnicode(String(Math.abs(a)) + String(Math.abs(b)));
+        } else {
+            unicodePair = `${a < 0 ? overlineUnicode(String(Math.abs(a))) : a}${b < 0 ? overlineUnicode(String(Math.abs(b))) : b}`;
+        }
+        unicodeParts.push(unicodePair);
+    }
+
+    // tighter spacing using \; instead of normal space
+    let latexOutput = latexParts.join('\\; ');
+    let unicodeOutput = unicodeParts.join('  ');
+    let customOutput = customParts.join('  ');
+
+    // make slashes text-sized and not giant math operators
+    if (leadingSlash) {
+        latexOutput = '\\text{/}\\; ' + latexOutput;
+        unicodeOutput = '/ ' + unicodeOutput;
+        customOutput = '/ ' + customOutput;
+    }
+    if (trailingSlash) {
+        latexOutput = latexOutput + '\\; \\text{/}';
+        unicodeOutput = unicodeOutput + ' /';
+        customOutput = customOutput + ' /';
+    }
+
+    // Render LaTeX using MathJax
+    let latexContainer = document.getElementById('latex');
+    latexContainer.innerHTML = `\\[ ${latexOutput} \\]`;
+    MathJax.typesetPromise();
+
+    document.getElementById('custom').innerText = customOutput;
+    document.getElementById('unicode').innerText = unicodeOutput;
+}
+</script>
+
+</body>
+</html>

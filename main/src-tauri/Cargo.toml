@@ -1,0 +1,19 @@
+[package]
+name = "croissant"
+version = "1.0.0"
+description = "A native Square-1 optimal solver UI"
+authors = ["Abid Ibn Ashraf", "Matt Mao"]
+edition = "2021"
+
+[lib]
+name = "croissant_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+cc = "1"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2.0.0", features = [] }
+tauri-plugin-store = "2.4.4"
