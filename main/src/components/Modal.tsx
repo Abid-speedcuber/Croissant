@@ -284,6 +284,13 @@ export function Modal({
           <li>{renderMarkup(t('modal.howToUse.outputTools4'))}</li>
         </ul>
         <p>{renderMarkup(t('modal.howToUse.descErgo'))}</p>
+        <div className="modal-section-title">{t('modal.howToUse.sectionFilter')}</div>
+        <p>{renderMarkup(t('modal.howToUse.filterOpen'))}</p>
+        <ul>
+          <li>{renderMarkup(t('modal.howToUse.filterMatchCase'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.filterNegate'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.filterRegex'))}</li>
+        </ul>
         <div className="modal-section-title">{t('modal.howToUse.sectionFavorites')}</div>
         <p>{renderMarkup(t('modal.howToUse.favIntro'))}</p>
         <p>{t('modal.howToUse.favAdd')}</p>
