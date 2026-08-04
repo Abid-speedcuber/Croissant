@@ -1,7 +1,7 @@
 export type IconName =
   | "search" | "close" | "timer" | "copy" | "list" | "grid"
   | "expand" | "collapse" | "chevronDown" | "chevronLeft" | "chevronRight"
-  | "heart" | "dots" | "trash";
+  | "heart" | "dots" | "trash" | "negate";
 
 // Single source of truth for every UI icon so they share one stroke weight/style
 // instead of relying on inconsistent Unicode glyph rendering across platforms.
@@ -13,6 +13,7 @@ export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {
   };
   switch (name) {
     case "search": return <svg {...common}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+    case "negate": return <svg {...common}><circle cx="12" cy="12" r="9" /><line x1="5.5" y1="18.5" x2="18.5" y2="5.5" /></svg>;
     case "close": return <svg {...common}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>;
     case "timer": return <svg {...common}><circle cx="12" cy="13" r="8" /><line x1="12" y1="13" x2="12" y2="9" /><line x1="9" y1="3" x2="15" y2="3" /></svg>;
     case "copy": return <svg {...common}><rect x="3" y="3" width="12" height="12" rx="1.5" /><rect x="9" y="9" width="12" height="12" rx="1.5" /></svg>;

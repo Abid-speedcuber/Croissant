@@ -1806,6 +1806,12 @@ textarea {
   border-color: #9ac7f2;
   color: #9ac7f2;
 }
+.filter-highlight {
+  background: rgba(255, 200, 0, 0.35);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
 .filter-spinner {
   display: inline-block;
   width: 10px;

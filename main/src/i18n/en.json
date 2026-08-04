@@ -120,6 +120,7 @@
     "invalidPattern": "Invalid pattern",
     "results": "results",
     "matchCase": "Match Case",
+    "negate": "Show solutions that DON'T match this text",
     "regex": "Use Regular Expression",
     "noMatches": "No algorithms match your search.",
     "close": "Close search"

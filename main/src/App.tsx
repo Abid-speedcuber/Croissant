@@ -630,6 +630,7 @@ export default function App() {
   const [filterQuery, setFilterQuery] = useState("");
   const [filterMatchCase, setFilterMatchCase] = useState(true);
   const [filterRegexMode, setFilterRegexMode] = useState(false);
+  const [filterNegate, setFilterNegate] = useState(false);
   const [filterResults, setFilterResults] = useState<Solution[] | null>(null);
   const [filterAppliedQuery, setFilterAppliedQuery] = useState("");
   const [filterSearching, setFilterSearching] = useState(false);
@@ -642,6 +643,8 @@ export default function App() {
       if (storedCase !== null) setFilterMatchCase(storedCase === "1");
       const storedRegex = localStorage.getItem("sq1opt.filterRegex");
       if (storedRegex !== null) setFilterRegexMode(storedRegex === "1");
+      const storedNegate = localStorage.getItem("sq1opt.filterNegate");
+      if (storedNegate !== null) setFilterNegate(storedNegate === "1");
     } catch { /* localStorage unavailable */ }
   }, []);
   useEffect(() => {
@@ -650,6 +653,9 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("sq1opt.filterRegex", filterRegexMode ? "1" : "0"); } catch { /* localStorage unavailable */ }
   }, [filterRegexMode]);
+  useEffect(() => {
+    try { localStorage.setItem("sq1opt.filterNegate", filterNegate ? "1" : "0"); } catch { /* localStorage unavailable */ }
+  }, [filterNegate]);
   useEffect(() => {
     if (filterOpen) requestAnimationFrame(() => filterInputRef.current?.focus());
   }, [filterOpen]);
@@ -2080,6 +2086,10 @@ export default function App() {
       const needle = filterMatchCase ? query : query.toLowerCase();
       matcher = (alg) => (filterMatchCase ? alg : alg.toLowerCase()).includes(needle);
     }
+    if (filterNegate) {
+      const positiveMatch = matcher;
+      matcher = (alg) => !positiveMatch(alg);
+    }
     const seen = new Set<string>();
     const matches: Solution[] = [];
     const consider = (solution: Solution) => {
@@ -2123,7 +2133,7 @@ export default function App() {
     const timer = window.setTimeout(() => { void runFilterSearch(filterQuery, id); }, 400);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterOpen, filterQuery, filterMatchCase, filterRegexMode, outputMode, normalize]);
+  }, [filterOpen, filterQuery, filterMatchCase, filterRegexMode, filterNegate, outputMode, normalize]);
   // Pagination targets the filtered set (already fully materialized in memory
   // by runFilterSearch) rather than the raw total when a filter is active.
   const activeTotalCount = filterActive ? filterResults!.length : totalCount;
@@ -2215,9 +2225,28 @@ export default function App() {
     void navigator.clipboard.writeText(lines.join("\n"));
     setStatusLines((old) => [...old, t('terminal.copied')].slice(-8));
   };
+  // literal-mode search term highlighting inside solution lines (not regex, not negate)
+  const highlightActive = filterActive && !filterRegexMode && !filterNegate && filterAppliedQuery.trim() !== "";
+  const highlightQuery = (text: string, query: string, matchCase: boolean) => {
+    const hay = matchCase ? text : text.toLowerCase();
+    const needle = matchCase ? query : query.toLowerCase();
+    if (!needle) return text;
+    const parts: (string | JSX.Element)[] = [];
+    let cursor = 0;
+    let idx = hay.indexOf(needle, cursor);
+    if (idx === -1) return text;
+    while (idx !== -1) {
+      if (idx > cursor) parts.push(text.slice(cursor, idx));
+      parts.push(<mark className="filter-highlight" key={idx}>{text.slice(idx, idx + needle.length)}</mark>);
+      cursor = idx + needle.length;
+      idx = hay.indexOf(needle, cursor);
+    }
+    if (cursor < text.length) parts.push(text.slice(cursor));
+    return parts;
+  };
   const renderSolutionText = (text: string) => {
     const showBarred = outputMode === "abid" || (karn && abidNotation);
-    if (!showBarred) return text;
+    if (!showBarred) return highlightActive ? highlightQuery(text, filterAppliedQuery, filterMatchCase) : text;
     const lb = text.lastIndexOf("[");
     if (lb <= 0) return <span className="abid-inline">{abidify(text)}</span>;
     return <><span className="abid-inline">{abidify(text.slice(0, lb).trim())}</span>{"  " + text.slice(lb).trim()}</>;
@@ -2385,6 +2414,13 @@ export default function App() {
         >Aa</button>
         <button
           type="button"
+          className={`filter-toggle ${filterNegate ? "active" : ""}`}
+          title={t('filter.negate')}
+          aria-pressed={filterNegate}
+          onClick={() => setFilterNegate((v) => !v)}
+        ><Icon name="negate" /></button>
+        <button
+          type="button"
           className={`filter-toggle ${filterRegexMode ? "active" : ""}`}
           title={t('filter.regex')}
           aria-pressed={filterRegexMode}
@@ -2433,7 +2469,7 @@ export default function App() {
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : x.alg}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : (highlightActive ? highlightQuery(x.alg, filterAppliedQuery, filterMatchCase) : x.alg)}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
