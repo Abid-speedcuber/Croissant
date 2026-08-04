@@ -1262,26 +1262,9 @@ textarea {
   padding-bottom: 8px;
   min-height: 0;
   overflow-y: auto;
-  justify-content: space-between;
 }
 :root.bp-720 .options-panel {
   display: none;
-}
-:root.bp-720 .cube-holder {
-  flex-grow: 1000;
-  flex-shrink: 1;
-}
-:root.bp-720 .moves {
-  flex: 1 0 auto;
-  max-height: 96px;
-}
-:root.bp-720 .undo {
-  flex: 1 0 auto;
-  max-height: 48px;
-}
-:root.bp-720 .solve {
-  flex: 1 0 auto;
-  max-height: 64px;
 }
 :root.bp-720 .cube-reset,
 :root.bp-720 .cube-options {
@@ -1305,9 +1288,6 @@ textarea {
 :root.bp-720 .mobile-open-output {
   display: block;
   height: 36px;
-  min-height: 36px;
-  max-height: 60px;
-  flex: 1 0 auto;
   width: 100%;
   margin-top: 5px;
   border: 1px solid #536178;

@@ -8,8 +8,8 @@ const root = dirname(fileURLToPath(import.meta.url));
 const main = resolve(root, "main");
 const outDir = process.env.BUILD_OUT_DIR
   ? resolve(process.env.BUILD_OUT_DIR)
-  : resolve(main, "public");
-const wasmOut = resolve(outDir, "wasm");
+  : resolve(root, "public");
+const wasmOut = resolve(main, "public/wasm");
 const localEmsdk = resolve(homedir(), ".local/share/emsdk");
 const localEmscripten = resolve(localEmsdk, "upstream/emscripten");
 const localEmsdkNode = resolve(localEmsdk, "node/22.16.0_64bit/bin/node");
