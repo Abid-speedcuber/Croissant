@@ -1903,7 +1903,7 @@ export default function App() {
         setZoom((value) => {
           const next = Math.min(2, Math.round((value + 0.1) * 10) / 10);
           zoomRef.current = next;
-          document.documentElement.classList.toggle("tall-viewport", window.innerHeight / next >= 810);
+          document.documentElement.classList.toggle("tall-viewport", window.innerHeight / next >= readBreakpoints().tall);
           return next;
         });
       }
@@ -1912,7 +1912,7 @@ export default function App() {
         setZoom((value) => {
           const next = Math.max(0.5, Math.round((value - 0.1) * 10) / 10);
           zoomRef.current = next;
-          document.documentElement.classList.toggle("tall-viewport", window.innerHeight / next >= 810);
+          document.documentElement.classList.toggle("tall-viewport", window.innerHeight / next >= readBreakpoints().tall);
           return next;
         });
       }
@@ -1920,7 +1920,7 @@ export default function App() {
         event.preventDefault();
         zoomRef.current = 1;
         setZoom(1);
-        document.documentElement.classList.toggle("tall-viewport", window.innerHeight >= 810);
+        document.documentElement.classList.toggle("tall-viewport", window.innerHeight >= readBreakpoints().tall);
       }
       if (event.ctrlKey && event.key.toLowerCase() === "z") { event.preventDefault(); doUndo(); }
       if (event.ctrlKey && event.key.toLowerCase() === "y") { event.preventDefault(); doRedo(); }
@@ -1959,7 +1959,7 @@ export default function App() {
       if (typeof value.maxYValue === "number") setMaxYValue(value.maxYValue);
       if (typeof value.maxTotal === "boolean") setMaxTotal(value.maxTotal);
       if (typeof value.maxTotalValue === "number") setMaxTotalValue(value.maxTotalValue);
-      if (typeof value.zoom === "number") { setZoom(value.zoom); zoomRef.current = value.zoom; document.documentElement.classList.toggle("tall-viewport", window.innerHeight / value.zoom >= 810); }
+      if (typeof value.zoom === "number") { setZoom(value.zoom); zoomRef.current = value.zoom; document.documentElement.classList.toggle("tall-viewport", window.innerHeight / value.zoom >= readBreakpoints().tall); }
       if (typeof value.pageSize === "number" && PAGE_SIZE_OPTIONS.includes(value.pageSize)) setPageSize(value.pageSize);
       if (typeof value.showAll === "boolean") setShowAll(value.showAll);
       if (typeof value.useLessRam === "boolean") setUseLessRam(value.useLessRam);
