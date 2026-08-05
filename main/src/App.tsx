@@ -382,6 +382,7 @@ function Cube({
     const key = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.matches("input, textarea, select, [contenteditable=true]")) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const map: Record<string, keyof CubeActions> = {
         i: "slice",
         k: "slice",
@@ -389,16 +390,29 @@ function Cube({
         f: "up",
         s: "d",
         l: "dp",
-        h: "up",
-        g: "u",
-        w: "dp",
-        o: "d",
         escape: "reset",
       };
-      const action = map[e.key.toLowerCase()];
+      // Double-turn shortcuts: each equivalent to pressing its base key twice.
+      const doubleMap: Record<string, keyof CubeActions> = {
+        g: "up", // G = F twice
+        h: "u",  // H = J twice
+        o: "dp", // O = L twice
+        w: "d",  // W = S twice
+      };
+      const pressed = e.key.toLowerCase();
+      const action = map[pressed];
       if (action) {
         e.preventDefault();
         invoke(action, action === "reset" ? "escape" : undefined);
+        return;
+      }
+      const doubleAction = doubleMap[pressed];
+      if (doubleAction) {
+        e.preventDefault();
+        const mid = doMove(s, doubleAction);
+        setSelected(-1);
+        update(mid, doubleAction);
+        update(doMove(mid, doubleAction), doubleAction);
       }
     };
     window.addEventListener("keydown", key);
