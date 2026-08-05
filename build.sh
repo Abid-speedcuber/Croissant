@@ -248,12 +248,8 @@ rename_artifacts() {
 # Arch Linux .pkg.tar.zst builder
 # ---------------------------------------------------------------------------
 build_arch_pkg() {
-  if ! command -v makepkg >/dev/null 2>&1; then
-    echo "Warning: makepkg not found, skipping .pkg.tar.zst" >&2
-    return 0
-  fi
-
   local pkg_name="croissant"
+  local pkg_rel="1"
   local pkg_dir="$root_dir/output/arch-pkg"
   rm -rf "$pkg_dir"
   mkdir -p "$pkg_dir/usr/bin" "$pkg_dir/usr/share/applications" "$pkg_dir/usr/share/icons"
@@ -282,7 +278,7 @@ build_arch_pkg() {
   fi
 
   # Generate a minimal .desktop file.
-  cat > "$pkg_dir/usr/share/applications/croissant.desktop" <<DESKTOP
+  cat > "$pkg_dir/usr/share/applications/croissant.desktop" <<'DESKTOP'
 [Desktop Entry]
 Name=Croissant
 Exec=/usr/bin/croissant
@@ -297,16 +293,15 @@ DESKTOP
     cp "$icon" "$pkg_dir/usr/share/icons/croissant.png"
   fi
 
-  # Build the package with makepkg.
-  local pkgver="${VERSION//-/.}"
   pushd "$pkg_dir" > /dev/null
 
-  # Generate a PKGBUILD on the fly.
-  cat > PKGBUILD <<PKGBUILD
+  if command -v makepkg >/dev/null 2>&1; then
+    # Build the package with makepkg.
+    cat > PKGBUILD <<PKGBUILD
 # Maintainer: Croissant Developers
-pkgname=croissant
+pkgname=$pkg_name
 pkgver=$VERSION
-pkgrel=1
+pkgrel=$pkg_rel
 pkgdesc="A native Square-1 optimal solver UI"
 arch=('x86_64')
 url="https://github.com/anomalyco/sq1opt-ui"
@@ -319,11 +314,47 @@ package() {
 }
 PKGBUILD
 
-  makepkg --noconfirm --nocheck --cleanbuild
-  # makepkg outputs into the current directory.
-  local pkg_file
-  pkg_file="$(ls -1 *.pkg.tar.zst 2>/dev/null | head -1)"
-  if [[ -n "$pkg_file" ]]; then
+    makepkg --noconfirm --nocheck --cleanbuild
+    # makepkg outputs into the current directory.
+    local pkg_file
+    pkg_file="$(ls -1 *.pkg.tar.zst 2>/dev/null | head -1)"
+    if [[ -n "$pkg_file" ]]; then
+      cp "$pkg_file" "$root_dir/output/"
+      echo "  -> $root_dir/output/$pkg_file"
+    fi
+  else
+    # makepkg is unavailable (e.g. building on a non-Arch distro), so assemble
+    # a spec-compatible .pkg.tar.zst directly with tar + zstd.
+    echo "makepkg not found; assembling .pkg.tar.zst with tar + zstd"
+    local epoch size
+    epoch="$(date +%s)"
+    size="$(du -sb usr | cut -f1)"
+    cat > .PKGINFO <<PKGINFO
+pkgname = $pkg_name
+pkgbase = $pkg_name
+pkgver = ${VERSION}-${pkg_rel}
+pkgdesc = A native Square-1 optimal solver UI
+url = https://github.com/anomalyco/sq1opt-ui
+builddate = $epoch
+packager = Croissant Developers
+size = $size
+arch = x86_64
+license = MIT
+PKGINFO
+    {
+      echo "#mtree"
+      find usr -mindepth 1 -print | sort | while IFS= read -r entry; do
+        if [[ -d "$entry" ]]; then
+          printf './%s type=dir uid=0 gid=0 mode=0755 time=%s\n' "$entry" "$epoch"
+        else
+          printf './%s type=file uid=0 gid=0 mode=0755 size=%s time=%s sha256digest=%s\n' \
+            "$entry" "$(stat -c %s "$entry")" "$epoch" "$(sha256sum "$entry" | cut -d' ' -f1)"
+        fi
+      done
+    } > .MTREE
+    local pkg_file="${pkg_name}-${VERSION}-${pkg_rel}-x86_64.pkg.tar.zst"
+    tar --sort=name --owner=0 --group=0 --numeric-owner \
+      -I 'zstd -19' -cf "$pkg_file" .PKGINFO .MTREE usr
     cp "$pkg_file" "$root_dir/output/"
     echo "  -> $root_dir/output/$pkg_file"
   fi

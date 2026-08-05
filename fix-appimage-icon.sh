@@ -3,6 +3,7 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 bundle_dir="$root_dir/main/src-tauri/target/release/bundle/appimage"
+output_dir="$root_dir/output"
 source_icon="$root_dir/main/src-tauri/icons/icon.png"
 plugin="${LINUXDEPLOY_PLUGIN_APPIMAGE:-$HOME/.cache/tauri/linuxdeploy-plugin-appimage.AppImage}"
 arch="${ARCH:-x86_64}"
@@ -63,13 +64,18 @@ for appdir in "${appdirs[@]}"; do
         cp "$generated" "$image"
       done
     fi
+    if [[ -f "$generated" && -d "$output_dir" ]]; then
+      for image in "$output_dir"/*.AppImage; do
+        cp "$generated" "$image"
+      done
+    fi
   else
     echo "AppImage plugin not found at $plugin; patched AppDir only." >&2
   fi
 done
 
 if command -v gio >/dev/null 2>&1; then
-  for image in "$bundle_dir"/*.AppImage; do
+  for image in "$bundle_dir"/*.AppImage "$output_dir"/*.AppImage; do
     gio set -t string "$image" metadata::custom-icon "file://$source_icon" || true
   done
 fi
