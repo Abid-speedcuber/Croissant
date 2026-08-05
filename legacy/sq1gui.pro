@@ -15,7 +15,7 @@ SOURCES += \
     main.cpp \
     sq1-core/output-converter.cpp \
     mainwindow.cpp \
-    ../sq1opt/sq1opt.cpp \
+    ../main/src-tauri/native/sq1opt.cpp \
     sq1widget.cpp \
     styles/stylesheet.cpp \
     sq1-core/sq1-logic.cpp

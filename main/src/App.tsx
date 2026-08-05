@@ -2512,7 +2512,7 @@ export default function App() {
   return (
     <div className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
-        <img className="app-icon" src="/icon-web.png" alt="" />
+        <img className="app-icon" src={`${import.meta.env.BASE_URL}icon-web.png`} alt="" />
         <div className="brand">
           <b>{t('app.brand')}</b><sub> &nbsp; &nbsp; {t('app.byline')}</sub>
         </div>
