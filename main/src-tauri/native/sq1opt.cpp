@@ -2183,6 +2183,11 @@ int show(int e){
 	return(e);
 }
 
+// true if both layers start with the same piece type
+static inline bool isSingleMisalign(const int pos[24]) {
+	return pos[0] >= 8 == pos[12] >= 8;
+}
+
 // Standalone cubeshape check: edges at positions i%3==r for some r, both layers.
 // Does not need ShapeTranTable — works directly on the raw position array.
 static bool isInCubeshapeRaw(const int pos[24]) {
@@ -2206,7 +2211,8 @@ static bool isInCubeshapeRaw(const int pos[24]) {
 static int preValidate(FullPosition& p, bool keepCubeShape, int twoGen) {
 	if (!keepCubeShape) return 0;
 	if (!isInCubeshapeRaw(p.pos)) return 19;
-	if (!p.isPartial() && p.getParityOdd()) return 19;
+	// getParityOdd() doesn't return even for "no parity"
+	if (!p.isPartial() && p.getParityOdd() != isSingleMisalign(p.pos)) return 19;
 	if ((twoGen == 1 || twoGen == 2) && !cornersAre2GenSolvable(p.pos, twoGen, specificAngleBot)) return 19;
 	return 0;
 }
