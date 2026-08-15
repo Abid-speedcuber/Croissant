@@ -44,7 +44,7 @@ function requireTool(command, installHint) {
   }
 }
 
-requireTool("emcc", "Install and activate Emscripten, then rerun: node build.mjs");
+requireTool("em++", "Install and activate Emscripten, then rerun: node build.mjs");
 
 const iconScript = resolve(root, "icon.sh");
 if (existsSync(iconScript)) {
@@ -53,7 +53,7 @@ if (existsSync(iconScript)) {
 
 mkdirSync(wasmOut, { recursive: true });
 
-run("emcc", [
+run("em++", [
   "src-tauri/native/sq1opt.cpp",
   "src-tauri/native/sq1-logic.cpp",
   "src-tauri/native/web_bridge.cpp",
