@@ -19,6 +19,9 @@ let solveWorker: Worker | undefined;
 let utilityWorker: Worker | undefined;
 const pending = new Map<number, PendingRequest>();
 
+// remember the last config sent so it can be relayed into the solve worker too
+let lastRatingConfig: Record<string, unknown> | undefined;
+
 class Channel<T> {
   onmessage: (message: T) => void = () => undefined;
 }
@@ -48,6 +51,7 @@ function ensureSolveWorker() {
   if (solveWorker) return solveWorker;
   solveWorker = new Worker(new URL("./solverWorker.ts", import.meta.url), { type: "module" });
   attachWorkerEvents(solveWorker);
+  if (lastRatingConfig) postInvoke(solveWorker, "set_rating_config", lastRatingConfig);
   return solveWorker;
 }
 
@@ -67,6 +71,22 @@ function rejectMatchingRequests(predicate: (request: PendingRequest) => boolean,
   }
 }
 
+function postInvoke<T>(worker: Worker, command: string, args: Record<string, unknown>): Promise<T> {
+  const id = nextId++;
+  const request: PendingRequest = {
+    resolve: (value) => undefined,
+    reject: () => undefined,
+    onLine: args.onLine as WebChannel<string> | undefined,
+  };
+  const promise = new Promise<T>((resolve, reject) => {
+    request.resolve = (value) => resolve(value as T);
+    request.reject = reject;
+  });
+  pending.set(id, request);
+  worker.postMessage({ id, type: "invoke", command, args });
+  return promise;
+}
+
 function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   if (command === "stop_solver") {
     solveWorker?.terminate();
@@ -75,25 +95,33 @@ function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise
     return Promise.resolve(undefined as T);
   }
 
-  const id = nextId++;
-  const request: PendingRequest = {
-    resolve: (value) => undefined,
-    reject: () => undefined,
-    onLine: args.onLine as WebChannel<string> | undefined,
-    solve: command === "solve",
-  };
-  const promise = new Promise<T>((resolve, reject) => {
-    request.resolve = (value) => resolve(value as T);
-    request.reject = reject;
-  });
-  pending.set(id, request);
+  if (command === "set_rating_config") {
+    lastRatingConfig = args;
+    // Push to the utility worker plus any solve worker that already exists;
+    // a solve worker created afterwards picks it up via ensureSolveWorker().
+    const targets = [ensureUtilityWorker()];
+    if (solveWorker) targets.push(solveWorker);
+    return Promise.all(targets.map((worker) => postInvoke<unknown>(worker, command, args))).then(() => undefined as T);
+  }
 
   if (command === "solve") {
+    const id = nextId++;
+    const request: PendingRequest = {
+      resolve: (value) => undefined,
+      reject: () => undefined,
+      onLine: args.onLine as WebChannel<string> | undefined,
+      solve: true,
+    };
+    const promise = new Promise<T>((resolve, reject) => {
+      request.resolve = (value) => resolve(value as T);
+      request.reject = reject;
+    });
+    pending.set(id, request);
     ensureSolveWorker().postMessage({ id, type: "solve", position: args.position, flags: args.flags || [] });
-  } else {
-    ensureUtilityWorker().postMessage({ id, type: "invoke", command, args });
+    return promise;
   }
-  return promise;
+
+  return postInvoke<T>(ensureUtilityWorker(), command, args);
 }
 
 export function createWebNative() {

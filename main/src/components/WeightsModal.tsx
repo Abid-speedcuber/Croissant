@@ -74,7 +74,7 @@ export function WeightsModal({
             const changed = weightOverrides[key] !== undefined;
             return (
               <label key={key} className="weights-field" title={t(tooltipKey)}>
-                <span className={"weights-eyebrow" + (changed ? " weights-eyebrow-changed" : "")}>
+                <span className={"weights-eyebrow weights-eyebrow-label" + (changed ? " weights-eyebrow-changed" : "")}>
                   {t(labelKey)}{changed ? "*" : ""}
                 </span>
                 <input

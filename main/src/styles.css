@@ -1179,11 +1179,13 @@ textarea {
 .weights-eyebrow {
   color: #718198;
   font-size: 10.5px;
-  text-transform: uppercase;
   letter-spacing: 0.05em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.weights-eyebrow-label {
+  text-transform: uppercase;
 }
 .weights-eyebrow-changed {
   color: #dce5f2;
