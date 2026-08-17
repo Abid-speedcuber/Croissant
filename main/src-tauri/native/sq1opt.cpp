@@ -1740,6 +1740,7 @@ class PositionSolver {
 		if( lm!=1 ){
 			i=doMove(1);
 			do{
+				// MOVE EQUIVALENCE PRUNE
 				// if we're allowed to use the transformation, and we're not doing any kind of
 				// 2gen, and we're not in the last two moves, then we should skip this move if the
 				// current (x,y) is worse than the alternative.
@@ -1749,7 +1750,9 @@ class PositionSolver {
 				int absBottomMove = i>6 ? 12-i : i;
 				// use the following to respect generator's solution inversion
 				bool nearExemptBoundary = generator ? (m_slicesDone < 2) : (l < 2) || (m_slicesDone == 0);
-				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || nearExemptBoundary || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngleBot || absBottomMove < 2)) {
+				// explicitly keep the branches for T and T'
+				bool isTMove = (topMove==2 && i==8) || (topMove==10 && i==4);
+				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || nearExemptBoundary || isTMove || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngleBot || absBottomMove < 2)) {
 					moveList[moveLen++]=i+12;
 					lastTurns[5]=i;
 					r+=search( metric==TURN_METRIC?l-1:metric==ANGLE_METRIC?l-absBottomMove:l, 1, nodes, twoGen, keepCubeShape, keepAngleTop, keepAngleBot);
