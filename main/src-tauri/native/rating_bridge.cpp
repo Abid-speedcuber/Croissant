@@ -14,7 +14,8 @@ extern "C" bool sq1_rate_algorithm(const char *algorithm, bool initial_top_a,
                                     Sq1RatingResult *output) {
     if (!output) return false;
     try {
-        const AlgRating rating = rateAlg(algorithm ? algorithm : "", initial_top_a, 34, 100, 38, 10);
+        const RatingWeights w = getRatingWeights();
+        const AlgRating rating = rateAlg(algorithm ? algorithm : "", initial_top_a, w.w1, w.w2, w.w3, w.w4);
         output->final_score = rating.FINAL;
         output->phase1 = rating.PHASE1; output->phase2 = rating.PHASE2;
         output->phase3 = rating.PHASE3; output->phase4 = rating.PHASE4;
@@ -27,4 +28,17 @@ extern "C" bool sq1_rate_algorithm(const char *algorithm, bool initial_top_a,
         std::memset(output, 0, sizeof(*output));
         return false;
     }
+}
+
+// Runtime configuration for the ergonomics rater — see sq1-logic.h.
+extern "C" void sq1_set_rating_weights(double w1, double w2, double w3, double w4) {
+    setRatingWeights(w1, w2, w3, w4);
+}
+
+extern "C" bool sq1_set_move_value(const char *key, int value) {
+    return key ? setMoveValueOverride(key, value) : false;
+}
+
+extern "C" void sq1_reset_rating_config() {
+    resetRatingConfig();
 }

@@ -27,6 +27,7 @@ type InvokeRequest =
   | { id: number; type: "invoke"; command: "karnify"; args: { input: string; position?: string | null; generator: boolean } }
   | { id: number; type: "invoke"; command: "rate_algorithm"; args: { algorithm: string; initialTopA: boolean } }
   | { id: number; type: "invoke"; command: "two_gen_status"; args: { position: number[]; specificAngleBot: boolean } }
+  | { id: number; type: "invoke"; command: "set_rating_config"; args: { weights: [number, number, number, number]; moveValues: Record<string, number> } }
   | { id: number; type: "deleteTable"; name: string };
 
 type WorkerEvent =
@@ -57,6 +58,9 @@ type WasmApi = {
   karnify: (input: string, position: string, generator: number) => number;
   rateAlgorithm: (algorithm: string, initialTopA: number) => number;
   twoGenStatus: (position: number, specificAngleBot: number) => number;
+  setRatingWeights: (w1: number, w2: number, w3: number, w4: number) => void;
+  setMoveValue: (key: string, value: number) => number;
+  resetRatingConfig: () => void;
   freeString: (ptr: number) => void;
 };
 
@@ -134,6 +138,9 @@ async function loadModule(): Promise<EmscriptenModule> {
       karnify: instance.cwrap("sq1_web_karnify_alloc", "number", ["string", "string", "number"]) as (input: string, position: string, generator: number) => number,
       rateAlgorithm: instance.cwrap("sq1_web_rate_algorithm_json_alloc", "number", ["string", "number"]) as (algorithm: string, initialTopA: number) => number,
       twoGenStatus: instance.cwrap("sq1_web_two_gen_status_json_alloc", "number", ["number", "number"]) as (position: number, specificAngleBot: number) => number,
+      setRatingWeights: instance.cwrap("sq1_web_set_rating_weights", null, ["number", "number", "number", "number"]) as (w1: number, w2: number, w3: number, w4: number) => void,
+      setMoveValue: instance.cwrap("sq1_web_set_move_value", "number", ["string", "number"]) as (key: string, value: number) => number,
+      resetRatingConfig: instance.cwrap("sq1_web_reset_rating_config", null, []) as () => void,
       freeString: instance.cwrap("sq1_web_free_string", null, ["number"]) as (ptr: number) => void,
     };
     return instance;
@@ -172,6 +179,13 @@ async function invoke(command: InvokeRequest & { type: "invoke" }): Promise<unkn
     } finally {
       mod._free(ptr);
     }
+  }
+  if (command.command === "set_rating_config") {
+    api.resetRatingConfig();
+    const [w1, w2, w3, w4] = command.args.weights;
+    api.setRatingWeights(w1, w2, w3, w4);
+    for (const [key, value] of Object.entries(command.args.moveValues)) api.setMoveValue(key, value);
+    return null;
   }
   throw new Error("Unsupported command.");
 }

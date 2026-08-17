@@ -49,7 +49,8 @@ extern "C" char *sq1_web_karnify_alloc(const char *input, const char *position, 
 
 extern "C" char *sq1_web_rate_algorithm_json_alloc(const char *algorithm, bool initial_top_a) {
     try {
-        const AlgRating rating = rateAlg(algorithm ? algorithm : "", initial_top_a, 34, 100, 38, 10);
+        const RatingWeights w = getRatingWeights();
+        const AlgRating rating = rateAlg(algorithm ? algorithm : "", initial_top_a, w.w1, w.w2, w.w3, w.w4);
         std::ostringstream out;
         out << "{\"finalScore\":" << rating.FINAL
             << ",\"phase1\":" << rating.PHASE1
@@ -89,4 +90,19 @@ extern "C" char *sq1_web_two_gen_status_json_alloc(const int *position, bool spe
 
 extern "C" void sq1_web_free_string(char *value) {
     delete[] value;
+}
+
+// Runtime configuration for the ergonomics rater — see sq1-logic.h. These
+// three symbols must be added to the Emscripten EXPORTED_FUNCTIONS list
+// alongside the other sq1_web_* symbols for the WASM build to expose them.
+extern "C" void sq1_web_set_rating_weights(double w1, double w2, double w3, double w4) {
+    setRatingWeights(w1, w2, w3, w4);
+}
+
+extern "C" bool sq1_web_set_move_value(const char *key, int value) {
+    return key ? setMoveValueOverride(key, value) : false;
+}
+
+extern "C" void sq1_web_reset_rating_config() {
+    resetRatingConfig();
 }

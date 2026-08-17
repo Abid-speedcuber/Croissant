@@ -25,6 +25,32 @@ static const std::map<std::string, int> MOVE_VALUES = {
 // Helper Functions
 // ============================================================
 
+// Mutable copies of the defaults above, adjustable at runtime via
+// setRatingWeights/setMoveValueOverride (see sq1-logic.h).
+static RatingWeights g_ratingWeights;
+static std::map<std::string, int> g_moveValues = MOVE_VALUES;
+
+RatingWeights getRatingWeights() { return g_ratingWeights; }
+
+void setRatingWeights(double w1, double w2, double w3, double w4)
+{
+    g_ratingWeights = {w1, w2, w3, w4};
+}
+
+bool setMoveValueOverride(const std::string &key, int value)
+{
+    auto it = g_moveValues.find(key);
+    if (it == g_moveValues.end()) return false;
+    it->second = value;
+    return true;
+}
+
+void resetRatingConfig()
+{
+    g_ratingWeights = RatingWeights{};
+    g_moveValues = MOVE_VALUES;
+}
+
 int getMoveValue(bool startA, bool upslice, const std::string &move)
 {
     std::string key;
@@ -41,8 +67,8 @@ int getMoveValue(bool startA, bool upslice, const std::string &move)
         key = (upslice ? "/" : "\\");
         key += move;
     }
-    auto it = MOVE_VALUES.find(key);
-    return (it != MOVE_VALUES.end()) ? it->second : 5;
+    auto it = g_moveValues.find(key);
+    return (it != g_moveValues.end()) ? it->second : 5;
 }
 
 std::pair<int, int> getOverwork(const std::vector<std::string> &moves)

@@ -17,6 +17,9 @@ unsafe extern "C" {
     fn sq1_request_stop();
     fn sq1_rate_algorithm(algorithm: *const c_char, initial_top_a: bool, output: *mut RatingResult) -> bool;
     fn sq1_two_gen_compatibility(position: *const i32, specific_angle_bot: bool, corners_two: *mut bool, corners_pseudo: *mut bool) -> i32;
+    fn sq1_set_rating_weights(w1: f64, w2: f64, w3: f64, w4: f64);
+    fn sq1_set_move_value(key: *const c_char, value: i32) -> bool;
+    fn sq1_reset_rating_config();
 }
 
 #[repr(C)]
@@ -162,6 +165,18 @@ fn rate_algorithm(algorithm: String, initial_top_a: bool) -> Result<RatingResult
     Ok(result)
 }
 
+// Resets the ergonomics rater to defaults, then re-applies the given weights and move value overrides
+#[tauri::command]
+fn set_rating_config(weights: [f64; 4], move_values: std::collections::HashMap<String, i32>) -> Result<(), String> {
+    unsafe { sq1_reset_rating_config(); }
+    unsafe { sq1_set_rating_weights(weights[0], weights[1], weights[2], weights[3]); }
+    for (key, value) in move_values {
+        let key = CString::new(key).map_err(|_| "Move-value key contains a NUL byte")?;
+        unsafe { sq1_set_move_value(key.as_ptr(), value); }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn two_gen_status(position: Vec<i32>, specific_angle_bot: bool) -> Result<TwoGenStatus, String> {
     if position.len() != 24 { return Err("A Square-1 position must have 24 slots".into()); }
@@ -227,7 +242,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(SolverState::default())
-        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size])
+        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, set_rating_config, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size])
         .run(tauri::generate_context!())
         .expect("error while running Croissant");
 }

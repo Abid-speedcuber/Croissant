@@ -1956,7 +1956,8 @@ class PositionSolver {
 			if (m_cubeshape) {
 				bool initialTopA = (fp.pos[0] >= 8);
 				try {
-					AlgRating rating = rateAlg(rawAlg, initialTopA, 34, 100, 38, 10);
+					const RatingWeights w = getRatingWeights();
+					AlgRating rating = rateAlg(rawAlg, initialTopA, w.w1, w.w2, w.w3, w.w4);
 					if (rating.valid) {
 						sliceMarker = rating.sliceStart;
 						std::string safeSS = rating.sliceStart;

@@ -19,7 +19,11 @@
     "maxX": "Limit the maximum top-layer turn in either direction (0-6).",
     "maxY": "Limit the maximum bottom-layer turn in either direction (0-6).",
     "maxTotal": "Limit the maximum combined |top|+|bottom| turn per move pair (1-12).",
-    "depths": "Comma-separated list of depths to search, e.g. 8,9."
+    "depths": "Comma-separated list of depths to search, e.g. 8,9.",
+    "weightW1": "The higher this weight is, the more important ergonomics of the moves is.",
+    "weightW2": "The slicecount of each alg is multiplied by the weight, and subtracted from the rating. The higher this number is, the more the longer algs will be punished.",
+    "weightW3": "The higher this weight is, the more overwork is punished for.",
+    "weightW4": "The higher this weight is, the more \"bonus\" is rewarded. \"Bonus\" refers to when a move like W appears instead of, say, U D'. Essentially, the second move cancels out the first move completely."
   },
   "btn": {
     "resetCube": "Reset",
@@ -198,6 +202,17 @@
       "karnSmart": "Smart Karn (CS-aware)",
       "abidNegatives": "Use Abid's negative number representation"
     },
+    "weights": {
+      "manage": "Configure ergonomics rater",
+      "title": "Weights",
+      "tableCaption": "Ergonomics table (A = top misalign; a = bottom misalign. / = upslice; \\ = downslice)",
+      "labels": {
+        "w1": "Ergonomics",
+        "w2": "Slicecount",
+        "w3": "Overwork",
+        "w4": "Bonus"
+      }
+    },
     "disk": {
       "manage": "Manage Disk Space",
       "title": "Manage Disk Space",
@@ -241,7 +256,7 @@
     "about": {
       "title": "About Croissant",
       "p1": "This program stemmed from the optimal Square-1 solver by <link:jaap>Jaap Scherphuis</link:jaap>.",
-      "p2": "v2 was created by Michael Gottlieb (<link:github>GitHub</link:github>, <link:wca>WCA</link:wca>), who rewrote the solver with significant improvements and optimisations.",
+      "p2": "v2 was created by Michael Gottlieb (<link:github>GitHub</link:github>, <link:wca>WCA</link:wca>), who rewrote the solver with significant improvements and optimizations.",
       "p3": "Read the old documentations <link:here>here</link:here>. Note that it is largely not applicable within v3.",
       "p4": "This is the official <strong>v3</strong>. New in v3:",
       "li1": "Actual graphical UI",

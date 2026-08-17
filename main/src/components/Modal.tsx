@@ -107,6 +107,7 @@ export function Modal({
     pageSizeOptions: number[];
     onRequestShowAll: () => void;
     onOpenDiskSpace?: () => void;
+    onOpenWeights?: () => void;
     disabled: boolean;
     hasMaxTurn: boolean;
     language?: LangCode;
@@ -148,7 +149,8 @@ export function Modal({
             <span>{t('modal.settings.useLessRam')}</span>
           </label>
         </div>
-        <button className="settings-disk-space" onClick={() => settings?.onOpenDiskSpace?.()}>{t('modal.disk.manage')}</button>
+        <button className="setting-button" disabled={settings?.disabled} onClick={() => settings?.onOpenWeights?.()}>{t('modal.weights.manage')}</button>
+        <button className="setting-button" onClick={() => settings?.onOpenDiskSpace?.()}>{t('modal.disk.manage')}</button>
         <div className="settings-slider">
           <span className="settings-slider-label">{t('modal.settings.pageSize')}</span>
           <input type="range" min="0" max={String((settings?.pageSizeOptions.length ?? 1) - 1)} step="1" value={Math.max(0, (settings?.pageSizeOptions ?? []).indexOf(settings?.pageSize ?? 1000))} disabled={settings?.disabled || settings?.showAll} onChange={(e) => settings?.setPageSize((settings?.pageSizeOptions ?? [])[Number(e.target.value)] ?? 1000)} />

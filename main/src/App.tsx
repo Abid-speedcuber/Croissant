@@ -9,11 +9,12 @@ import {
   twistable, getLayerR, getParityOdd, isGoodSquares, inCubeshape, doMove, tauri, validDepths, solverFlags,
   positionString, rawPosition, parsePosition, invertScramble, addCommas, applyNumericAlgorithm,
   abidify, abidSpacing, notationStyle, isKarnMode, OutputMode, OUTPUT_MODES, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
-  ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips,
+  ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips, DEFAULT_WEIGHTS,
 } from "./utils";
 import { Modal } from './components/Modal';
 import { Icon } from './components/Icon';
 import { DiskSpaceModal } from './components/DiskSpaceModal';
+import { WeightsModal } from './components/WeightsModal';
 import { t, tList, LangCode, getLang, setLang } from './i18n';
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
@@ -624,6 +625,9 @@ export default function App() {
     if (value && !isNativePlatform()) void clearTableBlobs();
   };
   const [diskOpen, setDiskOpen] = useState(false);
+  const [weightsOpen, setWeightsOpen] = useState(false);
+  const [weightOverrides, setWeightOverrides] = useState<Partial<{ w1: number; w2: number; w3: number; w4: number }>>({});
+  const [moveValueOverrides, setMoveValueOverrides] = useState<Record<string, number>>({});
   const [showAllConfirm, setShowAllConfirm] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false),
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
@@ -1978,6 +1982,8 @@ export default function App() {
       if (typeof value.showAll === "boolean") setShowAll(value.showAll);
       if (typeof value.useLessRam === "boolean") setUseLessRam(value.useLessRam);
       if (typeof value.deleteTablesOnQuitV2 === "boolean") setDeleteTablesOnQuit(value.deleteTablesOnQuitV2);
+      if (value.weightOverrides && typeof value.weightOverrides === "object") setWeightOverrides(value.weightOverrides as Partial<{ w1: number; w2: number; w3: number; w4: number }>);
+      if (value.moveValueOverrides && typeof value.moveValueOverrides === "object") setMoveValueOverrides(value.moveValueOverrides as Record<string, number>);
       queueMicrotask(() => { settingsReady.current = true; });
     });
   }, []);
@@ -1987,9 +1993,23 @@ export default function App() {
       outputMode, abidNotation, ignoreTransforms, debugOutput, normalize, mode,
       metric, two, angle, all, suboptimal, depths, generator, cubeShape: cubeShapeMemory, ignoreMiddle,
       maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam,
-      deleteTablesOnQuitV2,
+      deleteTablesOnQuitV2, weightOverrides, moveValueOverrides,
     });
-  }, [outputMode, abidNotation, ignoreTransforms, debugOutput, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam, deleteTablesOnQuit]);
+  }, [outputMode, abidNotation, ignoreTransforms, debugOutput, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam, deleteTablesOnQuit, weightOverrides, moveValueOverrides]);
+  useEffect(() => {
+    // Pushes the current ergonomics-rater overrides to the native/web solver
+    // backend so they take effect on the very next rating, including on
+    // startup once any overrides are restored from storage above.
+    const native = tauri();
+    if (!native?.core?.invoke) return;
+    const weights: [number, number, number, number] = [
+      weightOverrides.w1 ?? DEFAULT_WEIGHTS.w1,
+      weightOverrides.w2 ?? DEFAULT_WEIGHTS.w2,
+      weightOverrides.w3 ?? DEFAULT_WEIGHTS.w3,
+      weightOverrides.w4 ?? DEFAULT_WEIGHTS.w4,
+    ];
+    void native.core.invoke("set_rating_config", { weights, moveValues: moveValueOverrides }).catch(() => undefined);
+  }, [weightOverrides, moveValueOverrides]);
   useEffect(() => {
     if (!solutions.length || running) return;
     let cancelled = false;
@@ -2743,6 +2763,7 @@ export default function App() {
         useLessRam, setUseLessRam,
         onRequestShowAll: () => setShowAllConfirm(true),
         onOpenDiskSpace: () => setDiskOpen(true),
+        onOpenWeights: () => setWeightsOpen(true),
       }} notation={{
         outputMode, setOutputMode, abidNotation, setAbidNotation, disabled: running,
       }} debugStats={modal === "debug" ? computeDebugStats() : null} liveDebug={modal === "debug" ? () => ({
@@ -2755,6 +2776,7 @@ export default function App() {
         totalNodes: progressNodesRef.current,
       }) : null} />}
       {modal === "settings" && diskOpen && <DiskSpaceModal onClose={() => setDiskOpen(false)} deleteOnQuit={deleteTablesOnQuit} setDeleteOnQuit={setDeleteTablesOnQuit} solutions={solutions} onClearSolutions={clearSolutions} />}
+      {modal === "settings" && weightsOpen && <WeightsModal onClose={() => setWeightsOpen(false)} weightOverrides={weightOverrides} setWeightOverrides={setWeightOverrides} moveValueOverrides={moveValueOverrides} setMoveValueOverrides={setMoveValueOverrides} />}
       {showAllConfirm && <div className="modal-shade modal-shade-top" onClick={() => setShowAllConfirm(false)}>
         <div className="modal modal-confirm" onClick={(event) => event.stopPropagation()}>
           <button className="modal-close" onClick={() => setShowAllConfirm(false)}><Icon name="close" /></button>
