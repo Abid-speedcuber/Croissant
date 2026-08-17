@@ -647,6 +647,23 @@ export default function App() {
   const favClosingOriginRef = useRef({ x: 50, y: 50 });
   const favOpeningOriginRef = useRef({ x: 50, y: 50 });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; alg: string } | null>(null);
+  const [stickyTooltip, setStickyTooltip] = useState<{ x: number; y: number; text: string; key: string } | null>(null);
+  const stickyTooltipRef = useRef<HTMLDivElement>(null);
+  // Sticky tooltip is a real element, so clamp its actual measured box to the
+  // viewport (unlike the hover tooltip, which can only clamp its anchor point).
+  useLayoutEffect(() => {
+    const el = stickyTooltipRef.current;
+    if (!stickyTooltip || !el) return;
+    const margin = 8, gap = 6;
+    const w = el.offsetWidth, h = el.offsetHeight;
+    let left = Math.min(Math.max(stickyTooltip.x - w / 2, margin), window.innerWidth - w - margin);
+    let top = stickyTooltip.y - h - gap;
+    if (top < margin) top = stickyTooltip.y + gap; // no room above anchor: flip below
+    top = Math.min(Math.max(top, margin), window.innerHeight - h - margin);
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.visibility = "visible";
+  }, [stickyTooltip]);
   const [twoGenStatus, setTwoGenStatus] = useState<TwoGenStatus>({ compatibility: 0, cornersTwo: false, cornersPseudo: false });
   const [followTerminal, setFollowTerminal] = useState(true);
   const [completedWhilePaused, setCompletedWhilePaused] = useState(false);
@@ -968,13 +985,16 @@ export default function App() {
       if (!(event.target as Element | null)?.closest(".top-menu-wrap")) {
         setMenu(false);
       }
+      if (stickyTooltip && !(event.target as Element | null)?.closest(".sticky-tooltip, .ergo-value")) {
+        setStickyTooltip(null);
+      }
       if (!contextMenu) return;
       if ((event.target as Element | null)?.closest(".solution-context")) return;
       setContextMenu(null);
     };
     window.addEventListener("pointerdown", handlePointerDown);
     return () => window.removeEventListener("pointerdown", handlePointerDown);
-  }, [contextMenu]);
+  }, [contextMenu, stickyTooltip]);
   useEffect(() => {
     const onMouseUp = () => scheduleTerminalUserInactive();
     window.addEventListener("mouseup", onMouseUp);
@@ -1134,6 +1154,8 @@ export default function App() {
     if (!node) return;
     // Save current table scroll position
     tableScrollPositionRef.current = node.scrollTop;
+    // Anchor coords are stale once the row moves under the tooltip.
+    if (stickyTooltip) setStickyTooltip(null);
   };
   const switchToTableMode = () => {
     if (terminalTextRef.current) {
@@ -2577,7 +2599,13 @@ export default function App() {
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`} data-tooltip={x.debugAnn} onMouseEnter={positionTooltip}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : (highlightActive ? highlightQuery(x.alg, filterAppliedQuery, filterMatchCase) : x.alg)}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`} data-tooltip={x.debugAnn} onMouseEnter={positionTooltip}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : (highlightActive ? highlightQuery(x.alg, filterAppliedQuery, filterMatchCase) : x.alg)}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span className={debugOutput && x.debugAnn ? "ergo-value clickable" : "ergo-value"} onClick={(event) => {
+          if (!debugOutput || !x.debugAnn) return;
+          event.stopPropagation();
+          if (stickyTooltip?.key === x.raw) { setStickyTooltip(null); return; }
+          const r = event.currentTarget.getBoundingClientRect();
+          setStickyTooltip({ x: r.left + r.width / 2, y: r.top, text: x.debugAnn, key: x.raw });
+        }}>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
@@ -2602,7 +2630,7 @@ export default function App() {
     );
   };
   return (
-    <div className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
+    <div className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""} ${stickyTooltip ? "sticky-tooltip-active" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
         <img className="app-icon" src={`${import.meta.env.BASE_URL}icon-web.png`} alt="" />
         <div className="brand">
@@ -2742,6 +2770,7 @@ export default function App() {
         {renderOptionsPanel()}
         {renderOutputShell()}
       </div>
+      {stickyTooltip && <div ref={stickyTooltipRef} className="sticky-tooltip" style={{ visibility: "hidden" }}>{stickyTooltip.text}</div>}
       {contextMenu && <div className="solution-context" style={{
         left: Math.max(0, Math.min(contextMenu.x, window.innerWidth - 180)),
         top: Math.max(0, Math.min(contextMenu.y, window.innerHeight - 80)),
