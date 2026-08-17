@@ -21,6 +21,7 @@ export type Solution = {
   ergoRaw?: number;
   ergo?: number;
   sliceStart?: string;
+  debugAnn?: string;
 };
 
 export type OutputLine = { raw: string; karn: string; isSolution: boolean; algRaw?: string; sliceStart?: string };
@@ -32,6 +33,10 @@ export type RatingResult = {
   phase2?: number;
   phase3?: number;
   phase4?: number;
+  weight1?: number;
+  weight2?: number;
+  weight3?: number;
+  weight4?: number;
   ergoUp?: number;
   ergo_up?: number;
   ergoDown?: number;

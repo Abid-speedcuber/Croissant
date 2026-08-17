@@ -21,6 +21,7 @@ struct AlgRating
     bool valid{true}; // false when the alg could not be parsed / rated
     // Breakdown (only meaningful when valid==true)
     double PHASE1{0}, PHASE2{0}, PHASE3{0}, PHASE4{0};
+    double W1{0}, W2{0}, W3{0}, W4{0};
     int sliceCount{0};
     double ergo_up{0}, ergo_down{0};
     int movement{0}, bonus{0};

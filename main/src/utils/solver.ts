@@ -426,6 +426,28 @@ export function ratingScore(rating?: RatingResult) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+export function ratingDebugAnnotation(rating?: RatingResult): string | undefined {
+  if (!rating?.valid) return undefined;
+  const p1 = rating.phase1?.toFixed(1) ?? "?";
+  const p2 = rating.phase2?.toFixed(1) ?? "?";
+  const p3 = rating.phase3?.toFixed(1) ?? "?";
+  const p4 = rating.phase4?.toFixed(1) ?? "?";
+  // const f = rating.finalScore?.toFixed(2) ?? "?";
+  const w1 = rating.weight1?.toFixed(1) ?? "?";
+  const w2 = rating.weight2?.toFixed(1) ?? "?";
+  const w3 = rating.weight3?.toFixed(1) ?? "?";
+  const w4 = rating.weight4?.toFixed(1) ?? "?";
+  const eu = rating.ergoUp?.toFixed(1) ?? "?";
+  const ed = rating.ergoDown?.toFixed(1) ?? "?";
+  const e = !isNaN(Math.max(Number(eu), Number(ed))) ? Math.max(Number(eu), Number(ed)) : "?";
+  const sc = rating.sliceCount ?? "?";
+  const mv = rating.movement ?? "?";
+  const bn = rating.bonus ?? "?";
+  return `weights*values = ${w1}*${e} - ${w2}*${sc} - ${w3}*${mv} + ${w4}*${bn}
+        = ${p1} - ${p2} - ${p3} + ${p4}
+        upslice ergonomics:${eu}  downslice ergonomics:${ed}`;
+}
+
 export function ratingSliceStart(rating?: RatingResult) {
   const value = rating?.sliceStart ?? rating?.slice_start;
   if (typeof value === "number") return value ? String.fromCharCode(value) : undefined;

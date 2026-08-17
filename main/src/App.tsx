@@ -9,13 +9,21 @@ import {
   twistable, getLayerR, getParityOdd, isGoodSquares, inCubeshape, doMove, tauri, validDepths, solverFlags,
   positionString, rawPosition, parsePosition, invertScramble, addCommas, applyNumericAlgorithm,
   abidify, abidSpacing, notationStyle, isKarnMode, OutputMode, OUTPUT_MODES, injectSliceIndicator, lineAlg, lineWithoutBracket, parseSolutionCounts,
-  ratingScore, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips, DEFAULT_WEIGHTS,
+  ratingScore, ratingDebugAnnotation, ratingSliceStart, solutionErgo, medianNormalize, normalizeLine, tooltips, DEFAULT_WEIGHTS,
 } from "./utils";
 import { Modal } from './components/Modal';
 import { Icon } from './components/Icon';
 import { DiskSpaceModal } from './components/DiskSpaceModal';
 import { WeightsModal } from './components/WeightsModal';
 import { t, tList, LangCode, getLang, setLang } from './i18n';
+
+// Sets --tt-x/--tt-y from the hovered element's rect so the fixed-position
+// tooltip in styles.css can anchor to it without being clipped by scroll ancestors.
+function positionTooltip(event: React.MouseEvent<HTMLElement>) {
+  const r = event.currentTarget.getBoundingClientRect();
+  event.currentTarget.style.setProperty("--tt-x", `${r.left + r.width / 2}px`);
+  event.currentTarget.style.setProperty("--tt-y", `${r.top}px`);
+}
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
 const OFFLOAD_CHUNK = 5000;
@@ -616,6 +624,7 @@ export default function App() {
   const [isRestoring, setIsRestoring] = useState(false);
   const setUseLessRam = (value: boolean) => { useLessRamRef.current = value; _setUseLessRam(value); };
   const totalCount = solutions.length + offloadedTotal + pendingTailCount;
+  const debugOutputRef = useRef(false);
   const deleteTablesOnQuitRef = useRef(!isNativePlatform());
   const [deleteTablesOnQuit, _setDeleteTablesOnQuit] = useState(!isNativePlatform());
   const deleteTablesOnQuitV2 = deleteTablesOnQuit;
@@ -1714,7 +1723,7 @@ export default function App() {
     }
     const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
     if (lb < 0 || rb < 0) {
-      if (debugOutput || !seenRaw.current.size) addOutputLine({ raw: line, karn: line, isSolution: false });
+      if (debugOutputRef.current || !seenRaw.current.size) addOutputLine({ raw: line, karn: line, isSolution: false });
       return;
     }
     const rawAlg = line.slice(0, lb).trim();
@@ -1737,7 +1746,7 @@ export default function App() {
       if (fields[1] && fields[1].startsWith("R{")) {
         try {
           const raw = JSON.parse(fields[1].slice(1));
-          rating = { finalScore: raw.f, sliceStart: raw.ss, phase1: raw.p1, phase2: raw.p2, phase3: raw.p3, phase4: raw.p4, ergoUp: raw.eu, ergoDown: raw.ed, sliceCount: raw.sc, movement: raw.mv, bonus: raw.bn, valid: true };
+          rating = { finalScore: raw.f, sliceStart: raw.ss, phase1: raw.p1, phase2: raw.p2, phase3: raw.p3, phase4: raw.p4, weight1: raw.w1, weight2: raw.w2, weight3: raw.w3, weight4: raw.w4, ergoUp: raw.eu, ergoDown: raw.ed, sliceCount: raw.sc, movement: raw.mv, bonus: raw.bn, valid: true };
           if (rating.valid) sliceStart = ratingSliceStart(rating);
         } catch { /* unrated */ }
         abidified = fields.slice(2).join("  ") || undefined;
@@ -1761,17 +1770,19 @@ export default function App() {
       rawDisplay = pair.rawDisplay;
       karnDisplay = pair.karnDisplay;
     }
+    let debugAnn: string | undefined;
+    if (debugOutputRef.current) debugAnn = ratingDebugAnnotation(rating);
     const displayAlg = lineAlg(buildDisplayText(rawDisplay, karnDisplay, abidDisplay, sliceStart));
     if (seenDisplay.current.has(displayAlg)) return;
     seenDisplay.current.add(displayAlg);
     if (seenRaw.current.size === 1) {
       firstSolutionAt.current = performance.now();
       if (!solveStartTimeRef.current) solveStartTimeRef.current = firstSolutionAt.current;
-      if (!debugOutput) replaceOutputLines(outputLinesRef.current.filter((entry) => entry.isSolution));
+      if (!debugOutputRef.current) replaceOutputLines(outputLinesRef.current.filter((entry) => entry.isSolution));
     }
     const counts = parseSolutionCounts(line);
     const cleanLine = rawAlg + "  " + metricsPart;
-    const row: Solution = { raw: cleanLine, rawDisplay, karnDisplay, abidDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart };
+    const row: Solution = { raw: cleanLine, rawDisplay, karnDisplay, abidDisplay, algRaw: rawAlg, ...counts, ergoRaw: rating?.valid ? ratingScore(rating) : undefined, sliceStart, debugAnn };
     addSolution(row);
     addOutputLine({ raw: rawDisplay, karn: karnDisplay, isSolution: true, algRaw: rawAlg, sliceStart });
   };
@@ -1996,6 +2007,7 @@ export default function App() {
       deleteTablesOnQuitV2, weightOverrides, moveValueOverrides,
     });
   }, [outputMode, abidNotation, ignoreTransforms, debugOutput, normalize, mode, metric, two, angle, all, suboptimal, depths, generator, cubeShapeMemory, ignoreMiddle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue, zoom, pageSize, showAll, useLessRam, deleteTablesOnQuit, weightOverrides, moveValueOverrides]);
+  useEffect(() => { debugOutputRef.current = debugOutput; }, [debugOutput]);
   useEffect(() => {
     // Pushes the current ergonomics-rater overrides to the native/web solver
     // backend so they take effect on the very next rating, including on
@@ -2565,7 +2577,7 @@ export default function App() {
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : (highlightActive ? highlightQuery(x.alg, filterAppliedQuery, filterMatchCase) : x.alg)}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
+          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`} data-tooltip={x.debugAnn} onMouseEnter={positionTooltip}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : (highlightActive ? highlightQuery(x.alg, filterAppliedQuery, filterMatchCase) : x.alg)}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span>{ergo === undefined ? "…" : ergo.toFixed(1)}</span>}</div>;
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
@@ -2576,6 +2588,8 @@ export default function App() {
         {filterActive && !filterResults!.length && <span className="terminal-line terminal-line-empty">{t('filter.noMatches')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className={`terminal-line terminal-line-status ${notationCleanClass}`}>{line.text || " "}</span>)}
         {terminalSolutions.map((line, index) => <span key={line.key} className={`terminal-line terminal-line-solution ${index % 2 ? "terminal-line-b" : "terminal-line-a"} ${notationCleanClass}`}
+          data-tooltip={line.solution.debugAnn}
+          onMouseEnter={positionTooltip}
           onMouseDown={(event) => {
             if (event.button !== 0) return;
             event.preventDefault();

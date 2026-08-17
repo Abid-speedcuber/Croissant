@@ -182,6 +182,10 @@ AlgRating rateAlg(const std::string &algRaw, bool initial_top_A,
     result.PHASE2     = PHASE2;
     result.PHASE3     = PHASE3;
     result.PHASE4     = PHASE4;
+    result.W1         = W1;
+    result.W2         = W2;
+    result.W3         = W3;
+    result.W4         = W4;
     result.sliceCount = sliceCount;
     result.ergo_up    = ergo_up;
     result.ergo_down  = ergo_down;
