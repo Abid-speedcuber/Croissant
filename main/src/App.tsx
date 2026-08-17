@@ -2722,7 +2722,7 @@ export default function App() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); void apply(e.shiftKey); }
+              if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); void apply(e.shiftKey); }
               if (e.key === "Escape") {
                 e.preventDefault(); setUndo([]); setRedo([]); ignoreHistory.current = true;
                 cubeActions.current?.reset(); ignoreHistory.current = false;
