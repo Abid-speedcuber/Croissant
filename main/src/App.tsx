@@ -2034,22 +2034,20 @@ export default function App() {
         else void clearTableBlobs();
       }
     };
-    const onBeforeUnload = () => { cleanupOnQuit(); };
-    window.addEventListener("beforeunload", onBeforeUnload);
     if ((window as Window & { __TAURI__?: unknown }).__TAURI__) {
       void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
         try {
-          unlisten = await getCurrentWindow().onCloseRequested(async () => {
-            await clearOffloadedSolutions();
-            if (deleteTablesOnQuitRef.current) await clearAllTables();
+          unlisten = await getCurrentWindow().onCloseRequested(() => {
+            cleanupOnQuit();
           });
-        } catch { /* capability missing; the beforeunload fallback still runs */ }
+        } catch { /* capability missing */ }
       });
+    } else {
+      const onBeforeUnload = () => { cleanupOnQuit(); };
+      window.addEventListener("beforeunload", onBeforeUnload);
+      return () => { window.removeEventListener("beforeunload", onBeforeUnload); };
     }
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
-      unlisten?.();
-    };
+    return () => { unlisten?.(); };
   }, []);
   const cubeshapeBlockedBy2Gen = (two === "2g" && !twoGenStatus.cornersTwo) ||
     (two === "p2g" && !twoGenStatus.cornersPseudo);
