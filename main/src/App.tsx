@@ -2112,8 +2112,18 @@ export default function App() {
       }
       matcher = (alg) => re.test(alg);
     } else {
-      const needle = filterMatchCase ? query : query.toLowerCase();
-      matcher = (alg) => (filterMatchCase ? alg : alg.toLowerCase()).includes(needle);
+      const useCommaTerms = outputMode !== "default" && outputMode !== "wca";
+      if (useCommaTerms) {
+        const terms = query.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
+        const needles = terms.map((t) => filterMatchCase ? t : t.toLowerCase());
+        matcher = (alg) => {
+          const hay = filterMatchCase ? alg : alg.toLowerCase();
+          return needles.some((n) => hay.includes(n));
+        };
+      } else {
+        const needle = filterMatchCase ? query : query.toLowerCase();
+        matcher = (alg) => (filterMatchCase ? alg : alg.toLowerCase()).includes(needle);
+      }
     }
     if (filterNegate) {
       const positiveMatch = matcher;
@@ -2257,18 +2267,54 @@ export default function App() {
   // literal-mode search term highlighting inside solution lines (not regex, not negate)
   const highlightActive = filterActive && !filterRegexMode && !filterNegate && filterAppliedQuery.trim() !== "";
   const highlightQuery = (text: string, query: string, matchCase: boolean) => {
+    const useCommaTerms = outputMode !== "default" && outputMode !== "wca";
+    const terms = useCommaTerms
+      ? query.split(",").map((t) => t.trim()).filter((t) => t.length > 0)
+      : [query];
     const hay = matchCase ? text : text.toLowerCase();
-    const needle = matchCase ? query : query.toLowerCase();
-    if (!needle) return text;
+    const allMatches: { start: number; end: number; termIdx: number }[] = [];
+    for (let ti = 0; ti < terms.length; ti++) {
+      const needle = matchCase ? terms[ti] : terms[ti].toLowerCase();
+      if (!needle) continue;
+      let idx = hay.indexOf(needle, 0);
+      while (idx !== -1) {
+        allMatches.push({ start: idx, end: idx + needle.length, termIdx: ti });
+        idx = hay.indexOf(needle, idx + needle.length);
+      }
+    }
+    if (allMatches.length === 0) return text;
+    allMatches.sort((a, b) => a.start - b.start || a.termIdx - b.termIdx);
+    // Merge overlapping spans; keep the earliest-starting term's colour for each
+    // merged region but split if a later region starts inside but ends outside.
+    const regions: { start: number; end: number; termIdx: number }[] = [];
+    for (const m of allMatches) {
+      const last = regions[regions.length - 1];
+      if (last && m.start <= last.end) {
+        if (m.end > last.end) {
+          regions.push({ start: last.end, end: m.end, termIdx: m.termIdx });
+          last.end = m.start < last.end ? m.start : last.end;
+        }
+      } else {
+        regions.push({ start: m.start, end: m.end, termIdx: m.termIdx });
+      }
+    }
+    // Re-merge adjacent/overlapping same-term spans
+    const merged: { start: number; end: number; termIdx: number }[] = [];
+    for (const r of regions) {
+      const last = merged[merged.length - 1];
+      if (last && last.termIdx === r.termIdx && r.start <= last.end) {
+        last.end = Math.max(last.end, r.end);
+      } else {
+        merged.push({ start: r.start, end: r.end, termIdx: r.termIdx });
+      }
+    }
     const parts: (string | JSX.Element)[] = [];
     let cursor = 0;
-    let idx = hay.indexOf(needle, cursor);
-    if (idx === -1) return text;
-    while (idx !== -1) {
-      if (idx > cursor) parts.push(text.slice(cursor, idx));
-      parts.push(<mark className="filter-highlight" key={idx}>{text.slice(idx, idx + needle.length)}</mark>);
-      cursor = idx + needle.length;
-      idx = hay.indexOf(needle, cursor);
+    for (const m of merged) {
+      if (m.start > cursor) parts.push(text.slice(cursor, m.start));
+      const cls = `filter-highlight filter-hl-${m.termIdx % 6}`;
+      parts.push(<mark className={cls} key={`${m.start}-${m.termIdx}`}>{text.slice(m.start, m.end)}</mark>);
+      cursor = m.end;
     }
     if (cursor < text.length) parts.push(text.slice(cursor));
     return parts;
