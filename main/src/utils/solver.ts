@@ -443,9 +443,9 @@ export function ratingDebugAnnotation(rating?: RatingResult): string | undefined
   const sc = rating.sliceCount ?? "?";
   const mv = rating.movement ?? "?";
   const bn = rating.bonus ?? "?";
-  return `weights*values = ${w1}*${e} - ${w2}*${sc} - ${w3}*${mv} + ${w4}*${bn}
+  return `${t('modal.debug.initExpr')} = ${w1}*${e} - ${w2}*${sc} - ${w3}*${mv} + ${w4}*${bn}
         = ${p1} - ${p2} - ${p3} + ${p4}
-        upslice ergonomics:${eu}  downslice ergonomics:${ed}`;
+        ${t('modal.debug.upsliceErgo')}:${eu}  ${t('modal.debug.downsliceErgo')}:${ed}`;
 }
 
 export function ratingSliceStart(rating?: RatingResult) {

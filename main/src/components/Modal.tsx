@@ -306,7 +306,18 @@ export function Modal({
           <li>{renderMarkup(t('modal.howToUse.outputTools3'))}</li>
           <li>{renderMarkup(t('modal.howToUse.outputTools4'))}</li>
         </ul>
-        <p>{renderMarkup(t('modal.howToUse.descErgo'))}</p>
+        <div className="modal-section-title">{t('modal.howToUse.sectionErgo')}</div>
+        <p>{renderMarkup(t('modal.howToUse.ergoCond'))}</p>
+        <p>{renderMarkup(t('modal.howToUse.ergoAdvice'))}</p>
+        <p>{renderMarkup(t('modal.howToUse.ergoConfig'))}</p>
+        <p>{renderMarkup(t('modal.howToUse.ergoSections'))}</p>
+        <ul>
+          <li>{renderMarkup(t('modal.howToUse.ergoSection1'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.ergoSection2'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.ergoSection3'))}</li>
+          <li>{renderMarkup(t('modal.howToUse.ergoSection4'))}</li>
+        </ul>
+        <p>{renderMarkup(t('modal.howToUse.ergoWeights'))}</p>
         <div className="modal-section-title">{t('modal.howToUse.sectionFilter')}</div>
         <p>{renderMarkup(t('modal.howToUse.filterOpen'))}</p>
         <ul>
