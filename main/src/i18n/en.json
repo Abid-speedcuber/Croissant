@@ -205,7 +205,7 @@
     "weights": {
       "manage": "Configure ergonomics rater",
       "title": "Weights",
-      "tableCaption": "Ergonomics table (A = top misalign; a = bottom misalign. / = upslice; \\ = downslice)",
+      "tableCaption": "Move ratings (10 = top misalign; 0-1 = bottom misalign. / = upslice; \\ = downslice)",
       "labels": {
         "w1": "Ergonomics",
         "w2": "Slicecount",
