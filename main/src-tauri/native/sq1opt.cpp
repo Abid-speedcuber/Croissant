@@ -1416,6 +1416,189 @@ static inline bool isCubeShape(int shp) {
 	return shp==5052 || shp==4148 || shp==5039 || shp==4163;
 }
 
+// The 4 legal cubeshape indices, mirror/top/bot-closed among themselves
+// (verified: tranTable[.][0,1,3] never leave this set of 4). Slice
+// (tranTable[.][2]) only stays in-set for 5052 and 4148 (both self-loops);
+// from 5039 and 4163, slicing always leaves cubeshape, so there is no legal
+// slice from those two shapes while staying in -c mode.
+// local2raw[i] is the raw NUMSHAPES-space index for local index i.
+static const int CUBE_LOCAL2RAW[4] = {4148, 4163, 5039, 5052};
+static inline int cubeRaw2Local(int raw) {
+	for (int i=0; i<4; i++) if (CUBE_LOCAL2RAW[i]==raw) return i;
+	return -1;
+}
+
+// Restricted pruning table over just the 4 cubeshape-legal shapes, used
+// exclusively by -c mode in place of the general NUMSHAPES-row PrunTable.
+// Mirrors PrunTable's metric-specific BFS variants exactly, just scoped to
+// the 4-shape subgraph: the flood fill here can never step outside
+// cubeshape (every raw-shape transition is checked against cubeRaw2Local
+// before being followed; the two shapes with no legal slice simply skip
+// the slice branch for that metric's move-type loop).
+class CubePrunTable {
+public:
+	char (*table)[70][70]; // [4][70][70]
+	ShapeTranTable& stt;
+	ShpColTranTable& scte;
+	ShpColTranTable& sctc;
+
+	CubePrunTable( FullPosition& p0, int cl, ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0)
+		: stt(stt0), scte(scte0), sctc(sctc0)
+	{
+		table = new char[4][70][70];
+		std::string fname;
+		if (metric == TURN_METRIC) {
+			fname = tablePath((cl==0) ? "sq1cp1u.dat" : "sq1cp2u.dat");
+		} else if (metric == ANGLE_METRIC) {
+			fname = tablePath((cl==0) ? "sq1cp1a.dat" : "sq1cp2a.dat");
+		} else {
+			fname = tablePath((cl==0) ? "sq1cp1w.dat" : "sq1cp2w.dat");
+		}
+
+		std::ifstream is( fname, std::ios::binary );
+		if( is.fail() ){
+			for(int i0=0;i0<4;i0++) for(int i1=0;i1<70;i1++) for(int i2=0;i2<70;i2++) table[i0][i1][i2]=0;
+
+			int s0raw = stt.getShape(p0.getShape(), p0.getParityOdd());
+			int s0 = cubeRaw2Local(s0raw);
+			if( s0>=0 ){
+				int e0 = p0.getEdgeColouring(cl);
+				int c0 = p0.getCornerColouring(cl);
+				e0 = scte0.ct.choice2Idx[e0];
+				c0 = sctc0.ct.choice2Idx[c0];
+				if (metric == TURN_METRIC || metric == ANGLE_METRIC) {
+					table[s0][e0][c0] = 1;
+				} else {
+					setAll(s0raw, s0, e0, c0, 1);
+				}
+
+				char l=1;
+				int n=1;
+				int last_nonzero=-1;
+				do{
+					throwIfStopped();
+					n=0;
+					if (metric == TURN_METRIC) {
+						for(int i0=0;i0<4;i0++){
+							int rawI0 = CUBE_LOCAL2RAW[i0];
+							for(int i1=0;i1<70;i1++){
+							for(int i2=0;i2<70;i2++){
+								if( table[i0][i1][i2]==l ){
+									for(int m=0;m<3;m++){
+										int rawJ0=rawI0, j1=i1, j2=i2;
+										int w=0;
+										do{
+											j2=sctc.tranTable[rawJ0][j2][m];
+											j1=scte.tranTable[rawJ0][j1][m];
+											rawJ0=stt.tranTable[rawJ0][m];
+											int locJ0 = cubeRaw2Local(rawJ0);
+											if( locJ0<0 ) break; // leaves cubeshape -- no legal orbit here
+											if( table[locJ0][j1][j2]==0 ){
+												table[locJ0][j1][j2]=l+1;
+												n++;
+											}
+											w++;
+											if(w>12) throw std::runtime_error("Invalid restricted pruning table turn cycle.");
+										}while(rawJ0!=rawI0 || j1!=i1 || j2!=i2 );
+									}
+								}
+							}}
+						}
+					}else if (metric == ANGLE_METRIC) {
+						for(int i0=0;i0<4;i0++){
+							int rawI0 = CUBE_LOCAL2RAW[i0];
+							for(int i1=0;i1<70;i1++){
+							for(int i2=0;i2<70;i2++){
+								if( table[i0][i1][i2]==l ){
+									for(int m=0;m<3;m++){
+										int rawJ0=rawI0, j1=i1, j2=i2;
+										int w=0, newcnt=0;
+										do{
+											if(m==0){
+												w+=stt.getTopTurn(rawJ0);
+											}else if(m==1){
+												w+=stt.getBotTurn(rawJ0);
+											}else{
+												w++;
+											}
+											j2=sctc.tranTable[rawJ0][j2][m];
+											j1=scte.tranTable[rawJ0][j1][m];
+											rawJ0=stt.tranTable[rawJ0][m];
+											int locJ0 = cubeRaw2Local(rawJ0);
+											if( locJ0<0 ) break; // leaves cubeshape -- no legal orbit here
+											if (m==2) {
+												newcnt = l + 1;
+											} else {
+												newcnt = l + (w>6 ? 12-w : w);
+											}
+											if( table[locJ0][j1][j2]==0 || table[locJ0][j1][j2] > newcnt ){
+												table[locJ0][j1][j2]=newcnt;
+												n++;
+											}
+											if(w>12) throw std::runtime_error("Invalid restricted pruning table angle cycle.");
+										}while(rawJ0!=rawI0 || j1!=i1 || j2!=i2 );
+									}
+								}
+							}}
+						}
+					}else{
+						for(int i0=0;i0<4;i0++){
+							int rawI0 = CUBE_LOCAL2RAW[i0];
+							for(int i1=0;i1<70;i1++){
+							for(int i2=0;i2<70;i2++){
+								if( table[i0][i1][i2]==l ){
+									int rawSliceTarget = stt.tranTable[rawI0][2];
+									int localSliceTarget = cubeRaw2Local(rawSliceTarget);
+									if( localSliceTarget>=0 ){
+										int j1 = scte.tranTable[rawI0][i1][2];
+										int j2 = sctc.tranTable[rawI0][i2][2];
+										if( table[localSliceTarget][j1][j2]==0 ){
+											n += setAll(rawSliceTarget, localSliceTarget, j1, j2, l+1);
+										}
+									}
+								}
+							}}
+						}
+					}
+					l++;
+					if(n!=0) last_nonzero=l;
+				}while(l - last_nonzero < 10);
+			}
+
+			std::ofstream os( fname, std::ios::binary );
+			os.write( (char*)table, 4*70*70*sizeof(char) );
+		}else{
+			is.read( (char*)table, 4*70*70*sizeof(char) );
+		}
+	}
+	~CubePrunTable(){ delete[] table; }
+
+	// set a position to depth l, as well as all top/bottom-turn rotations of
+	// it (all of which stay within the 4-shape cubeshape set, verified).
+	// Slice-metric only (mirrors PrunTable::setAll).
+	inline int setAll(int rawI0, int locI0, int i1, int i2, char l){
+		int n=0;
+		int rawJ0=rawI0, j1=i1, j2=i2;
+		do{
+			int rawK0=rawJ0, k1=j1, k2=j2;
+			do{
+				int locK0 = cubeRaw2Local(rawK0);
+				if( table[locK0][k1][k2]==0 ){
+					table[locK0][k1][k2]=l;
+					n++;
+				}
+				k2=sctc.tranTable[rawK0][k2][0];
+				k1=scte.tranTable[rawK0][k1][0];
+				rawK0=stt.tranTable[rawK0][0];
+			}while(rawK0!=rawJ0 || k1!=j1 || k2!=j2 );
+			j2=sctc.tranTable[rawJ0][j2][1];
+			j1=scte.tranTable[rawJ0][j1][1];
+			rawJ0=stt.tranTable[rawJ0][1];
+		}while(rawJ0!=rawI0 || j1!=i1 || j2!=i2 );
+		return n;
+	}
+};
+
 //pruning table for combination of shape,edgecolouring,cornercolouring.
 class PrunTable {
 public:
@@ -1681,8 +1864,14 @@ class PositionSolver {
 	ShapeTranTable& stt;
 	ShpColTranTable& scte;
 	ShpColTranTable& sctc;
-	PrunTable& pr1;
-	PrunTable& pr2;
+	// General tables (non-cubeshape solves) and dedicated cubeshape-restricted
+	// tables (-c solves) are mutually exclusive at runtime: exactly one pair
+	// is actually built by main(), the other stays null and unused. Pointers
+	// (not references) so main() can skip building the unused 36MB pair.
+	PrunTable* pr1;
+	PrunTable* pr2;
+	CubePrunTable* cpr1;
+	CubePrunTable* cpr2;
 
 	int moveList[50];
 	int moveLen;
@@ -1743,8 +1932,8 @@ class PositionSolver {
 		return emitted;
 	}
 
-	PositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable& pr10, PrunTable& pr20 )
-		: stt(stt0), scte(scte0), sctc(sctc0), pr1(pr10), pr2(pr20)
+	PositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable* pr10, PrunTable* pr20, CubePrunTable* cpr10, CubePrunTable* cpr20 )
+		: stt(stt0), scte(scte0), sctc(sctc0), pr1(pr10), pr2(pr20), cpr1(cpr10), cpr2(cpr20)
 	{
 		m_sliceStaysCubePrimary.resize(NUMSHAPES);
 		for (int s = 0; s < NUMSHAPES; s++) {
@@ -1925,9 +2114,21 @@ class PositionSolver {
 	}
 	// determine if we should prune this branch of the tree
 	virtual inline bool prunedOut(int l) {
-		if( pr1.table[shp ][e0][c0]>l+1 ) return true;
-		if( pr2.table[shp ][e1][c1]>l+1 ) return true;
-		if( pr2.table[shp2][e2][c2]>l+1 ) return true;
+		if( m_cubeshape ){
+			// -c mode: dedicated cubeshape-restricted tables only. shp/shp2
+			// are guaranteed cubeshape-legal here (search only transitions
+			// within the 4-shape set when keepCubeShape is on), so loc/loc2
+			// should always resolve; the >=0 checks are just a safety net.
+			int loc  = cubeRaw2Local(shp);
+			int loc2 = cubeRaw2Local(shp2);
+			if( loc>=0  && cpr1->table[loc ][e0][c0]>l+1 ) return true;
+			if( loc>=0  && cpr2->table[loc ][e1][c1]>l+1 ) return true;
+			if( loc2>=0 && cpr2->table[loc2][e2][c2]>l+1 ) return true;
+			return false;
+		}
+		if( pr1->table[shp ][e0][c0]>l+1 ) return true;
+		if( pr2->table[shp ][e1][c1]>l+1 ) return true;
+		if( pr2->table[shp2][e2][c2]>l+1 ) return true;
 		return false;
 	}
 	int search( const int l, const int lm, unsigned long *nodes, int twoGen, bool keepCubeShape, bool keepAngleTop, bool keepAngleBot){
@@ -2281,8 +2482,8 @@ class PositionSolver {
 // PartialositionSolver is like PositionSolver but may have some incompletely defined pieces
 class PartialPositionSolver : public PositionSolver {
 public:
-	PartialPositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable& pr10, PrunTable& pr20 )
-	    : PositionSolver(stt0, scte0, sctc0, pr10, pr20) {}
+	PartialPositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable* pr10, PrunTable* pr20, CubePrunTable* cpr10, CubePrunTable* cpr20 )
+	    : PositionSolver(stt0, scte0, sctc0, pr10, pr20, cpr10, cpr20) {}
 	bool checkKeepCubeShape() override {
 		return isCubeShape(shp) || isCubeShape(shpx);
 	}
@@ -2454,14 +2655,43 @@ public:
 	// determine if we should prune this branch of the tree
 	// we should have a shape-only pruning table
 	inline bool prunedOut(int l) override {
+		if( m_cubeshape ){
+			// -c mode: dedicated cubeshape-restricted tables only. Unlike the
+			// full-position case, checkKeepCubeShape() here only requires
+			// EITHER shp or shpx to be cubeshape-legal, so one of loc/locx
+			// (or loc2/locx2) can legitimately be -1. Treat an untracked
+			// (-1) side as "does not exceed" -- safe/conservative, since it
+			// just means we can't prune off that side alone, same as the
+			// general table's AND-of-both-tracks logic would require anyway.
+			int loc   = cubeRaw2Local(shp);
+			int locx  = cubeRaw2Local(shpx);
+			int loc2  = cubeRaw2Local(shp2);
+			int locx2 = cubeRaw2Local(shpx2);
+			if (e0>-1 && c0>-1) {
+				bool a = (loc>=0)  && cpr1->table[loc ][e0][c0]>l+1;
+				bool b = (locx>=0) && cpr1->table[locx][e0][c0]>l+1;
+				if( a && b ) return true;
+			}
+			if (e1>-1 && c1>-1) {
+				bool a = (loc>=0)  && cpr2->table[loc ][e1][c1]>l+1;
+				bool b = (locx>=0) && cpr2->table[locx][e1][c1]>l+1;
+				if( a && b ) return true;
+			}
+			if (e2>-1 && c2>-1) {
+				bool a = (loc2>=0)  && cpr2->table[loc2 ][e2][c2]>l+1;
+				bool b = (locx2>=0) && cpr2->table[locx2][e2][c2]>l+1;
+				if( a && b ) return true;
+			}
+			return false;
+		}
 		if (e0>-1 && c0>-1) {
-			if( pr1.table[shp ][e0][c0]>l+1 && pr1.table[shpx][e0][c0]>l+1) return true;
+			if( pr1->table[shp ][e0][c0]>l+1 && pr1->table[shpx][e0][c0]>l+1) return true;
 		}
 		if (e1>-1 && c1>-1) {
-			if( pr2.table[shp ][e1][c1]>l+1 && pr2.table[shpx][e1][c1]>l+1) return true;
+			if( pr2->table[shp ][e1][c1]>l+1 && pr2->table[shpx][e1][c1]>l+1) return true;
 		}
 		if (e2>-1 && c2>-1) {
-			if( pr2.table[shp2][e2][c2]>l+1 && pr2.table[shpx2][e2][c2]>l+1) return true;
+			if( pr2->table[shp2][e2][c2]>l+1 && pr2->table[shpx2][e2][c2]>l+1) return true;
 		}
 		return false;
 	}
@@ -2744,13 +2974,25 @@ int sq1optMain(int argc, char* argv[]){
 
 	//calculate pruning tables for two colourings
 	FullPosition q;
-	if(verbosity>=4) std::cout << "  2. Computing pruning table #1"<<std::endl;
-	PrunTable pr1(q, 0, st,scte,sctc );
-	if(verbosity>=4) std::cout << "  1. Computing pruning table #2"<<std::endl;
-	PrunTable pr2(q, 1, st,scte,sctc );
+	PrunTable* pr1 = nullptr;
+	PrunTable* pr2 = nullptr;
+	CubePrunTable* cpr1 = nullptr;
+	CubePrunTable* cpr2 = nullptr;
+	if (keepCubeShape) {
+		// -c mode: only the small dedicated cubeshape tables are needed.
+		if(verbosity>=4) std::cout << "  2. Computing restricted cubeshape pruning table #1"<<std::endl;
+		cpr1 = new CubePrunTable(q, 0, st, scte, sctc);
+		if(verbosity>=4) std::cout << "  1. Computing restricted cubeshape pruning table #2"<<std::endl;
+		cpr2 = new CubePrunTable(q, 1, st, scte, sctc);
+	} else {
+		if(verbosity>=4) std::cout << "  2. Computing pruning table #1"<<std::endl;
+		pr1 = new PrunTable(q, 0, st,scte,sctc );
+		if(verbosity>=4) std::cout << "  1. Computing pruning table #2"<<std::endl;
+		pr2 = new PrunTable(q, 1, st,scte,sctc );
+	}
 	if(verbosity>=4) std::cout << "  0. Finished."<<std::endl;
-	PositionSolver ps( st, scte, sctc, pr1, pr2 );
-	PartialPositionSolver pps( st, scte, sctc, pr1, pr2 );
+	PositionSolver ps( st, scte, sctc, pr1, pr2, cpr1, cpr2 );
+	PartialPositionSolver pps( st, scte, sctc, pr1, pr2, cpr1, cpr2 );
 
 	if(verbosity>=2){
 		std::cout<<"Flags: "<<(metric==TURN_METRIC?"Move":metric==SLICE_METRIC?"Slice":"Angle")<<" Metric, ";
