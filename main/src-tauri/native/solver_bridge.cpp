@@ -11,6 +11,10 @@ void sq1optSetExtendedOutput(bool val);
 void sq1optSetTableDirectory(const std::string &dir);
 std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool specific_angle_bot, bool first_match_only);
 bool cornersAre2GenSolvable(const int pos[24], int two_gen, bool specific_angle_bot);
+namespace TwoGenExact {
+bool cornersAre2GenSolvableExact(const int pos[24], int two_gen, bool specific_angle_bot);
+std::vector<int> twoGenPreadfExact(const int pos[24], int two_gen, bool specific_angle_bot);
+}
 
 namespace {
 using LineCallback = void (*)(const char *, void *);
@@ -85,9 +89,9 @@ extern "C" void sq1_request_stop() { sq1optRequestStop(); }
 extern "C" int sq1_two_gen_compatibility(const int *position, bool specific_angle_bot,
                                           bool *corners_two, bool *corners_pseudo) {
     if (!position) return 0;
-    if (corners_two) *corners_two = cornersAre2GenSolvable(position, 2, specific_angle_bot);
-    if (corners_pseudo) *corners_pseudo = cornersAre2GenSolvable(position, 1, specific_angle_bot);
-    if (!twoGenPreadf(position, 2, specific_angle_bot, true).empty()) return 2;
-    if (!twoGenPreadf(position, 1, specific_angle_bot, true).empty()) return 1;
+    if (corners_two) *corners_two = TwoGenExact::cornersAre2GenSolvableExact(position, 2, specific_angle_bot);
+    if (corners_pseudo) *corners_pseudo = TwoGenExact::cornersAre2GenSolvableExact(position, 1, specific_angle_bot);
+    if (!TwoGenExact::twoGenPreadfExact(position, 2, specific_angle_bot).empty()) return 2;
+    if (!TwoGenExact::twoGenPreadfExact(position, 1, specific_angle_bot).empty()) return 1;
     return 0;
 }

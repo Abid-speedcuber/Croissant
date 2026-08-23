@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <array>
 #include <cstdint>
+#include <functional>
 
 #define NUMHALVES 13
 #define NUMLAYERS 158
@@ -742,6 +743,163 @@ bool cornersAre2GenSolvable(const int pos[24], int twoGen, bool specificAngleBot
 	return false;
 }
 
+// ---------------------------------------------------------------------------
+// Exact (non-heuristic) 2-gen compatibility / preadf enumeration.
+//
+// twoGenPreadf()/cornersAre2GenSolvable() above doesn't take into account
+// the seperate identity of partial pieces. The function below does.
+//
+// Input convention (matches solver.ts rawPosition(); different from FullPosition):
+//   concrete/UVWXYZ   unchanged
+//   <= -1000          duplicate declaration of corner piece p (0-7): -1000 - p
+//   >= 1000           duplicate declaration of edge piece p (8-15):   1000 + p
+// ---------------------------------------------------------------------------
+namespace TwoGenExact {
+
+struct OpenSlot {
+	int index;   // pos[] index (corner slots occupy index and index+1)
+	bool corner;
+	int layer;   // 0 = top only, 1 = bottom only, 2 = any
+};
+
+struct DupGroup {
+	int piece;                // 0-15
+	std::vector<int> members; // pos[] indices sharing this duplicate declaration
+};
+
+// Enumerates every fully concrete completion of `pos` and calls `visit` on
+// each one. (true iff some completion made it stop early)
+template <typename Visit>
+bool forEachCompletion(const int pos[24], Visit&& visit) {
+	int copy[24];
+	for (int i = 0; i < 24; i++) copy[i] = pos[i];
+
+	bool used[16] = {false};
+	std::vector<DupGroup> groups;
+	std::vector<OpenSlot> openSlots;
+
+	for (int i = 0; i < 24; i++) {
+		int v = pos[i];
+		if (v >= 0 && v <= 15) {
+			used[v] = true;
+			if (v < 8) i++;
+			continue;
+		}
+		if (v <= -1000 || v >= 1000) {
+			int p = v <= -1000 ? (-1000 - v) : (v - 1000);
+			bool found = false;
+			for (auto &g : groups) if (g.piece == p) { g.members.push_back(i); found = true; break; }
+			if (!found) groups.push_back({p, {i}});
+			if (p < 8) i++;
+			continue;
+		}
+		bool corner = v < 0;
+		int layer = corner ? (v % 3 == 0 ? 0 : v % 3 == -2 ? 1 : 2)
+		                    : (v % 3 == 0 ? 0 : v % 3 == 1 ? 1 : 2);
+		openSlots.push_back({i, corner, layer});
+		if (corner) i++;
+	}
+	for (auto &g : groups) used[g.piece] = true; // reserved, never part of the general pool
+
+	// Remaining candidate identities per type, consumed/restored as the search
+	// assigns and backtracks over open slots.
+	std::vector<int> cornerPool, edgePool;
+	for (int p = 0; p < 8;  p++) if (!used[p]) cornerPool.push_back(p);
+	for (int p = 8; p < 16; p++) if (!used[p]) edgePool.push_back(p);
+
+	auto layerOk = [](int layer, bool corner, int p) {
+		if (layer == 2) return true;
+		if (corner) return layer == 0 ? (p < 4) : (p >= 4);
+		return layer == 0 ? (p < 12) : (p >= 12);
+	};
+
+	// Assign every open slot (generic wildcards + un-pinned duplicate leftovers),
+	// one at a time, backtracking on the shared corner/edge pools.
+	std::function<bool(size_t)> assign = [&](size_t idx) -> bool {
+		if (idx == openSlots.size()) return visit(copy);
+		auto &slot = openSlots[idx];
+		auto &pool = slot.corner ? cornerPool : edgePool;
+		for (size_t k = 0; k < pool.size(); k++) {
+			int p = pool[k];
+			if (!layerOk(slot.layer, slot.corner, p)) continue;
+			pool.erase(pool.begin() + k);
+			copy[slot.index] = p;
+			if (slot.corner) copy[slot.index + 1] = p;
+			bool stop = assign(idx + 1);
+			pool.insert(pool.begin() + k, p);
+			if (stop) return true;
+		}
+		return false;
+	};
+
+	// For each duplicate group, try pinning each member to the group's piece;
+	// the other members become ordinary "any" open slots feeding the pool search.
+	std::function<bool(size_t)> pin = [&](size_t gi) -> bool {
+		if (gi == groups.size()) return assign(0);
+		auto &g = groups[gi];
+		bool corner = g.piece < 8;
+		for (size_t chosen = 0; chosen < g.members.size(); chosen++) {
+			size_t before = openSlots.size();
+			for (size_t m = 0; m < g.members.size(); m++) {
+				int idx = g.members[m];
+				if (m == chosen) {
+					copy[idx] = g.piece;
+					if (corner) copy[idx + 1] = g.piece;
+				} else {
+					openSlots.push_back({idx, corner, 2}); // leftover: any piece of this type
+				}
+			}
+			bool stop = pin(gi + 1);
+			openSlots.resize(before);
+			if (stop) return true;
+		}
+		return false;
+	};
+
+	return pin(0);
+}
+
+// Exact compatibility: true iff ANY completion is 2-gen (or pseudo-2-gen)
+// solvable. Short-circuits on the first success.
+bool cornersAre2GenSolvableExact(const int pos[24], int twoGen, bool specificAngleBot = false) {
+	if (twoGen == 0) return true;
+	return forEachCompletion(pos, [&](const int completed[24]) {
+		return cornersAre2GenSolvable(completed, twoGen, specificAngleBot);
+	});
+}
+
+// Exact preadf: union of every valid bottom angle across every completion.
+// Keeps searching until every completion is tried or all 12 angles are
+// already found (nothing left to gain).
+std::vector<int> twoGenPreadfExact(const int pos[24], int twoGen, bool specificAngleBot = false) {
+	if (twoGen == 0) return {0};
+	bool found[12] = {false};
+	int total = 0;
+	forEachCompletion(pos, [&](const int completed[24]) {
+		for (int k : twoGenPreadf(completed, twoGen, specificAngleBot)) {
+			if (!found[k]) { found[k] = true; total++; }
+		}
+		return total >= 12;
+	});
+	std::vector<int> result;
+	for (int k = 0; k < 12; k++) if (found[k]) result.push_back(k);
+	return result;
+}
+
+}
+
+
+// Tracks a group of positions where the same concrete piece was declared multiple times.
+// Each group gets its own wildcard value range so the solver can enforce:
+// "at least one of these wildcards must land at the duplicated piece's solved position."
+struct DuplicateSpec {
+	int pieceValue;    // 0-7 for corners, 8-15 for edges
+	int solvedPosIdx;  // pos[] index where this piece lives in solved state
+	int count;         // how many times it appeared
+	int baseValue;     // base T/S value for this group (unique per group)
+	int values[8];     // the actual T/S values assigned (up to 8 occurrences)
+};
+
 // Piece numbers below 0 are partially specified corners. Based on the value modulo 3, it's a
 //  top corner (0), bottom corner (-2), or any corner (-1).
 // Piece numbers above 15 are partially specified edges. Based on the value modulo 3, it's
@@ -750,18 +908,29 @@ class FullPosition {
 public:
 	int pos[24];
 	int middle;
+	std::vector<DuplicateSpec> duplicates;
+	char inputChars[16]; // original input characters for print()
 	FullPosition(){ reset(); }
 	void reset(){
 		middle=1;
+		duplicates.clear();
 		for( int i=0; i<24; i++)
 			pos[i]="AAIBBJCCKDDLMEENFFOGGPHH"[i]-'A';
 	}
 	void print(){
+		// maps pos[] index -> input string position (0-15)
+		static const int posToInput[24] = {0,0,1,2,2,3,4,4,5,6,6,7,8,9,9,10,11,11,12,13,13,14,15,15};
 		for(int i=0; i<24; i++){
-			if (pos[i] < 0) {
-				std::cout<<"UWV"[(-pos[i])%3];
+			if (pos[i] > 43) {
+				// S value (tracked wildcard for duplicate edges)
+				std::cout<<inputChars[posToInput[i]];
 			} else if (pos[i] > 15) {
 				std::cout<<"XYZ"[pos[i]%3];
+			} else if (pos[i] < 0 && pos[i] <= -25) {
+				// T value (tracked wildcard for duplicate corners)
+				std::cout<<inputChars[posToInput[i]];
+			} else if (pos[i] < 0) {
+				std::cout<<"UWV"[(-pos[i])%3];
 			} else {
 				std::cout<<"ABCDEFGH12345678"[pos[i]];
 			}
@@ -1071,21 +1240,123 @@ public:
 		}else{
 			// position
 			if( strlen(inp)!=16 && strlen(inp)!=17 ) return(9);
-			int pieceCount[16]; // track counts of each piece, so we can detect multiples of one piece
+			int pieceCount[16]; // track counts of each piece
 			int cecount[6]; // track total [up, down, all] + 3*[corners, edges]
 			for (int i=0; i<16; i++) pieceCount[i] = 0;
 			for (int i=0; i<6; i++) cecount[i] = 0;
+
+			// store original input characters for T/S print-back
+			for (int i=0; i<16; i++) {
+				char c = inp[i];
+				if (c >= 'a' && c <= 'z') c += 'A'-'a';
+				inputChars[i] = c;
+			}
+
+			// first pass: count concrete pieces to detect duplicates
+			for( int i=0; i<16; i++){
+				int k=inp[i];
+				if(k>='a' && k<='z') k+=('A'-'a');
+				if(k>='A' && k<='H') pieceCount[k-'A']++;
+				else if(k>='1' && k<='8') pieceCount[k-'1'+8]++;
+			}
+
+			// set up T/S value ranges for duplicate groups
+			// corner groups: base = -25, -49, -73, ... (spacing 24)
+			//   values go DOWN: base, base-3, base-6, ... (all mod 3 == -1, like W)
+			// edge groups:   base = 44, 68, 92, ...   (spacing 24)
+			//   values go UP: base, base+3, base+6, ... (all mod 3 == 2, like Z)
+			int nextTCornerGroup = -25;
+			int nextSEdgeGroup = 44;
+			duplicates.clear();
+
 			int j=0;
 			int pi[24];
 			// we can't reuse a piece number because two of the same number means a corner, so
 			// each partially defined piece gets a separate set of 3 possible values
 			int nextPartialCorner = -3;
 			int nextPartialEdge = 18;
+
+			// solved pos[] index for each concrete piece (A=0->pos0, B=1->pos3, etc.)
+			const int solvedPosIdx[16] = {0, 3, 6, 9, 13, 16, 19, 22, 2, 5, 8, 11, 12, 15, 18, 21};
+
 			for( int i=0; i<16; i++){
 				int k=inp[i];
 				if(k>='a' && k<='z') k+=('A'-'a');
-				if(k>='A' && k<='H') k-='A';
-				else if(k>='1' && k<='8') k-='1'-8;
+				if(k>='A' && k<='H') {
+					int pidx = k-'A';
+					if (pieceCount[pidx] > 1) {
+						// duplicate corner: check if we already have a group for this piece
+						int groupBase = 0;
+						bool found = false;
+						for (size_t g=0; g<duplicates.size(); g++) {
+							if (duplicates[g].pieceValue == pidx) {
+								groupBase = duplicates[g].baseValue;
+								found = true;
+								break;
+							}
+						}
+						if (!found) {
+							groupBase = nextTCornerGroup;
+							nextTCornerGroup -= 24;
+							DuplicateSpec ds;
+							ds.pieceValue = pidx;
+							ds.solvedPosIdx = solvedPosIdx[pidx];
+							ds.count = 0;
+							ds.baseValue = groupBase;
+							memset(ds.values, 0, sizeof(ds.values));
+							duplicates.push_back(ds);
+						}
+						// find group and assign T value: base, base-3, base-6, ...
+						for (size_t g=0; g<duplicates.size(); g++) {
+							if (duplicates[g].pieceValue == pidx) {
+								k = duplicates[g].baseValue - 3*duplicates[g].count;
+								duplicates[g].values[duplicates[g].count] = k;
+								duplicates[g].count++;
+								break;
+							}
+						}
+					} else {
+						// single corner: concrete value
+						k = pidx;
+					}
+				}
+				else if(k>='1' && k<='8') {
+					int pidx = k-'1'+8;
+					if (pieceCount[pidx] > 1) {
+						// duplicate edge
+						int groupBase = 0;
+						bool found = false;
+						for (size_t g=0; g<duplicates.size(); g++) {
+							if (duplicates[g].pieceValue == pidx) {
+								groupBase = duplicates[g].baseValue;
+								found = true;
+								break;
+							}
+						}
+						if (!found) {
+							groupBase = nextSEdgeGroup;
+							nextSEdgeGroup += 24;
+							DuplicateSpec ds;
+							ds.pieceValue = pidx;
+							ds.solvedPosIdx = solvedPosIdx[pidx];
+							ds.count = 0;
+							ds.baseValue = groupBase;
+							memset(ds.values, 0, sizeof(ds.values));
+							duplicates.push_back(ds);
+						}
+						// find group and assign S value: base, base+3, base+6, ...
+						for (size_t g=0; g<duplicates.size(); g++) {
+							if (duplicates[g].pieceValue == pidx) {
+								k = duplicates[g].baseValue + 3*duplicates[g].count;
+								duplicates[g].values[duplicates[g].count] = k;
+								duplicates[g].count++;
+								break;
+							}
+						}
+					} else {
+						k = pidx;
+					}
+				}
 				else if(k>='U' && k<='W') {
 					k+=(nextPartialCorner-'U');
 					nextPartialCorner -= 3;
@@ -1096,7 +1367,6 @@ public:
 				}
 				else return(10);
 				pi[j++] = k;
-				if (k>=0 && k<=15) pieceCount[k]++;
 				if (k<8) {
 					pi[j++] = k;
 					cecount[2]++;
@@ -1107,9 +1377,6 @@ public:
 					if ((k>15 && k%3==0) || (k>=8 && k<=11)) cecount[3]++; // edge up
 					if ((k>15 && k%3==1) || (k>=12 && k<=15)) cecount[4]++; // edge down
 				}
-			}
-			for (int i=0; i<16; i++) {
-				if (pieceCount[i] > 1) return(17);
 			}
 			if (cecount[0] > 4 || cecount[1] > 4 || cecount[2] > 8 || cecount[3] > 4 || cecount[4] > 4 || cecount[5] > 8) return 17;
 			int midLayer=0;
@@ -2168,7 +2435,21 @@ public:
 		return 0;
 	}
 	inline bool isSolved() override {
-		return (fp.matchesSolved() && middle>=0);
+		if (middle < 0) return false;
+		if (!fp.matchesSolved()) return false;
+		// check duplicate constraint: at least one T/S value must be at each duplicated piece's solved position
+		for (size_t g=0; g<fp.duplicates.size(); g++) {
+			int val = fp.pos[fp.duplicates[g].solvedPosIdx];
+			bool found = false;
+			for (int v=0; v<fp.duplicates[g].count; v++) {
+				if (val == fp.duplicates[g].values[v]) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) return false;
+		}
+		return true;
 	}
 	// determine if we should prune this branch of the tree
 	// we should have a shape-only pruning table

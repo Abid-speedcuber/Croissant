@@ -128,10 +128,12 @@ export function positionString(state: CubeState) {
   for (let i = 0; i < 24; i++) {
     const value = state.position[i], partial = state.partial[i];
     let encoded = value;
-    if (partial && value < 8) {
+    // partial 3 = duplicate declaration; print its literal letter/digit so the
+    // solver's own parser can re-detect the repeat and track it as a duplicate group.
+    if ((partial === 1 || partial === 2) && value < 8) {
       encoded = nextPartialCorner + (partial === 2 ? 2 : value < 4 ? 0 : 1);
       nextPartialCorner -= 3;
-    } else if (partial) {
+    } else if (partial === 1 || partial === 2) {
       encoded = nextPartialEdge + (partial === 2 ? 2 : value < 12 ? 0 : 1);
       nextPartialEdge += 3;
     }
@@ -150,12 +152,16 @@ export function rawPosition(state: CubeState) {
   for (let i = 0; i < 24; i++) {
     const value = state.position[i], partial = state.partial[i], corner = value < 8;
     let encoded = value;
-    if (partial && corner) {
-      encoded = nextPartialCorner + (partial === 2 ? 2 : value < 4 ? 0 : 1);
-      nextPartialCorner -= 3;
-    } else if (partial) {
-      encoded = nextPartialEdge + (partial === 2 ? 2 : value < 12 ? 0 : 1);
-      nextPartialEdge += 3;
+    if (partial === 3) {
+      // Duplicate declaration: every occurrence of this piece shares one value, since
+      // the exact 2-gen enumerator groups them by piece identity, not by occurrence.
+      encoded = corner ? -1000 - value : 1000 + value;
+    } else if (partial === 1) {
+      encoded = corner ? nextPartialCorner + (value < 4 ? 0 : 1) : nextPartialEdge + (value < 12 ? 0 : 1);
+      if (corner) nextPartialCorner -= 3; else nextPartialEdge += 3;
+    } else if (partial === 2) {
+      encoded = corner ? nextPartialCorner + 2 : nextPartialEdge + 2;
+      if (corner) nextPartialCorner -= 3; else nextPartialEdge += 3;
     }
     result[i] = encoded;
     if (corner && i + 1 < 24) result[++i] = encoded;
@@ -166,6 +172,17 @@ export function rawPosition(state: CubeState) {
 export function parsePosition(text: string): CubeState | undefined {
   const input = text.trim().toUpperCase();
   if (input.length < 15 || input.length > 17) return;
+
+  // Pre-count concrete pieces (A-H, 1-8) so a piece typed more than once is
+  // recognized as a duplicate declaration instead of being rejected outright.
+  const pieceCounts = Array(16).fill(0);
+  for (let i = 0; i < 16; i++) {
+    const token = input[i];
+    let v = "ABCDEFGH".indexOf(token);
+    if (v < 0 && token >= "1" && token <= "8") v = Number(token) + 7;
+    if (v >= 0) pieceCounts[v]++;
+  }
+
   const encoded: number[] = [], partial: number[] = [], counts = Array(16).fill(0);
   let nextPartialCorner = -3, nextPartialEdge = 18;
   let topPartialCorners = 0, bottomPartialCorners = 0, topPartialEdges = 0, bottomPartialEdges = 0;
@@ -180,7 +197,10 @@ export function parsePosition(text: string): CubeState | undefined {
     else if (value < 0 && token === "Y") { bottomPartialEdges++; value = nextPartialEdge + 1; nextPartialEdge += 3; definition = 1; }
     else if (value < 0 && token === "Z") { value = nextPartialEdge + 2; nextPartialEdge += 3; definition = 2; }
     else if (value < 0) return;
-    if (value >= 0 && value <= 15 && ++counts[value] > 1) return;
+    if (value >= 0 && value <= 15) {
+      counts[value]++;
+      if (pieceCounts[value] > 1) definition = 3; // duplicate declaration of a concrete piece
+    }
     const corner = value < 8;
     encoded.push(value); partial.push(definition);
     if (corner) { if (encoded.length >= 24) return; encoded.push(value); partial.push(definition); }
