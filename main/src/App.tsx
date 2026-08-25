@@ -641,6 +641,14 @@ export default function App() {
   const [favoritesOpen, setFavoritesOpen] = useState(false),
     [favorites, setFavorites] = useState<Record<string, FavoriteBin>>({}),
     [pendingDeletes, setPendingDeletes] = useState<Record<string, number>>({});
+  const [researchMode, setResearchMode] = useState(false);
+  const [batchInput, setBatchInput] = useState("");
+  const [batchResults, setBatchResults] = useState<{ input: string; solution: string; slices: number }[]>([]);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchStatsText, setBatchStatsText] = useState<string | null>(null);
+  const [batchDragOver, setBatchDragOver] = useState(false);
+  const batchStopRef = useRef(false);
+  const batchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [favoritesClosing, setFavoritesClosing] = useState(false);
   const [favoritesOpening, setFavoritesOpening] = useState(false);
   const favModalRef = useRef<HTMLDivElement>(null);
@@ -1943,6 +1951,118 @@ export default function App() {
       if (runId === solveRunId.current) { solveStopTimeRef.current = performance.now(); setRunningState(false); }
     }
   };
+  const batchSolve = async () => {
+    const native = tauri();
+    if (!native?.core?.invoke) return;
+    const lines = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+    if (!lines.length) return;
+    batchStopRef.current = false;
+    batchResultsRef.current = [];
+    setBatchResults([]);
+    setBatchStatsText(null);
+    batchRunningRef.current = true;
+    setBatchRunning(true);
+    solutionsRef.current = [];
+    outputLinesRef.current = [];
+    seenRaw.current.clear();
+    seenDisplay.current.clear();
+    lineQueue.current = Promise.resolve();
+    followTerminalRef.current = true;
+    setFollowTerminal(true);
+    setTableView(false);
+    setPage(0);
+    setOutputLines([{ raw: `Batch: ${lines.length} positions`, karn: `Batch: ${lines.length} positions`, isSolution: false }]);
+    outputLinesRef.current = [{ raw: `Batch: ${lines.length} positions`, karn: `Batch: ${lines.length} positions`, isSolution: false }];
+    setStatusLines([]);
+    setSolutions([]);
+    setRunningState(true);
+    const runId = ++solveRunId.current;
+    const startedAt = performance.now();
+    const flags = solverFlags({ metric, all: false, suboptimal: 0, depths: "", generator: false, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
+    if (ignoreTransforms) flags.push("-x");
+    if (!native.Channel) return;
+    const onLine = new native.Channel<string>();
+    onLine.onmessage = (line: string) => {
+      if (runId !== solveRunId.current) return;
+      batchQueueRef.current = batchQueueRef.current.then(async () => {
+        if (batchStopRef.current) return;
+        await receiveSolverLine(line, "", runId);
+        const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
+        if (lb >= 0 && rb > lb && batchCurrentInputRef.current) {
+          const rawAlg = line.slice(0, lb).trim();
+          const counts = parseSolutionCounts(line);
+          batchResultsRef.current = [...batchResultsRef.current, { input: batchCurrentInputRef.current, solution: rawAlg, slices: counts.slices }];
+          setBatchResults([...batchResultsRef.current]);
+        }
+      });
+    };
+    batchCurrentInputRef.current = null;
+    for (let i = 0; i < lines.length; i++) {
+      if (batchStopRef.current) break;
+      batchCurrentInputRef.current = lines[i];
+      seenRaw.current.clear();
+      seenDisplay.current.clear();
+      try {
+        await native.core.invoke("solve", { position: lines[i], flags, onLine });
+      } catch { /* skip */ }
+      await batchQueueRef.current;
+    }
+    await batchQueueRef.current;
+    if (runId !== solveRunId.current) return;
+    flushSolutionState();
+    const count = batchResultsRef.current.length;
+    const errorCount = lines.length - count;
+    const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
+    const statusMsg = `Done: ${count} solved, ${errorCount} errors, ${lines.length} total (${elapsed}s)`;
+    setStatusLines([statusMsg]);
+    batchRunningRef.current = false;
+    setBatchRunning(false);
+  };
+  const batchCurrentInputRef = useRef<string | null>(null);
+  const batchResultsRef = useRef<{ input: string; solution: string; slices: number }[]>([]);
+  const batchRunningRef = useRef(false);
+  const generateBatchStats = () => {
+    const results = batchResultsRef.current;
+    if (!results.length) return;
+    const maxMetric = Math.max(...results.map((r) => r[metric === "es" ? "slices" : "slices"]));
+    const sliceCounts: number[] = [];
+    for (let s = 0; s <= maxMetric; s++) sliceCounts.push(0);
+    for (const r of results) {
+      const s = r.slices;
+      if (s >= 0 && s <= maxMetric) sliceCounts[s]++;
+    }
+    const lines: string[] = [];
+    for (let s = 0; s <= maxMetric; s++) {
+      lines.push(`${s} slice solutions: ${sliceCounts[s]}`);
+    }
+    const totalSlices = results.reduce((sum, r) => sum + r.slices, 0);
+    if (results.length) {
+      lines.push(`average slice count: ${(totalSlices / results.length).toFixed(2)}`);
+    }
+    const errorCount = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).length - results.length;
+    lines.push(`errors: ${errorCount}`);
+    const statsText = lines.join("\n");
+    setBatchStatsText(statsText);
+    addOutputLine({ raw: "--- Stats ---\n" + statsText, karn: "--- Stats ---\n" + statsText, isSolution: false });
+    setStatusLines(["Stats written to terminal"]);
+  };
+  const downloadBatchCSV = () => {
+    const results = batchResultsRef.current;
+    if (!results.length) return;
+    const csvRows = ["input,solution,slices"];
+    for (const r of results) {
+      csvRows.push(`${r.input},${r.solution.replace(/,/g, " ")},${r.slices}`);
+    }
+    const csv = csvRows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "batch_solutions.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatusLines(["CSV downloaded"]);
+  };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === "Enter") {
@@ -1972,6 +2092,10 @@ export default function App() {
         zoomRef.current = 1;
         setZoom(1);
         document.documentElement.classList.toggle("tall-viewport", window.innerHeight >= readBreakpoints().tall);
+      }
+      if (event.altKey && event.shiftKey && (event.key === "P" || event.key === "p")) {
+        event.preventDefault();
+        setResearchMode((v) => !v);
       }
       if (event.ctrlKey && event.key.toLowerCase() === "z") { event.preventDefault(); doUndo(); }
       if (event.ctrlKey && event.key.toLowerCase() === "y") { event.preventDefault(); doRedo(); }
@@ -2499,19 +2623,24 @@ export default function App() {
     <div className="terminal-shell">
       <div className="output-tools">
         <div className="output-tools-left">
-          <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setModal("notation")}>{t('karnSelect.' + outputMode)}</span></span>
+          {researchMode ? <span className="generator-toggle">Batch: {batchResults.length} solved</span> : <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setModal("notation")}>{t('karnSelect.' + outputMode)}</span></span>}
         </div>
         <div className="output-tools-right">
-          {debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}><Icon name="timer" /></button>}
-          <button
+          {researchMode && <>
+            <button title="Download CSV" disabled={!batchResults.length} onClick={downloadBatchCSV}><Icon name="copy" /></button>
+            <button title="Show Stats" disabled={!batchResults.length} onClick={generateBatchStats}>S</button>
+          </>}
+          {!researchMode && debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}><Icon name="timer" /></button>}
+          {!researchMode && <button
             className={`filter-trigger ${filterOpen || filterActive ? "active" : ""}`}
             title={t('filter.find')}
             disabled={running || !totalCount}
             onClick={() => setFilterOpen((v) => !v)}
-          ><Icon name="search" /></button>
-          <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}><Icon name="copy" /></button>
-          <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}><Icon name={tableView ? "list" : "grid"} /></button>
+          ><Icon name="search" /></button>}
+          {!researchMode && <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}><Icon name="copy" /></button>}
+          {!researchMode && <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}><Icon name={tableView ? "list" : "grid"} /></button>}
           {running && <button className="terminal-stop" title={t('btn.stop')} aria-label={t('btn.stop')} onClick={() => void solve()}><Icon name="stop" /></button>}
+          {batchRunning && <button className="terminal-stop" title="Stop batch" aria-label="Stop batch" onClick={() => { batchStopRef.current = true; }}><Icon name="stop" /></button>}
           <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}><Icon name="close" /></button>
           <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}><Icon name={expanded ? "collapse" : "expand"} /></button>
         </div>
@@ -2741,7 +2870,51 @@ export default function App() {
         </div>
       </div>
       <div className="main-grid" ref={mainGridRef}>
-        <aside className="cube-column" ref={cubeColumnRef}>
+        {researchMode ? <aside className="cube-column research-batch-column" ref={cubeColumnRef}>
+          <h2 className="batch-heading">Batch Input</h2>
+          <div
+            className={`batch-drop-zone ${batchDragOver ? "drag-over" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setBatchDragOver(true); }}
+            onDragLeave={() => setBatchDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setBatchDragOver(false);
+              const file = e.dataTransfer.files[0];
+              if (file && file.name.endsWith(".txt")) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const text = typeof reader.result === "string" ? reader.result : "";
+                  setBatchInput((prev) => prev ? prev + "\n" + text : text);
+                };
+                reader.readAsText(file);
+              }
+            }}
+          >
+            <textarea
+              className="batch-textarea"
+              value={batchInput}
+              onChange={(e) => setBatchInput(e.target.value)}
+              placeholder={"Paste positions, one per line\nOr drag-drop a .txt file here"}
+              spellCheck={false}
+              disabled={batchRunning}
+            />
+          </div>
+          <div className="batch-info">
+            {batchInput.split(/\r?\n/).filter((l) => l.trim()).length} position{batchInput.split(/\r?\n/).filter((l) => l.trim()).length !== 1 ? "s" : ""}
+            {batchRunning && <span className="batch-running-badge">Running...</span>}
+          </div>
+          <div className="batch-actions">
+            <button
+              className={`solve ${batchRunning ? "is-running" : ""}`}
+              disabled={!batchInput.trim()}
+              onClick={() => { if (batchRunning) { batchStopRef.current = true; } else { void batchSolve(); } }}
+            >{batchRunning ? "Stop" : "Batch Solve"}</button>
+          </div>
+          <div className="batch-export">
+            <button disabled={!batchResults.length} onClick={downloadBatchCSV}>Download CSV</button>
+            <button disabled={!batchResults.length} onClick={generateBatchStats}>Show Stats</button>
+          </div>
+        </aside> : <aside className="cube-column" ref={cubeColumnRef}>
           <Cube
             actionsRef={cubeActions}
             onChange={onCubeChange}
@@ -2766,8 +2939,51 @@ export default function App() {
           </div>
           <button className={`solve ${running ? "is-running" : ""}`} disabled={!running && twoGenBlocked} title={running ? t('cube.titleSolve') : twoGenBlocked ? t('cube.titleSolveBlocked') : commandPreview} onClick={() => void solve()}>{running ? t('btn.stop') : t('btn.solve')}</button>
           <button className="mobile-open-output" onClick={openMobileOutput}>{t('btn.openOutput')}</button>
-        </aside>
-        {renderOptionsPanel()}
+        </aside>}
+        {researchMode ? <div className="options-panel research-options" ref={optionsPanelRef}>
+          <div className="mobile-modal-head">
+            <b>Batch Options</b>
+            <button aria-label={t('btn.closeOptions')} onClick={() => setMobileOptionsOpen(false)}><Icon name="close" /></button>
+          </div>
+          <h2>Batch Options</h2>
+          <div className="select-grid">
+            <OptionDropdown id="metric" label={t('options.metric')} title={tooltips.metric} value={metric} options={[{ value: "es", label: tList('options.metricValues')[0] }, { value: "move", label: tList('options.metricValues')[1] }, { value: "ea", label: tList('options.metricValues')[2] }]} disabled={batchRunning} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
+            <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={[{ value: "none", label: tList('options.twoGenValues')[0] }, { value: "p2g", label: tList('options.twoGenValues')[1] }, { value: "2g", label: tList('options.twoGenValues')[2] }]} disabled={batchRunning} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
+            <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={[{ value: "none", label: tList('options.lockValues')[0] }, { value: "nb", label: tList('options.lockValues')[1] }, { value: "nu", label: tList('options.lockValues')[2] }, { value: "nd", label: tList('options.lockValues')[3] }]} disabled={batchRunning} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+          </div>
+          <div className="check-grid">
+            <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShapeMemory} disabled={batchRunning} onChange={(e) => setCubeShapeMemory(e.target.checked)} /> {t('options.stayInCS')}</label>
+          </div>
+          <div className="limit-grid">
+            <label title={tooltips.maxX}>{t('options.maxTop')}
+              <div className="number-input-wrap">
+                <input type="number" min="0" max="5" value={maxX ? maxXValue : ""} placeholder="6" disabled={batchRunning} onChange={(e) => updateOptionalLimit(e.target.value, 0, 5, setMaxX, setMaxXValue)} />
+                <div className="number-stepper">
+                  <button type="button" className="top-stepper" disabled={batchRunning} onClick={() => stepOptionalLimit(maxX, maxXValue, 1, 0, 5, setMaxX, setMaxXValue)}>▲</button>
+                  <button type="button" className="bottom-stepper" disabled={batchRunning} onClick={() => stepOptionalLimit(maxX, maxXValue, -1, 0, 5, setMaxX, setMaxXValue)}>▼</button>
+                </div>
+              </div>
+            </label>
+            <label title={tooltips.maxY}>{t('options.maxBottom')}
+              <div className="number-input-wrap">
+                <input type="number" min="0" max="5" value={maxY ? maxYValue : ""} placeholder="6" disabled={batchRunning} onChange={(e) => updateOptionalLimit(e.target.value, 0, 5, setMaxY, setMaxYValue)} />
+                <div className="number-stepper">
+                  <button type="button" className="top-stepper" disabled={batchRunning} onClick={() => stepOptionalLimit(maxY, maxYValue, 1, 0, 5, setMaxY, setMaxYValue)}>▲</button>
+                  <button type="button" className="bottom-stepper" disabled={batchRunning} onClick={() => stepOptionalLimit(maxY, maxYValue, -1, 0, 5, setMaxY, setMaxYValue)}>▼</button>
+                </div>
+              </div>
+            </label>
+            <label title={tooltips.maxTotal}>{t('options.maxTotal')}
+              <div className="number-input-wrap">
+                <input type="number" min="2" max="11" value={maxTotal ? maxTotalValue : ""} placeholder="12" disabled={batchRunning} onChange={(e) => updateOptionalLimit(e.target.value, 2, 11, setMaxTotal, setMaxTotalValue)} />
+                <div className="number-stepper">
+                  <button type="button" className="top-stepper" disabled={batchRunning} onClick={() => stepOptionalLimit(maxTotal, maxTotalValue, 1, 2, 11, setMaxTotal, setMaxTotalValue)}>▲</button>
+                  <button type="button" className="bottom-stepper" disabled={batchRunning} onClick={() => stepOptionalLimit(maxTotal, maxTotalValue, -1, 2, 11, setMaxTotal, setMaxTotalValue)}>▼</button>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div> : renderOptionsPanel()}
         {renderOutputShell()}
       </div>
       {stickyTooltip && <div ref={stickyTooltipRef} className="sticky-tooltip" style={{ visibility: "hidden" }}>{stickyTooltip.text}</div>}
