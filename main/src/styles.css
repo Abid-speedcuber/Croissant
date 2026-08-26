@@ -2337,6 +2337,8 @@ textarea {
   color: #dce5f2;
   font-family: monospace;
   font-size: 12px;
+  line-height: 1.5;
+  resize: none;
   outline: none;
   transition: border-color 0.15s;
 }

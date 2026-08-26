@@ -2927,14 +2927,14 @@ export default function App() {
         {researchMode ? <aside className="cube-column research-batch-column" ref={cubeColumnRef}>
           <h2 className="batch-heading">Batch Input</h2>
           <label className="batch-target-label">Target position
-            <input
-              type="text"
+            <textarea
               className="batch-target-input"
               value={batchTarget}
               onChange={(e) => setBatchTarget(e.target.value)}
-              placeholder="Leave empty for solved state"
+              placeholder={"Leave empty for solved state\nOne target per line for multiple"}
               spellCheck={false}
               disabled={batchRunning}
+              rows={2}
             />
           </label>
           <div
