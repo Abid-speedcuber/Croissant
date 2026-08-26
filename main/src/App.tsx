@@ -1997,15 +1997,22 @@ export default function App() {
       });
     };
     batchCurrentInputRef.current = null;
-    for (let i = 0; i < lines.length; i++) {
-      if (batchStopRef.current) break;
-      batchCurrentInputRef.current = lines[i];
-      seenRaw.current.clear();
-      seenDisplay.current.clear();
-      try {
-        await native.core.invoke("solve", { position: lines[i], flags, onLine });
-      } catch { /* skip */ }
-      await batchQueueRef.current;
+    try {
+      setStatusLines(["Initializing solver..."]);
+      await native.core.invoke("batch_init", { flags });
+      setStatusLines([]);
+      for (let i = 0; i < lines.length; i++) {
+        if (batchStopRef.current) break;
+        batchCurrentInputRef.current = lines[i];
+        seenRaw.current.clear();
+        seenDisplay.current.clear();
+        try {
+          await native.core.invoke("batch_solve_position", { position: lines[i], onLine });
+        } catch { /* skip */ }
+        await batchQueueRef.current;
+      }
+    } finally {
+      try { await native.core.invoke("batch_destroy"); } catch { /* ignore */ }
     }
     await batchQueueRef.current;
     if (runId !== solveRunId.current) return;

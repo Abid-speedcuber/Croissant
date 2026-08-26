@@ -68,8 +68,8 @@ run("em++", [
   "-sEXIT_RUNTIME=0",
   "-sALLOW_MEMORY_GROWTH=1",
   "-sINITIAL_MEMORY=268435456",
-  "-sEXPORTED_FUNCTIONS=['_main','_sq1opt_web_set_table_directory','_sq1opt_web_request_stop','_sq1_web_unkarnify_alloc','_sq1_web_karnify_alloc','_sq1_web_rate_algorithm_json_alloc','_sq1_web_two_gen_status_json_alloc','_sq1_web_free_string','_sq1_web_set_rating_weights','_sq1_web_set_move_value','_sq1_web_reset_rating_config','_malloc','_free']",
-  "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap','UTF8ToString','FS','HEAP32']",
+  "-sEXPORTED_FUNCTIONS=['_main','_sq1opt_web_set_table_directory','_sq1opt_web_request_stop','_sq1_web_unkarnify_alloc','_sq1_web_karnify_alloc','_sq1_web_rate_algorithm_json_alloc','_sq1_web_two_gen_status_json_alloc','_sq1_web_free_string','_sq1_web_set_rating_weights','_sq1_web_set_move_value','_sq1_web_reset_rating_config','_sq1_web_batch_init','_sq1_web_batch_solve','_sq1_web_batch_destroy','_malloc','_free']",
+  "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap','UTF8ToString','FS','HEAP32','HEAPU8']",
   "-o",
   resolve(wasmOut, "sq1opt.js"),
 ], { cwd: main });

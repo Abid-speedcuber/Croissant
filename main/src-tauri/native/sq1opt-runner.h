@@ -7,6 +7,17 @@ void sq1optSetTableDirectory(const std::string& dir);
 void sq1optRequestStop();
 int sq1optMain(int argc, char* argv[]);
 
+// Batch solver API — initialize once, solve many positions.
+#ifdef __cplusplus
+extern "C" {
+#endif
+int sq1_batch_init(int argc, char* argv[], const char* table_directory);
+int sq1_batch_solve(const char* position);
+void sq1_batch_destroy();
+#ifdef __cplusplus
+}
+#endif
+
 // Direct position injection — bypasses string encoding/decoding.
 // pos[24] uses FullPosition encoding: concrete 0-15, partial corners <0, partial edges >15.
 // middle: 1=-, -1=+, 0=ignore.

@@ -3065,6 +3065,190 @@ int sq1optMain(int argc, char* argv[]){
 	return(0);
 }
 
+// ===================== Batch Solver API =====================
+// Allows initializing the solver once and solving multiple positions
+// without rebuilding the pruning tables each time.
+
+namespace {
+struct BatchState {
+	ChoiceTable ct;
+	ShapeTranTable st;
+	ShpColTranTable scte;
+	ShpColTranTable sctc;
+	FullPosition q;
+	PrunTable* pr1 = nullptr;
+	PrunTable* pr2 = nullptr;
+	CubePrunTable* cpr1 = nullptr;
+	CubePrunTable* cpr2 = nullptr;
+	PositionSolver* ps = nullptr;
+	PartialPositionSolver* pps = nullptr;
+	bool keepCubeShape = false;
+	bool ignoreMid = false;
+	bool ignoreTrans = false;
+	bool findAll = false;
+	int twoGen = 0;
+	int extraMoves = 0;
+	bool initialized = false;
+
+	BatchState() : scte(st, ct, true), sctc(st, ct, false) {}
+	~BatchState() { destroy(); }
+
+	void destroy() {
+		initialized = false;
+		// Solvers reference our tables, so delete them first.
+		// PositionSolver has virtual methods but no virtual destructor,
+		// so we delete through the exact derived type to avoid UB.
+		delete pps; pps = nullptr;
+		delete ps; ps = nullptr;
+		delete pr1; pr1 = nullptr;
+		delete pr2; pr2 = nullptr;
+		delete cpr1; cpr1 = nullptr;
+		delete cpr2; cpr2 = nullptr;
+	}
+};
+
+static BatchState* g_batch = nullptr;
+}
+
+static int batchParseFlags(int argc, char* argv[], BatchState& bs) {
+	resetSolverOptions();
+	bs.keepCubeShape = false;
+	bs.ignoreMid = false;
+	bs.ignoreTrans = false;
+	bs.findAll = false;
+	bs.twoGen = 0;
+	bs.extraMoves = 0;
+	usenegative = true;
+	bool ignoreTransLocal = false;
+
+	for (int i = 1; i < argc; i++) {
+		if (argv[i][0] == '-') {
+			switch (argv[i][1]) {
+				case 'e': case 'E':
+					if (argv[i][2]=='s'||argv[i][2]=='S') metric=SLICE_METRIC;
+					else if (argv[i][2]=='m'||argv[i][2]=='M') metric=TURN_METRIC;
+					else if (argv[i][2]=='a'||argv[i][2]=='A') metric=ANGLE_METRIC;
+					else return 1;
+					break;
+				case 'x': ignoreTransLocal = true; break;
+				case 'a': case 'A':
+					bs.findAll = true;
+					bs.extraMoves = parseInteger(argv[i]+2);
+					if (bs.extraMoves < 0) return 15;
+					break;
+				case 'm': case 'M': bs.ignoreMid = true; break;
+				case 'b': case 'B': usebrackets = true; break;
+				case 'v': case 'V':
+					verbosity = parseInteger(argv[i]+2);
+					if (verbosity < 0) return 15;
+					break;
+				case 'g': case 'G': generator = true; break;
+				case 'p': case 'P': bs.twoGen = 1; break;
+				case '2': bs.twoGen = 2; break;
+				case 'c': case 'C': bs.keepCubeShape = true; break;
+				case 'k': case 'K':
+					if (argv[i][2] == '0') karnotation = 0;
+					else if (argv[i][2] == '2') karnotation = 2;
+					else if (argv[i][2] == '3') karnotation = 3;
+					else karnotation = 1;
+					break;
+				case 'n': case 'N':
+					if (argv[i][2]=='b'||argv[i][2]=='B') { specificAngleTop=true; specificAngleBot=true; }
+					else if (argv[i][2]=='u'||argv[i][2]=='U') specificAngleTop=true;
+					else if (argv[i][2]=='d'||argv[i][2]=='D') specificAngleBot=true;
+					else if (argv[i][2]=='n'||argv[i][2]=='N') { specificAngleTop=false; specificAngleBot=false; }
+					else return 1;
+					break;
+				case 'X':
+					{ int v = parseInteger(argv[i]+2); if (v >= 0 && v <= 6) maxX = v; }
+					break;
+				case 'Y':
+					{ int v = parseInteger(argv[i]+2); if (v >= 0 && v <= 6) maxY = v; }
+					break;
+				case 'Z':
+					{ int v = parseInteger(argv[i]+2); if (v >= 1 && v <= 12) maxTotal = v; }
+					break;
+				case 'd': case 'D':
+					{
+						std::string ds(argv[i]+2);
+						std::stringstream ss(ds);
+						std::string token;
+						while(std::getline(ss, token, ',')) {
+							token.erase(std::remove_if(token.begin(), token.end(), ::isspace), token.end());
+							if (!token.empty()) {
+								try { specificDepths.push_back(std::stoi(token)); } catch(...) {}
+							}
+						}
+					}
+					break;
+				default: return 1;
+			}
+		}
+	}
+	bs.ignoreTrans = ignoreTransLocal || (maxX != 6 || maxY != 6 || maxTotal != 12);
+	return 0;
+}
+
+extern "C" int sq1_batch_init(int argc, char* argv[], const char* table_directory) {
+	if (g_batch) { delete g_batch; g_batch = nullptr; }
+
+	g_batch = new BatchState();
+	sq1optSetTableDirectory(table_directory ? table_directory : ".");
+
+	int err = batchParseFlags(argc, argv, *g_batch);
+	if (err) { delete g_batch; g_batch = nullptr; return err; }
+
+	if (verbosity >= 3) std::cout << "Batch: Initializing tables..." << std::endl;
+
+	if (g_batch->keepCubeShape) {
+		if (verbosity >= 4) std::cout << "  2. Computing restricted cubeshape pruning table #1" << std::endl;
+		g_batch->cpr1 = new CubePrunTable(g_batch->q, 0, g_batch->st, g_batch->scte, g_batch->sctc);
+		if (verbosity >= 4) std::cout << "  1. Computing restricted cubeshape pruning table #2" << std::endl;
+		g_batch->cpr2 = new CubePrunTable(g_batch->q, 1, g_batch->st, g_batch->scte, g_batch->sctc);
+	} else {
+		if (verbosity >= 4) std::cout << "  2. Computing pruning table #1" << std::endl;
+		g_batch->pr1 = new PrunTable(g_batch->q, 0, g_batch->st, g_batch->scte, g_batch->sctc);
+		if (verbosity >= 4) std::cout << "  1. Computing pruning table #2" << std::endl;
+		g_batch->pr2 = new PrunTable(g_batch->q, 1, g_batch->st, g_batch->scte, g_batch->sctc);
+	}
+
+	g_batch->ps = new PositionSolver(g_batch->st, g_batch->scte, g_batch->sctc, g_batch->pr1, g_batch->pr2, g_batch->cpr1, g_batch->cpr2);
+	g_batch->pps = new PartialPositionSolver(g_batch->st, g_batch->scte, g_batch->sctc, g_batch->pr1, g_batch->pr2, g_batch->cpr1, g_batch->cpr2);
+	g_batch->initialized = true;
+
+	if (verbosity >= 3) std::cout << "Batch: Tables ready." << std::endl;
+	return 0;
+}
+
+extern "C" int sq1_batch_solve(const char* position) {
+	if (!g_batch || !g_batch->initialized) return -1;
+	if (!position || !position[0]) return 13;
+
+	FullPosition p;
+	int r = p.parseInput(position);
+	if (r) { show(r); return r; }
+	if (g_batch->ignoreMid) p.middle = 0;
+
+	int pre = preValidate(p, g_batch->keepCubeShape, g_batch->twoGen);
+	if (pre) { show(pre); return pre; }
+
+	if (p.isPartial()) {
+		g_batch->pps->set(p, g_batch->findAll, g_batch->ignoreTrans);
+		r = g_batch->pps->solve(g_batch->twoGen, g_batch->extraMoves, g_batch->keepCubeShape);
+	} else {
+		g_batch->ps->set(p, g_batch->findAll, g_batch->ignoreTrans);
+		r = g_batch->ps->solve(g_batch->twoGen, g_batch->extraMoves, g_batch->keepCubeShape);
+	}
+	return r;
+}
+
+extern "C" void sq1_batch_destroy() {
+	if (g_batch) { delete g_batch; g_batch = nullptr; }
+}
+
+// ===================== End Batch API =====================
+
+
 #ifndef SQ1OPT_LIBRARY
 int main(int argc, char* argv[])
 {

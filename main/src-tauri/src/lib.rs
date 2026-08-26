@@ -20,6 +20,11 @@ unsafe extern "C" {
     fn sq1_set_rating_weights(w1: f64, w2: f64, w3: f64, w4: f64);
     fn sq1_set_move_value(key: *const c_char, value: i32) -> bool;
     fn sq1_reset_rating_config();
+    fn sq1_batch_init_alloc(argc: i32, argv: *const *const c_char, table_directory: *const c_char, exit_code: *mut i32,
+                            callback: extern "C" fn(*const c_char, *mut c_void), callback_context: *mut c_void) -> *mut c_char;
+    fn sq1_batch_solve_alloc(position: *const c_char, exit_code: *mut i32,
+                             callback: extern "C" fn(*const c_char, *mut c_void), callback_context: *mut c_void) -> *mut c_char;
+    fn sq1_batch_destroy_alloc();
 }
 
 #[repr(C)]
@@ -230,6 +235,66 @@ async fn solve(app: tauri::AppHandle, state: State<'_, SolverState>, position: S
         .map_err(|e| e.to_string())?
 }
 
+fn batch_init_blocking(app: tauri::AppHandle, flags: Vec<String>) -> Result<SolverResult, String> {
+    let table_dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("pruning-tables");
+    fs::create_dir_all(&table_dir).map_err(|e| e.to_string())?;
+    let mut arguments = vec!["sq1opt".to_owned(), "-v5".to_owned()];
+    arguments.extend(flags);
+    let c_arguments = arguments.into_iter().map(|value| CString::new(value).map_err(|_| "Batch init argument contains a NUL byte")).collect::<Result<Vec<_>, _>>()?;
+    let pointers = c_arguments.iter().map(|value| value.as_ptr()).collect::<Vec<_>>();
+    let table_directory = CString::new(table_dir.to_string_lossy().as_bytes()).map_err(|_| "Table path contains a NUL byte")?;
+    let mut code = -1;
+    extern "C" fn ignore_line(_: *const c_char, _: *mut c_void) {}
+    let output_pointer = unsafe { sq1_batch_init_alloc(pointers.len() as i32, pointers.as_ptr(), table_directory.as_ptr(), &mut code, ignore_line, std::ptr::null_mut()) };
+    if !output_pointer.is_null() {
+        let output = unsafe { CStr::from_ptr(output_pointer) }.to_string_lossy().into_owned();
+        unsafe { sq1_free_string(output_pointer); }
+        Ok(SolverResult { code: Some(code), stdout: output, stderr: String::new() })
+    } else {
+        Ok(SolverResult { code: Some(code), stdout: String::new(), stderr: String::new() })
+    }
+}
+
+#[tauri::command]
+async fn batch_init(app: tauri::AppHandle, state: State<'_, SolverState>, flags: Vec<String>) -> Result<SolverResult, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _solver_guard = state.0.lock().map_err(|_| "Solver state is unavailable")?;
+        batch_init_blocking(app, flags)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn batch_solve_blocking(position: String, on_line: Channel<String>) -> Result<SolverResult, String> {
+    let position_c = CString::new(position).map_err(|_| "Position contains a NUL byte")?;
+    let mut code = -1;
+    let channel_context = &on_line as *const Channel<String> as *mut c_void;
+    let output_pointer = unsafe { sq1_batch_solve_alloc(position_c.as_ptr(), &mut code, solver_line_callback, channel_context) };
+    if output_pointer.is_null() { return Err("The batch solver returned no output".into()); }
+    let output = unsafe { CStr::from_ptr(output_pointer) }.to_string_lossy().into_owned();
+    unsafe { sq1_free_string(output_pointer); }
+    Ok(SolverResult { code: Some(code), stdout: output, stderr: String::new() })
+}
+
+#[tauri::command]
+async fn batch_solve_position(state: State<'_, SolverState>, position: String, on_line: Channel<String>) -> Result<SolverResult, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _solver_guard = state.0.lock().map_err(|_| "Solver state is unavailable")?;
+        batch_solve_blocking(position, on_line)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn batch_destroy(state: State<'_, SolverState>) -> Result<(), String> {
+    let _solver_guard = state.0.lock().map_err(|_| "Solver state is unavailable")?;
+    unsafe { sq1_batch_destroy_alloc(); }
+    Ok(())
+}
+
 #[tauri::command]
 fn stop_solver(state: State<'_, SolverState>) -> Result<(), String> {
     let _ = state;
@@ -242,7 +307,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(SolverState::default())
-        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, set_rating_config, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size])
+        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, set_rating_config, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size, batch_init, batch_solve_position, batch_destroy])
         .run(tauri::generate_context!())
         .expect("error while running Croissant");
 }

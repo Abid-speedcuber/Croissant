@@ -5,10 +5,9 @@
 #include <string>
 #include <vector>
 
-int sq1optMain(int argc, char *argv[]);
-void sq1optRequestStop();
+#include "sq1opt-runner.h"
+
 void sq1optSetExtendedOutput(bool val);
-void sq1optSetTableDirectory(const std::string &dir);
 std::vector<int> twoGenPreadf(const int pos[24], int two_gen, bool specific_angle_bot, bool first_match_only);
 bool cornersAre2GenSolvable(const int pos[24], int two_gen, bool specific_angle_bot);
 namespace TwoGenExact {
@@ -86,6 +85,56 @@ extern "C" char *sq1_run_alloc(int argc, const char *const *input_argv,
 
 extern "C" void sq1_free_string(char *value) { delete[] value; }
 extern "C" void sq1_request_stop() { sq1optRequestStop(); }
+
+extern "C" char *sq1_batch_init_alloc(int argc, const char *const *input_argv,
+                                       const char *table_directory, int *exit_code,
+                                       LineCallback callback, void *callback_context) {
+    std::vector<std::string> storage;
+    std::vector<char *> argv;
+    storage.reserve(static_cast<std::size_t>(argc));
+    argv.reserve(static_cast<std::size_t>(argc));
+    for (int i = 0; i < argc; ++i) storage.emplace_back(input_argv[i] ? input_argv[i] : "");
+    for (auto &argument : storage) argv.push_back(argument.data());
+
+    CaptureBuffer capture(callback, callback_context);
+    auto *old_out = std::cout.rdbuf(&capture);
+    auto *old_error = std::cerr.rdbuf(&capture);
+    int code = -1;
+    try {
+        code = sq1_batch_init(argc, argv.data(), table_directory);
+    } catch (const std::exception &error) {
+        capture.text += "ERROR: "; capture.text += error.what(); capture.text += '\n';
+    } catch (...) {
+        capture.text += "ERROR: Unknown batch init failure.\n";
+    }
+    std::cout.flush(); std::cerr.flush();
+    std::cout.rdbuf(old_out); std::cerr.rdbuf(old_error);
+    if (exit_code) *exit_code = code;
+    return copy_allocated(capture.text);
+}
+
+extern "C" char *sq1_batch_solve_alloc(const char *position, int *exit_code,
+                                        LineCallback callback, void *callback_context) {
+    CaptureBuffer capture(callback, callback_context);
+    auto *old_out = std::cout.rdbuf(&capture);
+    auto *old_error = std::cerr.rdbuf(&capture);
+    int code = -1;
+    try {
+        code = sq1_batch_solve(position);
+    } catch (const std::exception &error) {
+        capture.text += "ERROR: "; capture.text += error.what(); capture.text += '\n';
+    } catch (...) {
+        capture.text += "ERROR: Unknown batch solve failure.\n";
+    }
+    std::cout.flush(); std::cerr.flush();
+    std::cout.rdbuf(old_out); std::cerr.rdbuf(old_error);
+    if (exit_code) *exit_code = code;
+    return copy_allocated(capture.text);
+}
+
+extern "C" void sq1_batch_destroy_alloc() {
+    sq1_batch_destroy();
+}
 extern "C" int sq1_two_gen_compatibility(const int *position, bool specific_angle_bot,
                                           bool *corners_two, bool *corners_pseudo) {
     if (!position) return 0;

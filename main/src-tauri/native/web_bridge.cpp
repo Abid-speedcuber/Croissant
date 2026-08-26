@@ -1,5 +1,6 @@
 #include "karnotation.h"
 #include "sq1-logic.h"
+#include "sq1opt-runner.h"
 
 #include <cstring>
 #include <sstream>
@@ -109,4 +110,16 @@ extern "C" bool sq1_web_set_move_value(const char *key, int value) {
 
 extern "C" void sq1_web_reset_rating_config() {
     resetRatingConfig();
+}
+
+extern "C" int sq1_web_batch_init(int argc, char** argv) {
+    return sq1_batch_init(argc, argv, "/tables");
+}
+
+extern "C" int sq1_web_batch_solve(const char* position) {
+    return sq1_batch_solve(position);
+}
+
+extern "C" void sq1_web_batch_destroy() {
+    sq1_batch_destroy();
 }

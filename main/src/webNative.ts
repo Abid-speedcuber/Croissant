@@ -97,8 +97,6 @@ function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise
 
   if (command === "set_rating_config") {
     lastRatingConfig = args;
-    // Push to the utility worker plus any solve worker that already exists;
-    // a solve worker created afterwards picks it up via ensureSolveWorker().
     const targets = [ensureUtilityWorker()];
     if (solveWorker) targets.push(solveWorker);
     return Promise.all(targets.map((worker) => postInvoke<unknown>(worker, command, args))).then(() => undefined as T);
@@ -118,6 +116,55 @@ function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise
     });
     pending.set(id, request);
     ensureSolveWorker().postMessage({ id, type: "solve", position: args.position, flags: args.flags || [] });
+    return promise;
+  }
+
+  if (command === "batch_init") {
+    const id = nextId++;
+    const request: PendingRequest = {
+      resolve: (value) => undefined,
+      reject: () => undefined,
+      solve: true,
+    };
+    const promise = new Promise<T>((resolve, reject) => {
+      request.resolve = (value) => resolve(value as T);
+      request.reject = reject;
+    });
+    pending.set(id, request);
+    ensureSolveWorker().postMessage({ id, type: "batchInit", flags: args.flags || [] });
+    return promise;
+  }
+
+  if (command === "batch_solve_position") {
+    const id = nextId++;
+    const request: PendingRequest = {
+      resolve: (value) => undefined,
+      reject: () => undefined,
+      onLine: args.onLine as WebChannel<string> | undefined,
+      solve: true,
+    };
+    const promise = new Promise<T>((resolve, reject) => {
+      request.resolve = (value) => resolve(value as T);
+      request.reject = reject;
+    });
+    pending.set(id, request);
+    ensureSolveWorker().postMessage({ id, type: "batchSolvePosition", position: args.position });
+    return promise;
+  }
+
+  if (command === "batch_destroy") {
+    const id = nextId++;
+    const request: PendingRequest = {
+      resolve: (value) => undefined,
+      reject: () => undefined,
+      solve: true,
+    };
+    const promise = new Promise<T>((resolve, reject) => {
+      request.resolve = (value) => resolve(value as T);
+      request.reject = reject;
+    });
+    pending.set(id, request);
+    ensureSolveWorker().postMessage({ id, type: "batchDestroy" });
     return promise;
   }
 

@@ -23,6 +23,10 @@ type TwoGenStatus = {
 
 type InvokeRequest =
   | { id: number; type: "solve"; position: string; flags: string[] }
+  | { id: number; type: "batchSolve"; positions: string[]; flags: string[] }
+  | { id: number; type: "batchInit"; flags: string[] }
+  | { id: number; type: "batchSolvePosition"; position: string }
+  | { id: number; type: "batchDestroy" }
   | { id: number; type: "invoke"; command: "unkarnify"; args: { input: string } }
   | { id: number; type: "invoke"; command: "karnify"; args: { input: string; position?: string | null; generator: boolean } }
   | { id: number; type: "invoke"; command: "rate_algorithm"; args: { algorithm: string; initialTopA: boolean } }
@@ -46,6 +50,7 @@ type EmscriptenModule = {
     unlink: (path: string) => void;
   };
   HEAP32: Int32Array;
+  HEAPU8: Uint8Array;
   UTF8ToString: (ptr: number) => string;
   callMain: (args: string[]) => number;
   cwrap: (name: string, returnType: "number" | null, argTypes: string[]) => (...args: unknown[]) => number | void;
@@ -62,6 +67,9 @@ type WasmApi = {
   setMoveValue: (key: string, value: number) => number;
   resetRatingConfig: () => void;
   freeString: (ptr: number) => void;
+  batchInit: (argc: number, argv: number) => number;
+  batchSolve: (position: string) => number;
+  batchDestroy: () => void;
 };
 
 let modulePromise: Promise<EmscriptenModule> | undefined;
@@ -142,6 +150,9 @@ async function loadModule(): Promise<EmscriptenModule> {
       setMoveValue: instance.cwrap("sq1_web_set_move_value", "number", ["string", "number"]) as (key: string, value: number) => number,
       resetRatingConfig: instance.cwrap("sq1_web_reset_rating_config", null, []) as () => void,
       freeString: instance.cwrap("sq1_web_free_string", null, ["number"]) as (ptr: number) => void,
+      batchInit: instance.cwrap("sq1_web_batch_init", "number", ["number", "number"]) as (argc: number, argv: number) => number,
+      batchSolve: instance.cwrap("sq1_web_batch_solve", "number", ["string"]) as (position: string) => number,
+      batchDestroy: instance.cwrap("sq1_web_batch_destroy", null, []) as () => void,
     };
     return instance;
   })();
@@ -202,11 +213,112 @@ async function solve(request: InvokeRequest & { type: "solve" }) {
   await syncTablesToIdb(mod);
 }
 
+async function batchSolve(request: InvokeRequest & { type: "batchSolve" }) {
+  const mod = await loadModule();
+  if (!api) throw new Error("The Square-1 WASM module is not ready.");
+  activeSolveId = request.id;
+
+  try {
+    // Build argv for batchInit: ["sq1opt", "-v5", ...flags]
+    const argv = ["sq1opt", "-v5", ...request.flags];
+    const encoded = argv.map((s) => {
+      const bytes = new TextEncoder().encode(s + "\0");
+      const ptr = mod._malloc(bytes.length);
+      mod.HEAPU8.set(bytes, ptr);
+      return ptr;
+    });
+    const argvPtr = mod._malloc(encoded.length * 4);
+    for (let i = 0; i < encoded.length; i++) {
+      mod.HEAP32[(argvPtr >> 2) + i] = encoded[i];
+    }
+
+    try {
+      const initCode = api.batchInit(encoded.length, argvPtr);
+      if (initCode !== 0) {
+        emit({ id: request.id, type: "result", result: { code: initCode, stdout: "", stderr: "Batch init failed" } });
+        return;
+      }
+
+      for (let i = 0; i < request.positions.length; i++) {
+        if (activeSolveId !== request.id) break; // stopped
+        api.batchSolve(request.positions[i]);
+      }
+
+      api.batchDestroy();
+    } finally {
+      for (const ptr of encoded) mod._free(ptr);
+      mod._free(argvPtr);
+    }
+
+    emit({ id: request.id, type: "result", result: { code: 0, stdout: "", stderr: "" } });
+  } finally {
+    activeSolveId = undefined;
+  }
+  await syncTablesToIdb(mod);
+}
+
+let batchAllocatedPtrs: number[] = [];
+
+async function handleBatchInit(request: InvokeRequest & { type: "batchInit" }) {
+  const mod = await loadModule();
+  if (!api) throw new Error("The Square-1 WASM module is not ready.");
+
+  const argv = ["sq1opt", "-v5", ...request.flags];
+  const encoded = argv.map((s) => {
+    const bytes = new TextEncoder().encode(s + "\0");
+    const ptr = mod._malloc(bytes.length);
+    mod.HEAPU8.set(bytes, ptr);
+    return ptr;
+  });
+  const argvPtr = mod._malloc(encoded.length * 4);
+  for (let i = 0; i < encoded.length; i++) {
+    mod.HEAP32[(argvPtr >> 2) + i] = encoded[i];
+  }
+
+  batchAllocatedPtrs = [...encoded, argvPtr];
+
+  const code = api.batchInit(encoded.length, argvPtr);
+  if (code !== 0) {
+    emit({ id: request.id, type: "result", result: { code } });
+    return;
+  }
+  emit({ id: request.id, type: "result", result: { code: 0 } });
+}
+
+async function handleBatchSolvePosition(request: InvokeRequest & { type: "batchSolvePosition" }) {
+  const mod = await loadModule();
+  if (!api) throw new Error("The Square-1 WASM module is not ready.");
+  activeSolveId = request.id;
+  try {
+    api.batchSolve(request.position);
+    emit({ id: request.id, type: "result", result: { code: 0 } });
+  } finally {
+    activeSolveId = undefined;
+  }
+}
+
+async function handleBatchDestroy(request: InvokeRequest & { type: "batchDestroy" }) {
+  const mod = await loadModule();
+  if (!api) throw new Error("The Square-1 WASM module is not ready.");
+  try {
+    api.batchDestroy();
+  } finally {
+    for (const ptr of batchAllocatedPtrs) mod._free(ptr);
+    batchAllocatedPtrs = [];
+  }
+  emit({ id: request.id, type: "result", result: { code: 0 } });
+  await syncTablesToIdb(mod);
+}
+
 self.onmessage = (event: MessageEvent<InvokeRequest>) => {
   const request = event.data;
   void (async () => {
     try {
       if (request.type === "solve") await solve(request);
+      else if (request.type === "batchSolve") await batchSolve(request);
+      else if (request.type === "batchInit") await handleBatchInit(request);
+      else if (request.type === "batchSolvePosition") await handleBatchSolvePosition(request);
+      else if (request.type === "batchDestroy") await handleBatchDestroy(request);
       else if (request.type === "deleteTable") {
         if (activeSolveId === undefined && moduleInstance) {
           try { moduleInstance.FS.unlink(`${TABLE_DIR}/${request.name}`); } catch { /* not present */ }
