@@ -1958,7 +1958,7 @@ export default function App() {
     if (!native?.core?.invoke) return;
     const lines = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
     if (!lines.length) return;
-    const target = batchTarget.trim();
+    const targets = batchTarget.trim() ? batchTarget.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0) : [];
     batchStopRef.current = false;
     batchResultsRef.current = [];
     setBatchResults([]);
@@ -1974,7 +1974,7 @@ export default function App() {
     setFollowTerminal(true);
     setTableView(false);
     setPage(0);
-    const headerMsg = target ? `Batch: ${lines.length} positions -> ${target}` : `Batch: ${lines.length} positions`;
+    const headerMsg = targets.length ? `Batch: ${lines.length} positions -> ${targets.length} target${targets.length !== 1 ? "s" : ""}` : `Batch: ${lines.length} positions`;
     setOutputLines([{ raw: headerMsg, karn: headerMsg, isSolution: false }]);
     outputLinesRef.current = [{ raw: headerMsg, karn: headerMsg, isSolution: false }];
     setStatusLines([]);
@@ -2021,8 +2021,9 @@ export default function App() {
       for (let i = 0; i < lines.length; i++) {
         if (batchStopRef.current) break;
         const given = lines[i];
-        if (target) {
-          const candidates = generateRemapCandidates(given, target);
+        if (targets.length) {
+          const candidates: string[] = [];
+          for (const t of targets) candidates.push(...generateRemapCandidates(given, t));
           let bestSol: { rawAlg: string; countVal: number; slices: number; moves: number; angle: number } | null = null;
           for (const candidate of candidates) {
             captureSolution = null;
