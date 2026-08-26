@@ -1984,11 +1984,12 @@ export default function App() {
     const onLine = new native.Channel<string>();
     onLine.onmessage = (line: string) => {
       if (runId !== solveRunId.current) return;
+      const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
+      if (lb < 0 || rb < 0) return;
       batchQueueRef.current = batchQueueRef.current.then(async () => {
         if (batchStopRef.current) return;
         await receiveSolverLine(line, "", runId);
-        const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
-        if (lb >= 0 && rb > lb && batchCurrentInputRef.current) {
+        if (batchCurrentInputRef.current) {
           const rawAlg = line.slice(0, lb).trim();
           const counts = parseSolutionCounts(line);
           batchResultsRef.current = [...batchResultsRef.current, { input: batchCurrentInputRef.current, solution: rawAlg, slices: counts.slices }];
@@ -2031,7 +2032,7 @@ export default function App() {
   const generateBatchStats = () => {
     const results = batchResultsRef.current;
     if (!results.length) return;
-    const maxMetric = Math.max(...results.map((r) => r[metric === "es" ? "slices" : "slices"]));
+    const maxMetric = Math.max(...results.map((r) => r.slices));
     const sliceCounts: number[] = [];
     for (let s = 0; s <= maxMetric; s++) sliceCounts.push(0);
     for (const r of results) {
@@ -2050,8 +2051,6 @@ export default function App() {
     lines.push(`errors: ${errorCount}`);
     const statsText = lines.join("\n");
     setBatchStatsText(statsText);
-    addOutputLine({ raw: "--- Stats ---\n" + statsText, karn: "--- Stats ---\n" + statsText, isSolution: false });
-    setStatusLines(["Stats written to terminal"]);
   };
   const downloadBatchCSV = () => {
     const results = batchResultsRef.current;
@@ -2761,6 +2760,13 @@ export default function App() {
           }}
           onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, alg: line.solution.display }); }}>{renderSolutionText(line.text)}</span>)}
         {statusLines.map((line, index) => <span key={`status-${index}-${line}`} className="terminal-line terminal-line-final">{line}</span>)}
+      </div>}
+      {researchMode && batchStatsText && <div className="batch-stats-panel">
+        <div className="batch-stats-header">
+          <span className="batch-stats-title">Stats</span>
+          <button className="batch-stats-copy" title="Copy to clipboard" onClick={() => { navigator.clipboard.writeText(batchStatsText).catch(() => undefined); setStatusLines(["Stats copied to clipboard"]); }}>Copy</button>
+        </div>
+        <pre className="batch-stats-body">{batchStatsText}</pre>
       </div>}
     </div>
     );

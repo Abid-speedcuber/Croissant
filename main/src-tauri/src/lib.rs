@@ -238,7 +238,7 @@ async fn solve(app: tauri::AppHandle, state: State<'_, SolverState>, position: S
 fn batch_init_blocking(app: tauri::AppHandle, flags: Vec<String>) -> Result<SolverResult, String> {
     let table_dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("pruning-tables");
     fs::create_dir_all(&table_dir).map_err(|e| e.to_string())?;
-    let mut arguments = vec!["sq1opt".to_owned(), "-v5".to_owned()];
+    let mut arguments = vec!["sq1opt".to_owned(), "-v1".to_owned()];
     arguments.extend(flags);
     let c_arguments = arguments.into_iter().map(|value| CString::new(value).map_err(|_| "Batch init argument contains a NUL byte")).collect::<Result<Vec<_>, _>>()?;
     let pointers = c_arguments.iter().map(|value| value.as_ptr()).collect::<Vec<_>>();

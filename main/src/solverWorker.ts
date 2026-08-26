@@ -220,7 +220,7 @@ async function batchSolve(request: InvokeRequest & { type: "batchSolve" }) {
 
   try {
     // Build argv for batchInit: ["sq1opt", "-v5", ...flags]
-    const argv = ["sq1opt", "-v5", ...request.flags];
+    const argv = ["sq1opt", "-v1", ...request.flags];
     const encoded = argv.map((s) => {
       const bytes = new TextEncoder().encode(s + "\0");
       const ptr = mod._malloc(bytes.length);
@@ -263,7 +263,7 @@ async function handleBatchInit(request: InvokeRequest & { type: "batchInit" }) {
   const mod = await loadModule();
   if (!api) throw new Error("The Square-1 WASM module is not ready.");
 
-  const argv = ["sq1opt", "-v5", ...request.flags];
+  const argv = ["sq1opt", "-v1", ...request.flags];
   const encoded = argv.map((s) => {
     const bytes = new TextEncoder().encode(s + "\0");
     const ptr = mod._malloc(bytes.length);
