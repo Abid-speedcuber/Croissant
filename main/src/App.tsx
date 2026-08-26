@@ -13,7 +13,7 @@ import {
 } from "./utils";
 import { Modal } from './components/Modal';
 import { Icon } from './components/Icon';
-import { remapPosition, generateRemapCandidates } from './utils/remap';
+import { generateRemapCandidates } from './utils/remap';
 import { DiskSpaceModal } from './components/DiskSpaceModal';
 import { WeightsModal } from './components/WeightsModal';
 import { t, tList, LangCode, getLang, setLang } from './i18n';
@@ -2023,7 +2023,7 @@ export default function App() {
         const given = lines[i];
         if (targets.length) {
           const candidates: string[] = [];
-          for (const t of targets) candidates.push(...generateRemapCandidates(given, t));
+          for (const t of targets) candidates.push(...generateRemapCandidates(given, t, debugOutput));
           let bestSol: { rawAlg: string; countVal: number; slices: number; moves: number; angle: number } | null = null;
           for (const candidate of candidates) {
             captureSolution = null;

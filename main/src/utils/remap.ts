@@ -1,20 +1,13 @@
 const SOLVED = "A1B2C3D45E6F7G8H";
 
 const PLACEHOLDER_SETS: Record<string, string> = {
-  U: "ABCD",
-  V: "EFGH",
-  W: "ABCDEFGH",
-  X: "1234",
-  Y: "5678",
-  Z: "12345678",
+  U: "ABCDU",
+  V: "EFGHV",
+  W: "ABCDEFGHUVW",
+  X: "1234X",
+  Y: "5678Y",
+  Z: "12345678XYZ",
 };
-
-const PLACEHOLDER_TYPES: Record<string, string> = {};
-for (const [ph, set] of Object.entries(PLACEHOLDER_SETS)) {
-  for (const c of set) {
-    PLACEHOLDER_TYPES[c] = (PLACEHOLDER_TYPES[c] || "") + ph;
-  }
-}
 
 function isPlaceholder(c: string): boolean {
   return "UVWXYZ".indexOf(c) >= 0;
@@ -89,13 +82,50 @@ function* heapPermutations(arr: string[], size: number): Generator<string[]> {
   }
 }
 
-export function remapPosition(given: string, target: string): string {
-  const map = buildSubstitutionMap(target, SOLVED);
-  const substituted = applySubstitution(given, map);
-  return assignPlaceholders(substituted, target);
+function expandDuplicateTargets(target: string): string[] {
+  const counts = new Map<string, number>();
+  for (let i = 0; i < 16; i++) {
+    const c = target[i];
+    counts.set(c, (counts.get(c) || 0) + 1);
+  }
+
+  const duplicates: { piece: string; positions: number[] }[] = [];
+  for (const [piece, count] of counts) {
+    if (count > 1 && !isPlaceholder(piece)) {
+      const positions: number[] = [];
+      for (let i = 0; i < 16; i++) {
+        if (target[i] === piece) positions.push(i);
+      }
+      duplicates.push({ piece, positions });
+    }
+  }
+
+  if (duplicates.length === 0) return [target];
+
+  let candidates = [target];
+
+  for (const { piece, positions } of duplicates) {
+    const solvedPieces = positions.map((p) => SOLVED[p]);
+    const uniqueSolved = [...new Set(solvedPieces)];
+    if (uniqueSolved.length === 1) continue;
+
+    const newCandidates: string[] = [];
+    for (const existing of candidates) {
+      for (const perm of generatePermutations(solvedPieces)) {
+        const chars = existing.split("");
+        for (let j = 0; j < positions.length; j++) {
+          chars[positions[j]] = perm[j];
+        }
+        newCandidates.push(chars.join(""));
+      }
+    }
+    candidates = [...new Set(newCandidates)];
+  }
+
+  return candidates;
 }
 
-export function generateRemapCandidates(given: string, target: string): string[] {
+function processTarget(given: string, target: string): string[] {
   const map = buildSubstitutionMap(target, SOLVED);
   const substituted = applySubstitution(given, map);
 
@@ -103,7 +133,10 @@ export function generateRemapCandidates(given: string, target: string): string[]
   for (let i = 0; i < 16; i++) {
     if (isPlaceholder(target[i])) placeholderPositions.push(i);
   }
-  if (placeholderPositions.length === 0) return [substituted];
+
+  if (placeholderPositions.length === 0) {
+    return [substituted];
+  }
 
   const groups = new Map<string, { positions: number[]; pieces: string[] }>();
   for (const pos of placeholderPositions) {
@@ -131,20 +164,18 @@ export function generateRemapCandidates(given: string, target: string): string[]
   }
 
   if (!hasOverlap) {
-    const result = assignPlaceholders(substituted, target);
-    return [result];
+    return [assignPlaceholders(substituted, target)];
   }
 
   const groupEntries = groupKeys.map((k) => groups.get(k)!);
-
   const allPositions: number[] = [];
   const allPieces: string[] = [];
   const allTypes: string[] = [];
   for (const entry of groupEntries) {
-    for (let i = 0; i < entry.positions.length; i++) {
-      allPositions.push(entry.positions[i]);
-      allPieces.push(entry.pieces[i]);
-      allTypes.push(target[entry.positions[i]]);
+    for (let j = 0; j < entry.positions.length; j++) {
+      allPositions.push(entry.positions[j]);
+      allPieces.push(entry.pieces[j]);
+      allTypes.push(target[entry.positions[j]]);
     }
   }
 
@@ -152,10 +183,9 @@ export function generateRemapCandidates(given: string, target: string): string[]
   const candidates: string[] = [];
 
   for (const perm of generatePermutations(allPieces)) {
-
     let valid = true;
-    for (let i = 0; i < allPositions.length; i++) {
-      if (!pieceBelongsToPlaceholder(perm[i], allTypes[i])) {
+    for (let j = 0; j < allPositions.length; j++) {
+      if (!pieceBelongsToPlaceholder(perm[j], allTypes[j])) {
         valid = false;
         break;
       }
@@ -163,8 +193,8 @@ export function generateRemapCandidates(given: string, target: string): string[]
     if (!valid) continue;
 
     const chars = substituted.split("");
-    for (let i = 0; i < allPositions.length; i++) {
-      chars[allPositions[i]] = perm[i];
+    for (let j = 0; j < allPositions.length; j++) {
+      chars[allPositions[j]] = perm[j];
     }
     const candidate = assignPlaceholders(chars.join(""), target);
     if (!seen.has(candidate)) {
@@ -178,4 +208,41 @@ export function generateRemapCandidates(given: string, target: string): string[]
   }
 
   return candidates;
+}
+
+export function remapPosition(given: string, target: string): string {
+  const expandedTargets = expandDuplicateTargets(target);
+  return processTarget(given, expandedTargets[0])[0];
+}
+
+export function generateRemapCandidates(given: string, target: string, debug?: boolean): string[] {
+  const expandedTargets = expandDuplicateTargets(target);
+  if (debug) console.debug("[remap] expanded targets:", expandedTargets);
+
+  const allCandidates: string[] = [];
+  const seen = new Set<string>();
+
+  for (const expandedTarget of expandedTargets) {
+    const map = buildSubstitutionMap(expandedTarget, SOLVED);
+    if (debug) console.debug("[remap] target:", expandedTarget, "map:", Object.fromEntries(map));
+    const substituted = applySubstitution(given, map);
+    if (debug) console.debug("[remap] substituted:", substituted);
+    const candidates = processTarget(given, expandedTarget);
+    if (debug) console.debug("[remap] candidates from target:", candidates);
+    for (const c of candidates) {
+      if (!seen.has(c)) {
+        seen.add(c);
+        allCandidates.push(c);
+      }
+    }
+  }
+
+  if (allCandidates.length === 0) {
+    const map = buildSubstitutionMap(target, SOLVED);
+    allCandidates.push(assignPlaceholders(applySubstitution(given, map), target));
+  }
+
+  if (debug) console.debug("[remap] all candidates:", allCandidates);
+
+  return allCandidates;
 }
