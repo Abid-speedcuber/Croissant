@@ -106,6 +106,7 @@ export function solverFlags(options: {
 }) {
   const flags: string[] = [];
   if (options.metric === "es") flags.push("-es");
+  if (options.metric === "move") flags.push("-em");
   if (options.metric === "ea") flags.push("-ea");
   if (options.all) flags.push(options.suboptimal && !validDepths(options.depths) ? "-a" + options.suboptimal : "-a");
   if (validDepths(options.depths)) flags.push("-d" + options.depths.replace(/\s/g, ""));

@@ -1981,20 +1981,26 @@ export default function App() {
     const flags = solverFlags({ metric, all: false, suboptimal: 0, depths: "", generator: false, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     if (!native.Channel) return;
+    const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
+    const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
     const onLine = new native.Channel<string>();
+    let batchIndex = 0;
     onLine.onmessage = (line: string) => {
       if (runId !== solveRunId.current) return;
       const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
       if (lb < 0 || rb < 0) return;
-      batchQueueRef.current = batchQueueRef.current.then(async () => {
+      batchQueueRef.current = batchQueueRef.current.then(() => {
         if (batchStopRef.current) return;
-        await receiveSolverLine(line, "", runId);
-        if (batchCurrentInputRef.current) {
-          const rawAlg = line.slice(0, lb).trim();
-          const counts = parseSolutionCounts(line);
-          batchResultsRef.current = [...batchResultsRef.current, { input: batchCurrentInputRef.current, solution: rawAlg, slices: counts.slices }];
-          setBatchResults([...batchResultsRef.current]);
-        }
+        const input = batchCurrentInputRef.current;
+        if (!input) return;
+        const rawAlg = line.slice(0, lb).trim();
+        const counts = parseSolutionCounts(line);
+        const countVal = counts[metricKey] || counts.slices;
+        batchResultsRef.current.push({ input, solution: rawAlg, slices: counts.slices, moves: counts.moves, angle: counts.angle });
+        batchIndex++;
+        const output = `[${batchIndex}] ${input} -> ${rawAlg} [${countVal} ${metricLabel}]`;
+        outputLinesRef.current = [...outputLinesRef.current, { raw: output, karn: output, isSolution: false }].slice(-10000);
+        scheduleSolutionFlush();
       });
     };
     batchCurrentInputRef.current = null;
@@ -2005,8 +2011,6 @@ export default function App() {
       for (let i = 0; i < lines.length; i++) {
         if (batchStopRef.current) break;
         batchCurrentInputRef.current = lines[i];
-        seenRaw.current.clear();
-        seenDisplay.current.clear();
         try {
           await native.core.invoke("batch_solve_position", { position: lines[i], onLine });
         } catch { /* skip */ }
@@ -2023,29 +2027,32 @@ export default function App() {
     const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
     const statusMsg = `Done: ${count} solved, ${errorCount} errors, ${lines.length} total (${elapsed}s)`;
     setStatusLines([statusMsg]);
+    setBatchResults([...batchResultsRef.current]);
     batchRunningRef.current = false;
     setBatchRunning(false);
   };
   const batchCurrentInputRef = useRef<string | null>(null);
-  const batchResultsRef = useRef<{ input: string; solution: string; slices: number }[]>([]);
+  const batchResultsRef = useRef<{ input: string; solution: string; slices: number; moves: number; angle: number }[]>([]);
   const batchRunningRef = useRef(false);
   const generateBatchStats = () => {
     const results = batchResultsRef.current;
     if (!results.length) return;
-    const maxMetric = Math.max(...results.map((r) => r.slices));
-    const sliceCounts: number[] = [];
-    for (let s = 0; s <= maxMetric; s++) sliceCounts.push(0);
+    const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
+    const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
+    const maxVal = Math.max(...results.map((r) => r[metricKey]));
+    const counts: number[] = [];
+    for (let s = 0; s <= maxVal; s++) counts.push(0);
     for (const r of results) {
-      const s = r.slices;
-      if (s >= 0 && s <= maxMetric) sliceCounts[s]++;
+      const s = r[metricKey];
+      if (s >= 0 && s <= maxVal) counts[s]++;
     }
     const lines: string[] = [];
-    for (let s = 0; s <= maxMetric; s++) {
-      lines.push(`${s} slice solutions: ${sliceCounts[s]}`);
+    for (let s = 0; s <= maxVal; s++) {
+      lines.push(`${s} ${metricLabel} solutions: ${counts[s]}`);
     }
-    const totalSlices = results.reduce((sum, r) => sum + r.slices, 0);
+    const total = results.reduce((sum, r) => sum + r[metricKey], 0);
     if (results.length) {
-      lines.push(`average slice count: ${(totalSlices / results.length).toFixed(2)}`);
+      lines.push(`average ${metricLabel} count: ${(total / results.length).toFixed(2)}`);
     }
     const errorCount = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).length - results.length;
     lines.push(`errors: ${errorCount}`);
@@ -2055,9 +2062,11 @@ export default function App() {
   const downloadBatchCSV = () => {
     const results = batchResultsRef.current;
     if (!results.length) return;
-    const csvRows = ["input,solution,slices"];
+    const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
+    const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
+    const csvRows = [`input,solution,${metricLabel}`];
     for (const r of results) {
-      csvRows.push(`${r.input},${r.solution.replace(/,/g, " ")},${r.slices}`);
+      csvRows.push(`${r.input},${r.solution.replace(/,/g, " ")},${r[metricKey]}`);
     }
     const csv = csvRows.join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -2646,7 +2655,7 @@ export default function App() {
           {!researchMode && <button title={t('btn.copyAll')} disabled={!totalCount} onClick={copyTerminalText}><Icon name="copy" /></button>}
           {!researchMode && <button title={tableView ? t('btn.switchTerminalView') : t('btn.switchTableView')} onClick={() => tableView ? switchToTerminalMode() : switchToTableMode()}><Icon name={tableView ? "list" : "grid"} /></button>}
           {running && <button className="terminal-stop" title={t('btn.stop')} aria-label={t('btn.stop')} onClick={() => void solve()}><Icon name="stop" /></button>}
-          {batchRunning && <button className="terminal-stop" title="Stop batch" aria-label="Stop batch" onClick={() => { batchStopRef.current = true; }}><Icon name="stop" /></button>}
+          {batchRunning && <button className="terminal-stop" title="Stop batch" aria-label="Stop batch" onClick={() => { batchStopRef.current = true; const native = tauri(); native?.core?.invoke("stop_solver").catch(() => undefined); }}><Icon name="stop" /></button>}
           <button className="mobile-output-close" title={t('btn.close')} aria-label={t('btn.close')} onClick={() => setMobileOutputOpen(false)}><Icon name="close" /></button>
           <button className="expand-output" title={expanded ? t('btn.shrinkTerminal') : t('btn.expandTerminal')} onClick={() => setExpanded((v) => !v)}><Icon name={expanded ? "collapse" : "expand"} /></button>
         </div>
@@ -2920,7 +2929,7 @@ export default function App() {
             <button
               className={`solve ${batchRunning ? "is-running" : ""}`}
               disabled={!batchInput.trim()}
-              onClick={() => { if (batchRunning) { batchStopRef.current = true; } else { void batchSolve(); } }}
+              onClick={() => { if (batchRunning) { batchStopRef.current = true; const native = tauri(); native?.core?.invoke("stop_solver").catch(() => undefined); } else { void batchSolve(); } }}
             >{batchRunning ? "Stop" : "Batch Solve"}</button>
           </div>
           <div className="batch-export">
