@@ -13,6 +13,7 @@ import {
 } from "./utils";
 import { Modal } from './components/Modal';
 import { Icon } from './components/Icon';
+import { remapPosition, generateRemapCandidates } from './utils/remap';
 import { DiskSpaceModal } from './components/DiskSpaceModal';
 import { WeightsModal } from './components/WeightsModal';
 import { t, tList, LangCode, getLang, setLang } from './i18n';
@@ -643,6 +644,7 @@ export default function App() {
     [pendingDeletes, setPendingDeletes] = useState<Record<string, number>>({});
   const [researchMode, setResearchMode] = useState(false);
   const [batchInput, setBatchInput] = useState("");
+  const [batchTarget, setBatchTarget] = useState("");
   const [batchResults, setBatchResults] = useState<{ input: string; solution: string; slices: number }[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchStatsText, setBatchStatsText] = useState<string | null>(null);
@@ -1956,6 +1958,7 @@ export default function App() {
     if (!native?.core?.invoke) return;
     const lines = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
     if (!lines.length) return;
+    const target = batchTarget.trim();
     batchStopRef.current = false;
     batchResultsRef.current = [];
     setBatchResults([]);
@@ -1971,8 +1974,9 @@ export default function App() {
     setFollowTerminal(true);
     setTableView(false);
     setPage(0);
-    setOutputLines([{ raw: `Batch: ${lines.length} positions`, karn: `Batch: ${lines.length} positions`, isSolution: false }]);
-    outputLinesRef.current = [{ raw: `Batch: ${lines.length} positions`, karn: `Batch: ${lines.length} positions`, isSolution: false }];
+    const headerMsg = target ? `Batch: ${lines.length} positions -> ${target}` : `Batch: ${lines.length} positions`;
+    setOutputLines([{ raw: headerMsg, karn: headerMsg, isSolution: false }]);
+    outputLinesRef.current = [{ raw: headerMsg, karn: headerMsg, isSolution: false }];
     setStatusLines([]);
     setSolutions([]);
     setRunningState(true);
@@ -1983,25 +1987,31 @@ export default function App() {
     if (!native.Channel) return;
     const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
     const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
-    const onLine = new native.Channel<string>();
     let batchIndex = 0;
+    let captureSolution: { rawAlg: string; slices: number; moves: number; angle: number } | null = null;
+    const onLine = new native.Channel<string>();
     onLine.onmessage = (line: string) => {
       if (runId !== solveRunId.current) return;
       const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
       if (lb < 0 || rb < 0) return;
-      batchQueueRef.current = batchQueueRef.current.then(() => {
-        if (batchStopRef.current) return;
-        const input = batchCurrentInputRef.current;
-        if (!input) return;
-        const rawAlg = line.slice(0, lb).trim();
-        const counts = parseSolutionCounts(line);
-        const countVal = counts[metricKey] || counts.slices;
-        batchResultsRef.current.push({ input, solution: rawAlg, slices: counts.slices, moves: counts.moves, angle: counts.angle });
-        batchIndex++;
-        const output = `[${batchIndex}] ${input} -> ${rawAlg} [${countVal} ${metricLabel}]`;
-        outputLinesRef.current = [...outputLinesRef.current, { raw: output, karn: output, isSolution: false }].slice(-10000);
-        scheduleSolutionFlush();
-      });
+      if (captureSolution) return;
+      const rawAlg = line.slice(0, lb).trim();
+      const counts = parseSolutionCounts(line);
+      captureSolution = { rawAlg, slices: counts.slices, moves: counts.moves, angle: counts.angle };
+    };
+    const flushCapture = async () => {
+      await batchQueueRef.current;
+      const sol = captureSolution;
+      captureSolution = null;
+      return sol;
+    };
+    const storeResult = (input: string, sol: { rawAlg: string; slices: number; moves: number; angle: number }) => {
+      const countVal = sol[metricKey] || sol.slices;
+      batchResultsRef.current.push({ input, solution: sol.rawAlg, slices: sol.slices, moves: sol.moves, angle: sol.angle });
+      batchIndex++;
+      const output = `[${batchIndex}] ${input} -> ${sol.rawAlg} [${countVal} ${metricLabel}]`;
+      outputLinesRef.current = [...outputLinesRef.current, { raw: output, karn: output, isSolution: false }].slice(-10000);
+      scheduleSolutionFlush();
     };
     batchCurrentInputRef.current = null;
     try {
@@ -2010,16 +2020,37 @@ export default function App() {
       setStatusLines([]);
       for (let i = 0; i < lines.length; i++) {
         if (batchStopRef.current) break;
-        batchCurrentInputRef.current = lines[i];
-        try {
-          await native.core.invoke("batch_solve_position", { position: lines[i], onLine });
-        } catch { /* skip */ }
-        await batchQueueRef.current;
+        const given = lines[i];
+        if (target) {
+          const candidates = generateRemapCandidates(given, target);
+          let bestSol: { rawAlg: string; countVal: number; slices: number; moves: number; angle: number } | null = null;
+          for (const candidate of candidates) {
+            captureSolution = null;
+            try {
+              await native.core.invoke("batch_solve_position", { position: candidate, onLine });
+            } catch { /* skip */ }
+            const sol = await flushCapture();
+            if (sol) {
+              const countVal = sol[metricKey] || sol.slices;
+              if (!bestSol || countVal < bestSol.countVal) {
+                bestSol = { rawAlg: sol.rawAlg, countVal, slices: sol.slices, moves: sol.moves, angle: sol.angle };
+              }
+            }
+          }
+          if (bestSol) storeResult(given, { rawAlg: bestSol.rawAlg, slices: bestSol.slices, moves: bestSol.moves, angle: bestSol.angle });
+        } else {
+          captureSolution = null;
+          batchCurrentInputRef.current = given;
+          try {
+            await native.core.invoke("batch_solve_position", { position: given, onLine });
+          } catch { /* skip */ }
+          const sol = await flushCapture();
+          if (sol) storeResult(given, sol);
+        }
       }
     } finally {
       try { await native.core.invoke("batch_destroy"); } catch { /* ignore */ }
     }
-    await batchQueueRef.current;
     if (runId !== solveRunId.current) return;
     flushSolutionState();
     const count = batchResultsRef.current.length;
@@ -2894,6 +2925,17 @@ export default function App() {
       <div className="main-grid" ref={mainGridRef}>
         {researchMode ? <aside className="cube-column research-batch-column" ref={cubeColumnRef}>
           <h2 className="batch-heading">Batch Input</h2>
+          <label className="batch-target-label">Target position
+            <input
+              type="text"
+              className="batch-target-input"
+              value={batchTarget}
+              onChange={(e) => setBatchTarget(e.target.value)}
+              placeholder="Leave empty for solved state"
+              spellCheck={false}
+              disabled={batchRunning}
+            />
+          </label>
           <div
             className={`batch-drop-zone ${batchDragOver ? "drag-over" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setBatchDragOver(true); }}

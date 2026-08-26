@@ -2318,6 +2318,34 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.65px;
 }
+.batch-target-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px 0;
+  color: #7a8da6;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.batch-target-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #354256;
+  border-radius: 4px;
+  color: #dce5f2;
+  font-family: monospace;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.batch-target-input:focus {
+  border-color: #4a90d9;
+}
+.batch-target-input::placeholder {
+  color: #5a6a80;
+}
 .batch-drop-zone {
   flex: 1;
   margin: 8px 10px 0;
