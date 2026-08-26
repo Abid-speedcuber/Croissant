@@ -24,6 +24,9 @@ unsafe extern "C" {
                             callback: extern "C" fn(*const c_char, *mut c_void), callback_context: *mut c_void) -> *mut c_char;
     fn sq1_batch_solve_alloc(position: *const c_char, exit_code: *mut i32,
                              callback: extern "C" fn(*const c_char, *mut c_void), callback_context: *mut c_void) -> *mut c_char;
+    fn sq1_batch_solve_multi_alloc(num_candidates: i32, candidates: *const *const c_char,
+                                   exit_code: *mut i32,
+                                   callback: extern "C" fn(*const c_char, *mut c_void), callback_context: *mut c_void) -> *mut c_char;
     fn sq1_batch_destroy_alloc();
 }
 
@@ -288,6 +291,33 @@ async fn batch_solve_position(state: State<'_, SolverState>, position: String, o
     .map_err(|e| e.to_string())?
 }
 
+fn batch_solve_multi_blocking(candidates: Vec<String>, on_line: Channel<String>) -> Result<SolverResult, String> {
+    let c_candidates: Vec<CString> = candidates.into_iter()
+        .map(|s| CString::new(s).map_err(|_| "Candidate contains a NUL byte"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let pointers: Vec<*const c_char> = c_candidates.iter().map(|c| c.as_ptr()).collect();
+    let mut code = -1;
+    let channel_context = &on_line as *const Channel<String> as *mut c_void;
+    let output_pointer = unsafe {
+        sq1_batch_solve_multi_alloc(pointers.len() as i32, pointers.as_ptr(), &mut code, solver_line_callback, channel_context)
+    };
+    if output_pointer.is_null() { return Err("The batch solver returned no output".into()); }
+    let output = unsafe { CStr::from_ptr(output_pointer) }.to_string_lossy().into_owned();
+    unsafe { sq1_free_string(output_pointer); }
+    Ok(SolverResult { code: Some(code), stdout: output, stderr: String::new() })
+}
+
+#[tauri::command]
+async fn batch_solve_multi(state: State<'_, SolverState>, candidates: Vec<String>, on_line: Channel<String>) -> Result<SolverResult, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _solver_guard = state.0.lock().map_err(|_| "Solver state is unavailable")?;
+        batch_solve_multi_blocking(candidates, on_line)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 fn batch_destroy(state: State<'_, SolverState>) -> Result<(), String> {
     let _solver_guard = state.0.lock().map_err(|_| "Solver state is unavailable")?;
@@ -307,7 +337,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(SolverState::default())
-        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, set_rating_config, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size, batch_init, batch_solve_position, batch_destroy])
+        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, set_rating_config, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size, batch_init, batch_solve_position, batch_solve_multi, batch_destroy])
         .run(tauri::generate_context!())
         .expect("error while running Croissant");
 }

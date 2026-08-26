@@ -13,6 +13,7 @@ extern "C" {
 #endif
 int sq1_batch_init(int argc, char* argv[], const char* table_directory);
 int sq1_batch_solve(const char* position);
+int sq1_batch_solve_multi(const char** candidates, int num_candidates);
 void sq1_batch_destroy();
 #ifdef __cplusplus
 }

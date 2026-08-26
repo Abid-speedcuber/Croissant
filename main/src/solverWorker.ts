@@ -26,6 +26,7 @@ type InvokeRequest =
   | { id: number; type: "batchSolve"; positions: string[]; flags: string[] }
   | { id: number; type: "batchInit"; flags: string[] }
   | { id: number; type: "batchSolvePosition"; position: string }
+  | { id: number; type: "batchSolveMulti"; candidates: string[] }
   | { id: number; type: "batchDestroy" }
   | { id: number; type: "invoke"; command: "unkarnify"; args: { input: string } }
   | { id: number; type: "invoke"; command: "karnify"; args: { input: string; position?: string | null; generator: boolean } }
@@ -69,6 +70,7 @@ type WasmApi = {
   freeString: (ptr: number) => void;
   batchInit: (argc: number, argv: number) => number;
   batchSolve: (position: string) => number;
+  batchSolveMulti: (argc: number, argv: number) => number;
   batchDestroy: () => void;
 };
 
@@ -152,6 +154,7 @@ async function loadModule(): Promise<EmscriptenModule> {
       freeString: instance.cwrap("sq1_web_free_string", null, ["number"]) as (ptr: number) => void,
       batchInit: instance.cwrap("sq1_web_batch_init", "number", ["number", "number"]) as (argc: number, argv: number) => number,
       batchSolve: instance.cwrap("sq1_web_batch_solve", "number", ["string"]) as (position: string) => number,
+      batchSolveMulti: instance.cwrap("sq1_web_batch_solve_multi", "number", ["number", "number"]) as (argc: number, argv: number) => number,
       batchDestroy: instance.cwrap("sq1_web_batch_destroy", null, []) as () => void,
     };
     return instance;
@@ -297,6 +300,33 @@ async function handleBatchSolvePosition(request: InvokeRequest & { type: "batchS
   }
 }
 
+async function handleBatchSolveMulti(request: InvokeRequest & { type: "batchSolveMulti" }) {
+  const mod = await loadModule();
+  if (!api) throw new Error("The Square-1 WASM module is not ready.");
+  activeSolveId = request.id;
+  try {
+    const encoded = request.candidates.map((s) => {
+      const bytes = new TextEncoder().encode(s + "\0");
+      const ptr = mod._malloc(bytes.length);
+      mod.HEAPU8.set(bytes, ptr);
+      return ptr;
+    });
+    const argvPtr = mod._malloc(encoded.length * 4);
+    for (let i = 0; i < encoded.length; i++) {
+      mod.HEAP32[(argvPtr >> 2) + i] = encoded[i];
+    }
+    try {
+      api.batchSolveMulti(encoded.length, argvPtr);
+    } finally {
+      for (const ptr of encoded) mod._free(ptr);
+      mod._free(argvPtr);
+    }
+    emit({ id: request.id, type: "result", result: { code: 0 } });
+  } finally {
+    activeSolveId = undefined;
+  }
+}
+
 async function handleBatchDestroy(request: InvokeRequest & { type: "batchDestroy" }) {
   const mod = await loadModule();
   if (!api) throw new Error("The Square-1 WASM module is not ready.");
@@ -318,6 +348,7 @@ self.onmessage = (event: MessageEvent<InvokeRequest>) => {
       else if (request.type === "batchSolve") await batchSolve(request);
       else if (request.type === "batchInit") await handleBatchInit(request);
       else if (request.type === "batchSolvePosition") await handleBatchSolvePosition(request);
+      else if (request.type === "batchSolveMulti") await handleBatchSolveMulti(request);
       else if (request.type === "batchDestroy") await handleBatchDestroy(request);
       else if (request.type === "deleteTable") {
         if (activeSolveId === undefined && moduleInstance) {

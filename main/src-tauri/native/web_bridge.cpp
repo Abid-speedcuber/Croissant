@@ -120,6 +120,10 @@ extern "C" int sq1_web_batch_solve(const char* position) {
     return sq1_batch_solve(position);
 }
 
+extern "C" int sq1_web_batch_solve_multi(int argc, char** argv) {
+    return sq1_batch_solve_multi((const char**)argv, argc);
+}
+
 extern "C" void sq1_web_batch_destroy() {
     sq1_batch_destroy();
 }

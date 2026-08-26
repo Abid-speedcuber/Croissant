@@ -132,6 +132,26 @@ extern "C" char *sq1_batch_solve_alloc(const char *position, int *exit_code,
     return copy_allocated(capture.text);
 }
 
+extern "C" char *sq1_batch_solve_multi_alloc(int num_candidates, const char **candidates,
+                                              int *exit_code,
+                                              LineCallback callback, void *callback_context) {
+    CaptureBuffer capture(callback, callback_context);
+    auto *old_out = std::cout.rdbuf(&capture);
+    auto *old_error = std::cerr.rdbuf(&capture);
+    int code = -1;
+    try {
+        code = sq1_batch_solve_multi(candidates, num_candidates);
+    } catch (const std::exception &error) {
+        capture.text += "ERROR: "; capture.text += error.what(); capture.text += '\n';
+    } catch (...) {
+        capture.text += "ERROR: Unknown batch solve multi failure.\n";
+    }
+    std::cout.flush(); std::cerr.flush();
+    std::cout.rdbuf(old_out); std::cerr.rdbuf(old_error);
+    if (exit_code) *exit_code = code;
+    return copy_allocated(capture.text);
+}
+
 extern "C" void sq1_batch_destroy_alloc() {
     sq1_batch_destroy();
 }

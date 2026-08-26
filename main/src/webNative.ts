@@ -152,6 +152,23 @@ function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise
     return promise;
   }
 
+  if (command === "batch_solve_multi") {
+    const id = nextId++;
+    const request: PendingRequest = {
+      resolve: (value) => undefined,
+      reject: () => undefined,
+      onLine: args.onLine as WebChannel<string> | undefined,
+      solve: true,
+    };
+    const promise = new Promise<T>((resolve, reject) => {
+      request.resolve = (value) => resolve(value as T);
+      request.reject = reject;
+    });
+    pending.set(id, request);
+    ensureSolveWorker().postMessage({ id, type: "batchSolveMulti", candidates: args.candidates });
+    return promise;
+  }
+
   if (command === "batch_destroy") {
     const id = nextId++;
     const request: PendingRequest = {

@@ -1908,6 +1908,7 @@ class PositionSolver {
 	int m_internalBad{0};
 	bool m_banInternal{false};
 	bool m_cleanFound{false};
+	bool m_solutionFound{false};
 	std::vector<std::string> m_dirtyBuf;
 	bool m_cubeshape{false};
 	clock_t m_lastProgressClock{0};
@@ -1999,6 +2000,7 @@ class PositionSolver {
 	}
 	virtual int solve(int twoGen, int extraMoves, bool keepCubeShape){
 		m_cubeshape = keepCubeShape;
+		m_solutionFound = false;
 		// Find the valid preadf D rotations for 2-gen / pseudo-2-gen (solve guard:
 		// if no compatible block exists the position can't be 2-genned).
 		// For twoGen==0 this always returns {0}.
@@ -2353,6 +2355,7 @@ class PositionSolver {
 		return alg.substr(0, sep) + indicator + alg.substr(sep+1);
 	}
 	void printsol(){
+		m_solutionFound = true;
 		std::string out = "";
 		int tw=0, tu=0;
 		int mu=0, md=0;
@@ -2526,6 +2529,7 @@ public:
 	}
 	int solve(int twoGen, int extraMoves, bool keepCubeShape) override {
 		m_cubeshape = keepCubeShape;
+		m_solutionFound = false;
 		// Partial-aware preadf detection doubles as the 2-gen / p2g solve guard:
 		// twoGenPreadf understands U/V/W/X/Y/Z pieces, so it returns every rotation
 		// that can bring a (possibly partially-specified) solved block to the frozen
@@ -3240,6 +3244,61 @@ extern "C" int sq1_batch_solve(const char* position) {
 		r = g_batch->ps->solve(g_batch->twoGen, g_batch->extraMoves, g_batch->keepCubeShape);
 	}
 	return r;
+}
+
+extern "C" int sq1_batch_solve_multi(const char** candidates, int num_candidates) {
+	if (!g_batch || !g_batch->initialized) return -1;
+	if (!candidates || num_candidates <= 0) return -1;
+
+	std::vector<bool> done(num_candidates, false);
+
+	for (int depth = 1; depth <= maxTotal; depth++) {
+		specificDepths.clear();
+		specificDepths.push_back(depth);
+
+		bool allDone = true;
+		for (int i = 0; i < num_candidates; i++) {
+			if (done[i]) continue;
+			allDone = false;
+
+			if (stopRequested.load()) { specificDepths.clear(); return -1; }
+
+			if (!candidates[i] || !candidates[i][0]) { done[i] = true; continue; }
+
+			FullPosition p;
+			int r = p.parseInput(candidates[i]);
+			if (r) { done[i] = true; continue; }
+			if (g_batch->ignoreMid) p.middle = 0;
+
+			int pre = preValidate(p, g_batch->keepCubeShape, g_batch->twoGen);
+			if (pre) { done[i] = true; continue; }
+
+			int solveResult;
+			if (p.isPartial()) {
+				g_batch->pps->set(p, false, g_batch->ignoreTrans);
+				solveResult = g_batch->pps->solve(g_batch->twoGen, 0, g_batch->keepCubeShape);
+			} else {
+				g_batch->ps->set(p, false, g_batch->ignoreTrans);
+				solveResult = g_batch->ps->solve(g_batch->twoGen, 0, g_batch->keepCubeShape);
+			}
+
+			if (solveResult < 0) { specificDepths.clear(); return solveResult; }
+			if (solveResult != 0) { done[i] = true; continue; }
+
+			PositionSolver* solver = p.isPartial()
+				? static_cast<PositionSolver*>(g_batch->pps)
+				: static_cast<PositionSolver*>(g_batch->ps);
+			if (solver->m_solutionFound) {
+				specificDepths.clear();
+				return 0;
+			}
+		}
+
+		if (allDone) break;
+	}
+
+	specificDepths.clear();
+	return 0;
 }
 
 extern "C" void sq1_batch_destroy() {

@@ -2024,21 +2024,12 @@ export default function App() {
         if (targets.length) {
           const candidates: string[] = [];
           for (const t of targets) candidates.push(...generateRemapCandidates(given, t, debugOutput));
-          let bestSol: { rawAlg: string; countVal: number; slices: number; moves: number; angle: number } | null = null;
-          for (const candidate of candidates) {
-            captureSolution = null;
-            try {
-              await native.core.invoke("batch_solve_position", { position: candidate, onLine });
-            } catch { /* skip */ }
-            const sol = await flushCapture();
-            if (sol) {
-              const countVal = sol[metricKey] || sol.slices;
-              if (!bestSol || countVal < bestSol.countVal) {
-                bestSol = { rawAlg: sol.rawAlg, countVal, slices: sol.slices, moves: sol.moves, angle: sol.angle };
-              }
-            }
-          }
-          if (bestSol) storeResult(given, { rawAlg: bestSol.rawAlg, slices: bestSol.slices, moves: bestSol.moves, angle: bestSol.angle });
+          captureSolution = null;
+          try {
+            await native.core.invoke("batch_solve_multi", { candidates, onLine });
+          } catch { /* skip */ }
+          const sol = await flushCapture();
+          if (sol) storeResult(given, sol);
         } else {
           captureSolution = null;
           batchCurrentInputRef.current = given;
