@@ -185,6 +185,14 @@ function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise
     return promise;
   }
 
+  // debug_log has no WASM counterpart (no terminal/stderr); log to the
+  // browser console instead.  The argument payload is { line: string }.
+  if (command === "debug_log") {
+    const line = (args as Record<string, unknown>).line as string | undefined;
+    if (typeof line === "string") console.log(line);
+    return Promise.resolve(undefined as T);
+  }
+
   return postInvoke<T>(ensureUtilityWorker(), command, args);
 }
 

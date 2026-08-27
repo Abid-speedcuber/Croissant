@@ -1984,6 +1984,7 @@ export default function App() {
     const startedAt = performance.now();
     const flags = solverFlags({ metric, all: false, suboptimal: 0, depths: "", generator: false, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
+    if (debugOutput) flags.push("-v2");
     if (!native.Channel) return;
     const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
     const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
@@ -2023,12 +2024,28 @@ export default function App() {
         const given = lines[i];
         if (targets.length) {
           const candidates: string[] = [];
-          for (const t of targets) candidates.push(...generateRemapCandidates(given, t, debugOutput));
+          const seen = new Set<string>();
+          const dbg = (line: string) => {
+            if (!debugOutput) return;
+            addOutputLine({ raw: line, karn: line, isSolution: false });
+            void native.core.invoke("debug_log", { line }).catch(() => undefined);
+          };
+          dbg(`[SI ${i + 1}] Given: "${given}"`);
+          for (let ti = 0; ti < targets.length; ti++) {
+            const t = targets[ti];
+            const perTarget = generateRemapCandidates(given, t, false);
+            dbg(`  Target ${ti + 1}: "${t}" -> ${perTarget.length ? perTarget.join(" | ") : "(none)"}`);
+            for (const c of perTarget) {
+              if (!seen.has(c)) { seen.add(c); candidates.push(c); }
+            }
+          }
+          dbg(`  All candidates (${candidates.length}): ${candidates.join(" | ")}`);
           captureSolution = null;
           try {
             await native.core.invoke("batch_solve_multi", { candidates, onLine });
           } catch { /* skip */ }
           const sol = await flushCapture();
+          dbg(`  Solved: "${given}"${sol ? " -> " + sol.rawAlg + " (" + (sol[metricKey] || sol.slices) + " " + metricLabel + ")" : " -> (NO solution)"}`);
           if (sol) storeResult(given, sol);
         } else {
           captureSolution = null;

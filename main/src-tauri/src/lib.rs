@@ -332,12 +332,22 @@ fn stop_solver(state: State<'_, SolverState>) -> Result<(), String> {
     Ok(())
 }
 
+// Writes a debug line straight to stderr (which surfaces on the terminal that
+// launched the app). Used by the batch research mode to trace the
+// given -> target -> candidate mapping without contaminating the solution
+// stream (which only reads stdout).
+#[tauri::command]
+fn debug_log(line: String) -> Result<(), String> {
+    eprintln!("{}", line);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(SolverState::default())
-        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, set_rating_config, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size, batch_init, batch_solve_position, batch_solve_multi, batch_destroy])
+        .invoke_handler(tauri::generate_handler![solve, stop_solver, unkarnify, karnify, rate_algorithm, set_rating_config, two_gen_status, list_pruning_tables, delete_pruning_table, clear_pruning_tables, app_size, batch_init, batch_solve_position, batch_solve_multi, batch_destroy, debug_log])
         .run(tauri::generate_context!())
         .expect("error while running Croissant");
 }

@@ -3553,8 +3553,15 @@ extern "C" int sq1_batch_solve_multi(const char** candidates, int num_candidates
 	if (!candidates || num_candidates <= 0) return -1;
 
 	std::vector<bool> done(num_candidates, false);
+	bool didDebugHeader = false;
 
 	for (int depth = 1; depth <= maxTotal; depth++) {
+		if (verbosity >= 2 && !didDebugHeader) {
+			std::cerr << "batch_multi: " << num_candidates << " candidate(s):" << std::endl;
+			for (int i = 0; i < num_candidates; i++)
+				std::cerr << "  candidate[" << i << "] = \"" << (candidates[i] ? candidates[i] : "") << "\"" << std::endl;
+			didDebugHeader = true;
+		}
 		specificDepths.clear();
 		specificDepths.push_back(depth);
 
@@ -3569,11 +3576,13 @@ extern "C" int sq1_batch_solve_multi(const char** candidates, int num_candidates
 
 			FullPosition p;
 			int r = p.parseInput(candidates[i]);
-			if (r) { done[i] = true; continue; }
+			if (r) { if (verbosity >= 2) std::cerr << "  candidate[" << i << "] parse FAILED (code " << r << ")" << std::endl; done[i] = true; continue; }
 			if (g_batch->ignoreMid) p.middle = 0;
 
 			int pre = preValidate(p, g_batch->keepCubeShape, g_batch->twoGen);
-			if (pre) { done[i] = true; continue; }
+			if (pre) { if (verbosity >= 2) std::cerr << "  candidate[" << i << "] preValidate FAILED (code " << pre << ")" << std::endl; done[i] = true; continue; }
+
+			if (verbosity >= 2) std::cerr << "  depth " << depth << ": solving candidate[" << i << "] = \"" << candidates[i] << "\" (partial=" << p.isPartial() << ")" << std::endl;
 
 			int solveResult;
 			if (p.isPartial()) {
@@ -3585,15 +3594,17 @@ extern "C" int sq1_batch_solve_multi(const char** candidates, int num_candidates
 			}
 
 			if (solveResult < 0) { specificDepths.clear(); return solveResult; }
-			if (solveResult != 0) { done[i] = true; continue; }
+			if (solveResult != 0) { if (verbosity >= 2) std::cerr << "  candidate[" << i << "] no solution at depth " << depth << std::endl; done[i] = true; continue; }
 
 			PositionSolver* solver = p.isPartial()
 				? static_cast<PositionSolver*>(g_batch->pps)
 				: static_cast<PositionSolver*>(g_batch->ps);
 			if (solver->m_solutionFound) {
+				if (verbosity >= 2) std::cerr << "  candidate[" << i << "] SOLVED at depth " << depth << std::endl;
 				specificDepths.clear();
 				return 0;
 			}
+			if (verbosity >= 2) std::cerr << "  candidate[" << i << "] completed depth " << depth << " (no solution found)" << std::endl;
 		}
 
 		if (allDone) break;
