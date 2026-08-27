@@ -1599,6 +1599,203 @@ public:
 	}
 };
 
+// ---------------------------------------------------------------------
+// Dynamic single-axis (corner-only or edge-only) cubeshape-restricted
+// pruning tables for partial-position solving.
+//
+// The fixed c1/c2/e1/e2 colouring classes (clp[1]/clp[2] in
+// getCornerColouring/getEdgeColouring) only resolve to a usable index
+// when all 4 of THAT SPECIFIC class's pieces happen to be concretely
+// known. Many partial inputs don't line up with either fixed class, so
+// c1/c2/e1/e2 sit at -1 and prunedOut() gets no benefit from pr2/cpr2 at
+// all.
+//
+// ShapeColPos/ShpColTranTable (sctc/scte) never look at *which* pieces
+// are marked, only at *which of the 8 corner (or edge) slots* are
+// marked -- so the existing transition tables already support ANY choice
+// of 4 marked corners or 4 marked edges "for free". All that's missing is
+// (a) computing the colour index for an arbitrary marked set, and (b) a
+// small BFS flood fill seeded at that set's solved index -- both cheap,
+// since they reuse the same machinery as CubePrunTable, just tracking one
+// axis instead of two. These are therefore built fresh, in memory only,
+// per solve() call, from whichever pieces are actually concrete in the
+// input for *this* query -- never written to disk like the fixed tables.
+// ---------------------------------------------------------------------
+
+// Colour index (0..69, or -1) of an arbitrary 4-piece marked set on a
+// given position. Mirrors FullPosition::getCornerColouring/
+// getEdgeColouring but takes the marked piece ids explicitly instead of
+// a fixed clp[] class. The marked pieces are always concrete in `pos`
+// here: `marked` is only ever populated from ids that appear concretely
+// in the original partial input, and moves permute slots, never piece
+// identities, so this never has to fall back to a partial-wildcard case
+// the way getCornerColouring(0) does for U/V.
+static inline int markedColourIdx(const int pos[24], const int marked[4], bool isEdge, ChoiceTable& ct){
+	int c=0, cnt=0;
+	int m=1<<7;
+	for(int i=0; i<24; i++){
+		bool thisType = isEdge ? (pos[i]>=8) : (pos[i]<8);
+		if(thisType){
+			for(int j=0;j<4;j++){
+				if(pos[i]==marked[j]){ c|=m; cnt++; break; }
+			}
+			m>>=1;
+			if(!isEdge) i++; // corners occupy two adjacent slots
+		}
+	}
+	return (cnt==4) ? ct.choice2Idx[c] : -1;
+}
+
+// Cubeshape-restricted (4-shape) pruning table for one arbitrary 4-piece
+// marked set, tracking only that one axis (corners OR edges, not both --
+// keeping corner and edge groups independent avoids having to also pick
+// a matching partner group of the other type, and each axis alone is
+// still a valid, if slightly looser, admissible lower bound). Built
+// in-memory only; not persisted to disk, since it's specific to which
+// pieces the current query happens to have concretely defined.
+class DynCubePrunTable1D {
+public:
+	char table[4][70];
+	bool valid=false;
+
+	// sc is sctc for corners, scte for edges.
+	DynCubePrunTable1D(const int marked[4], bool isEdge, ShapeTranTable& stt, ShpColTranTable& sc, ChoiceTable& ct){
+		for(int i0=0;i0<4;i0++) for(int i1=0;i1<70;i1++) table[i0][i1]=0;
+
+		FullPosition q; // default-constructed FullPosition is the solved position
+		int s0raw = stt.getShape(q.getShape(), q.getParityOdd());
+		int s0 = cubeRaw2Local(s0raw);
+		if (s0 < 0) return; // solved position is always cubeshape; defensive only
+		int c0 = markedColourIdx(q.pos, marked, isEdge, ct);
+		if (c0 < 0) return; // marked[] must be a valid 4-of-8 concrete set
+
+		if (metric == TURN_METRIC || metric == ANGLE_METRIC) {
+			table[s0][c0] = 1;
+		} else {
+			setAll(s0raw, s0, c0, 1, stt, sc);
+		}
+
+		char l=1;
+		int n=1;
+		int last_nonzero=-1;
+		do{
+			throwIfStopped();
+			n=0;
+			if (metric == TURN_METRIC) {
+				for(int i0=0;i0<4;i0++){
+					int rawI0 = CUBE_LOCAL2RAW[i0];
+					for(int i1=0;i1<70;i1++){
+						if( table[i0][i1]==l ){
+							for(int m=0;m<3;m++){
+								int rawJ0=rawI0, j1=i1;
+								int w=0;
+								do{
+									j1=sc.tranTable[rawJ0][j1][m];
+									rawJ0=stt.tranTable[rawJ0][m];
+									int locJ0 = cubeRaw2Local(rawJ0);
+									if( locJ0<0 ) break; // leaves cubeshape -- no legal orbit here
+									if( table[locJ0][j1]==0 ){
+										table[locJ0][j1]=l+1;
+										n++;
+									}
+									w++;
+									if(w>12) throw std::runtime_error("Invalid dynamic pruning table turn cycle.");
+								}while(rawJ0!=rawI0 || j1!=i1);
+							}
+						}
+					}
+				}
+			}else if (metric == ANGLE_METRIC) {
+				for(int i0=0;i0<4;i0++){
+					int rawI0 = CUBE_LOCAL2RAW[i0];
+					for(int i1=0;i1<70;i1++){
+						if( table[i0][i1]==l ){
+							for(int m=0;m<3;m++){
+								int rawJ0=rawI0, j1=i1;
+								int w=0, newcnt=0;
+								do{
+									if(m==0) w+=stt.getTopTurn(rawJ0);
+									else if(m==1) w+=stt.getBotTurn(rawJ0);
+									else w++;
+									j1=sc.tranTable[rawJ0][j1][m];
+									rawJ0=stt.tranTable[rawJ0][m];
+									int locJ0 = cubeRaw2Local(rawJ0);
+									if( locJ0<0 ) break;
+									if (m==2) newcnt = l+1;
+									else newcnt = l + (w>6 ? 12-w : w);
+									if( table[locJ0][j1]==0 || table[locJ0][j1] > newcnt ){
+										table[locJ0][j1]=newcnt;
+										n++;
+									}
+									if(w>12) throw std::runtime_error("Invalid dynamic pruning table angle cycle.");
+								}while(rawJ0!=rawI0 || j1!=i1);
+							}
+						}
+					}
+				}
+			}else{ // SLICE_METRIC
+				for(int i0=0;i0<4;i0++){
+					int rawI0 = CUBE_LOCAL2RAW[i0];
+					for(int i1=0;i1<70;i1++){
+						if( table[i0][i1]==l ){
+							int rawSliceTarget = stt.tranTable[rawI0][2];
+							int localSliceTarget = cubeRaw2Local(rawSliceTarget);
+							if( localSliceTarget>=0 ){
+								int j1 = sc.tranTable[rawI0][i1][2];
+								if( table[localSliceTarget][j1]==0 ){
+									n += setAll(rawSliceTarget, localSliceTarget, j1, l+1, stt, sc);
+								}
+							}
+						}
+					}
+				}
+			}
+			l++;
+			if(n!=0) last_nonzero=l;
+		}while(l - last_nonzero < 10);
+
+		valid = true;
+	}
+
+private:
+	// mirrors CubePrunTable::setAll, single-axis. Slice-metric only.
+	int setAll(int rawI0, int /*locI0*/, int i1, char l, ShapeTranTable& stt, ShpColTranTable& sc){
+		int n=0;
+		int rawJ0=rawI0, j1=i1;
+		do{
+			int rawK0=rawJ0, k1=j1;
+			do{
+				int locK0 = cubeRaw2Local(rawK0);
+				if( table[locK0][k1]==0 ){
+					table[locK0][k1]=l;
+					n++;
+				}
+				k1=sc.tranTable[rawK0][k1][0];
+				rawK0=stt.tranTable[rawK0][0];
+			}while(rawK0!=rawJ0 || k1!=j1);
+			j1=sc.tranTable[rawJ0][j1][1];
+			rawJ0=stt.tranTable[rawJ0][1];
+		}while(rawJ0!=rawI0 || j1!=i1);
+		return n;
+	}
+};
+
+// Enumerate every 4-element combination of `items` (capped at MAX_COMBOS
+// to bound build time when a great many pieces of one type are known --
+// C(8,4)=70 is the theoretical ceiling anyway, so this is a generous cap
+// rather than one expected to bite in practice).
+static inline std::vector<std::array<int,4>> chooseFour(const std::vector<int>& items){
+	std::vector<std::array<int,4>> out;
+	const size_t MAX_COMBOS = 70;
+	int n = (int)items.size();
+	for(int a=0; a<n && out.size()<MAX_COMBOS; a++)
+	for(int b=a+1; b<n && out.size()<MAX_COMBOS; b++)
+	for(int c=b+1; c<n && out.size()<MAX_COMBOS; c++)
+	for(int d=c+1; d<n && out.size()<MAX_COMBOS; d++)
+		out.push_back({items[a], items[b], items[c], items[d]});
+	return out;
+}
+
 //pruning table for combination of shape,edgecolouring,cornercolouring.
 class PrunTable {
 public:
@@ -2487,6 +2684,63 @@ class PartialPositionSolver : public PositionSolver {
 public:
 	PartialPositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable* pr10, PrunTable* pr20, CubePrunTable* cpr10, CubePrunTable* cpr20 )
 	    : PositionSolver(stt0, scte0, sctc0, pr10, pr20, cpr10, cpr20) {}
+
+	// Dynamic per-query pruning tables (see DynCubePrunTable1D). Built once
+	// per solve() call from whichever pieces are concretely known in the
+	// input -- when more than 4 pieces of one type are known, one table per
+	// 4-subset (capped) -- and tracked through doMove() exactly like c0/e0.
+	// Only consulted in -c (keepCubeShape) mode, matching where the fixed
+	// cpr1/cpr2 tables apply; see prunedOut().
+	static const size_t MAX_DYN_COMBOS = 16;
+	std::vector<DynCubePrunTable1D> dynCornerTables;
+	std::vector<DynCubePrunTable1D> dynEdgeTables;
+	std::vector<std::array<int,4>> dynCornerMarked;
+	std::vector<std::array<int,4>> dynEdgeMarked;
+	std::vector<int> dynCornerIdx;
+	std::vector<int> dynEdgeIdx;
+
+	void buildDynamicTables(const int pos[24]){
+		dynCornerTables.clear(); dynCornerMarked.clear();
+		dynEdgeTables.clear();   dynEdgeMarked.clear();
+
+		std::vector<int> knownCorners, knownEdges;
+		for(int i=0;i<24;i++){
+			int v=pos[i];
+			if(v>=0 && v<8){ knownCorners.push_back(v); i++; } // corners occupy 2 slots
+			else if(v>=8 && v<16) knownEdges.push_back(v);
+		}
+		if((int)knownCorners.size()>=4){
+			auto combos = chooseFour(knownCorners);
+			if(combos.size()>MAX_DYN_COMBOS) combos.resize(MAX_DYN_COMBOS);
+			for(auto& combo : combos){
+				int m4[4]={combo[0],combo[1],combo[2],combo[3]};
+				dynCornerTables.emplace_back(m4, false, stt, sctc, sctc.ct);
+				dynCornerMarked.push_back(combo);
+			}
+		}
+		if((int)knownEdges.size()>=4){
+			auto combos = chooseFour(knownEdges);
+			if(combos.size()>MAX_DYN_COMBOS) combos.resize(MAX_DYN_COMBOS);
+			for(auto& combo : combos){
+				int m4[4]={combo[0],combo[1],combo[2],combo[3]};
+				dynEdgeTables.emplace_back(m4, true, stt, scte, scte.ct);
+				dynEdgeMarked.push_back(combo);
+			}
+		}
+		dynCornerIdx.assign(dynCornerTables.size(), -1);
+		dynEdgeIdx.assign(dynEdgeTables.size(), -1);
+	}
+	// Recompute each dynamic table's live colour index from a (possibly
+	// preadf-rotated) position. Cheap -- O(combos * 24) -- safe to call any
+	// time set() runs, including before buildDynamicTables() has ever been
+	// called (loops over empty vectors).
+	void refreshDynIdx(const int pos[24]){
+		for(size_t i=0;i<dynCornerTables.size();i++)
+			dynCornerIdx[i] = markedColourIdx(pos, dynCornerMarked[i].data(), false, sctc.ct);
+		for(size_t i=0;i<dynEdgeTables.size();i++)
+			dynEdgeIdx[i] = markedColourIdx(pos, dynEdgeMarked[i].data(), true, scte.ct);
+	}
+
 	bool checkKeepCubeShape() override {
 		return isCubeShape(shp) || isCubeShape(shpx);
 	}
@@ -2499,6 +2753,7 @@ public:
 		PositionSolver::set(p, findAll0, ignoreTrans0);
 		shpx = stt.getShape(p.getShape(),!p.getParityOdd());
 		shpx2 = stt.tranTable[shpx][3];
+		refreshDynIdx(p.pos);
 	};
 	inline int doMove(int m) override {
 		const int mirrmv[3]={1,0,2};
