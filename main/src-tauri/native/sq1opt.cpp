@@ -2773,6 +2773,12 @@ public:
 		if (c1>-1) c1 = sctc.tranTable[shp][c1][m];
 		if (e0>-1) e0 = scte.tranTable[shp][e0][m];
 		if (e1>-1) e1 = scte.tranTable[shp][e1][m];
+		// maintain dynamic single-axis colour indices (same transition tables,
+		// same primary-track shape, but only one of corner/edge axis each)
+		for (size_t i=0; i<dynCornerIdx.size(); i++)
+			if (dynCornerIdx[i]>-1) dynCornerIdx[i] = sctc.tranTable[shp][dynCornerIdx[i]][m];
+		for (size_t i=0; i<dynEdgeIdx.size(); i++)
+			if (dynEdgeIdx[i]>-1) dynEdgeIdx[i] = scte.tranTable[shp][dynEdgeIdx[i]][m];
 		shp = stt.tranTable[shp][m];
 		shpx = stt.tranTable[shpx][m];
 
@@ -2805,6 +2811,12 @@ public:
 
 		FullPosition fpOrig = fp;
 
+		// Build cubeshape-restricted dynamic pruning tables once from the
+		// original position (which pieces are known doesn't change with
+		// preadf rotations).  refreshDynIdx() inside set() recomputes the
+		// live colour index for each preadf candidate.
+		if (keepCubeShape) buildDynamicTables(fpOrig.pos);
+
 		// Snapshot the full per-preadf start state.  PartialPositionSolver::doMove
 		// mutates fp and the extra shapes during search, and isSolved() reads fp, so
 		// everything must be restored before each search.  All candidates share the
@@ -2812,13 +2824,15 @@ public:
 		struct PreadfState {
 			FullPosition fp;
 			int e0,e1,e2,c0,c1,c2,shp,shp2,shpx,shpx2,middle,preadf;
+			std::vector<int> dynCornerIdx;
+			std::vector<int> dynEdgeIdx;
 		};
 		std::vector<PreadfState> states;
 		for (int k : preadfs) {
 			fp = fpOrig;
 			if (k != 0) fp.doBot(k);
 			set(fp, findAll, ignoreTrans);
-			states.push_back({fp, e0,e1,e2,c0,c1,c2,shp,shp2,shpx,shpx2,middle,k});
+			states.push_back({fp, e0,e1,e2,c0,c1,c2,shp,shp2,shpx,shpx2,middle,k, dynCornerIdx, dynEdgeIdx});
 		}
 		const int sharedMiddle = states[0].middle;
 
@@ -2827,6 +2841,7 @@ public:
 			e0=st.e0; e1=st.e1; e2=st.e2; c0=st.c0; c1=st.c1; c2=st.c2;
 			shp=st.shp; shp2=st.shp2; shpx=st.shpx; shpx2=st.shpx2;
 			middle=st.middle; m_preadfBot=st.preadf;
+			dynCornerIdx=st.dynCornerIdx; dynEdgeIdx=st.dynEdgeIdx;
 			moveLen=0; for(int i=0;i<6;i++) lastTurns[i]=0;
 			m_slicesDone=0; m_internalBad=0;
 		};
@@ -2918,10 +2933,17 @@ public:
 			// -c mode: dedicated cubeshape-restricted tables only. Unlike the
 			// full-position case, checkKeepCubeShape() here only requires
 			// EITHER shp or shpx to be cubeshape-legal, so one of loc/locx
-			// (or loc2/locx2) can legitimately be -1. Treat an untracked
-			// (-1) side as "does not exceed" -- safe/conservative, since it
-			// just means we can't prune off that side alone, same as the
-			// general table's AND-of-both-tracks logic would require anyway.
+			// (or loc2/locx2) can legitimately be -1.
+			//
+			// Pruning logic when one track leaves cubeshape:
+			//   - Both loc>=0 and locx>=0: both parities are cubeshape-legal;
+			//     we don't know which is the actual parity, so prune only if
+			//     BOTH tracks say "too deep" (AND).
+			//   - Exactly one of loc/locx >= 0: the other parity is impossible
+			//     (it left cubeshape and can't return), so the remaining
+			//     cubeshape track IS the actual parity.  Prune if THAT track
+			//     alone says "too deep".
+			//   - Neither >= 0: can't happen (checkKeepCubeShape would reject).
 			int loc   = cubeRaw2Local(shp);
 			int locx  = cubeRaw2Local(shpx);
 			int loc2  = cubeRaw2Local(shp2);
@@ -2930,16 +2952,41 @@ public:
 				bool a = (loc>=0)  && cpr1->table[loc ][e0][c0]>l+1;
 				bool b = (locx>=0) && cpr1->table[locx][e0][c0]>l+1;
 				if( a && b ) return true;
+				// one track left cubeshape → the other IS the actual parity
+				if( a && locx<0 ) return true;
+				if( b && loc<0  ) return true;
 			}
 			if (e1>-1 && c1>-1) {
 				bool a = (loc>=0)  && cpr2->table[loc ][e1][c1]>l+1;
 				bool b = (locx>=0) && cpr2->table[locx][e1][c1]>l+1;
 				if( a && b ) return true;
+				if( a && locx<0 ) return true;
+				if( b && loc<0  ) return true;
 			}
 			if (e2>-1 && c2>-1) {
 				bool a = (loc2>=0)  && cpr2->table[loc2 ][e2][c2]>l+1;
 				bool b = (locx2>=0) && cpr2->table[locx2][e2][c2]>l+1;
 				if( a && b ) return true;
+				if( a && locx2<0 ) return true;
+				if( b && loc2<0  ) return true;
+			}
+			// Dynamic single-axis cubeshape tables: each covers an arbitrary
+			// 4-piece subset not necessarily present in cpr1/cpr2.
+			for (size_t i=0; i<dynCornerTables.size(); i++) {
+				if (dynCornerIdx[i]<0) continue;
+				bool a = (loc>=0)  && dynCornerTables[i].table[loc ][dynCornerIdx[i]]>l+1;
+				bool b = (locx>=0) && dynCornerTables[i].table[locx][dynCornerIdx[i]]>l+1;
+				if( a && b ) return true;
+				if( a && locx<0 ) return true;
+				if( b && loc<0  ) return true;
+			}
+			for (size_t i=0; i<dynEdgeTables.size(); i++) {
+				if (dynEdgeIdx[i]<0) continue;
+				bool a = (loc>=0)  && dynEdgeTables[i].table[loc ][dynEdgeIdx[i]]>l+1;
+				bool b = (locx>=0) && dynEdgeTables[i].table[locx][dynEdgeIdx[i]]>l+1;
+				if( a && b ) return true;
+				if( a && locx<0 ) return true;
+				if( b && loc<0  ) return true;
 			}
 			return false;
 		}
