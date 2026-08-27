@@ -14,6 +14,13 @@ const localEmsdk = resolve(homedir(), ".local/share/emsdk");
 const localEmscripten = resolve(localEmsdk, "upstream/emscripten");
 const localEmsdkNode = resolve(localEmsdk, "node/22.16.0_64bit/bin/node");
 
+// Recompile the WASM only when --recompile is passed; otherwise just build the
+// frontend against the existing wasm/ artifacts. `node build.mjs` => fast
+// frontend-only build, `node build.mjs --recompile` => also rebuild wasm.
+const recompileWasm = process.argv.includes("--recompile");
+// Generate icons only when --icon is passed; otherwise skip (already exist).
+const buildIcon = process.argv.includes("--icon");
+
 if (existsSync(resolve(localEmscripten, "emcc"))) {
   process.env.EMSDK ??= localEmsdk;
   if (existsSync(localEmsdkNode)) process.env.EMSDK_NODE ??= localEmsdkNode;
@@ -44,35 +51,43 @@ function requireTool(command, installHint) {
   }
 }
 
-requireTool("em++", "Install and activate Emscripten, then rerun: node build.mjs");
+if (recompileWasm) requireTool("em++", "Install and activate Emscripten, then rerun: node build.mjs --recompile");
 
-const iconScript = resolve(root, "icon.sh");
-if (existsSync(iconScript)) {
-  run("bash", [iconScript, "--web"]);
+if (buildIcon) {
+  const iconScript = resolve(root, "icon.sh");
+  if (existsSync(iconScript)) {
+    run("bash", [iconScript, "--web"]);
+  }
+} else {
+  console.log("Skipping icon generation (use --icon to regenerate).");
 }
 
-mkdirSync(wasmOut, { recursive: true });
+if (recompileWasm) {
+  mkdirSync(wasmOut, { recursive: true });
 
-run("em++", [
-  "src-tauri/native/sq1opt.cpp",
-  "src-tauri/native/sq1-logic.cpp",
-  "src-tauri/native/web_bridge.cpp",
-  "-Isrc-tauri/native",
-  "-std=c++17",
-  "-O3",
-  "-DSQ1OPT_NO_QT",
-  "-sMODULARIZE=1",
-  "-sEXPORT_ES6=1",
-  "-sENVIRONMENT=worker",
-  "-sINVOKE_RUN=0",
-  "-sEXIT_RUNTIME=0",
-  "-sALLOW_MEMORY_GROWTH=1",
-  "-sINITIAL_MEMORY=268435456",
-  "-sEXPORTED_FUNCTIONS=['_main','_sq1opt_web_set_table_directory','_sq1opt_web_request_stop','_sq1_web_unkarnify_alloc','_sq1_web_karnify_alloc','_sq1_web_rate_algorithm_json_alloc','_sq1_web_two_gen_status_json_alloc','_sq1_web_free_string','_sq1_web_set_rating_weights','_sq1_web_set_move_value','_sq1_web_reset_rating_config','_sq1_web_batch_init','_sq1_web_batch_solve','_sq1_web_batch_solve_multi','_sq1_web_batch_destroy','_malloc','_free']",
-  "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap','UTF8ToString','FS','HEAP32','HEAPU8']",
-  "-o",
-  resolve(wasmOut, "sq1opt.js"),
-], { cwd: main });
+  run("em++", [
+    "src-tauri/native/sq1opt.cpp",
+    "src-tauri/native/sq1-logic.cpp",
+    "src-tauri/native/web_bridge.cpp",
+    "-Isrc-tauri/native",
+    "-std=c++17",
+    "-O3",
+    "-DSQ1OPT_NO_QT",
+    "-sMODULARIZE=1",
+    "-sEXPORT_ES6=1",
+    "-sENVIRONMENT=worker",
+    "-sINVOKE_RUN=0",
+    "-sEXIT_RUNTIME=0",
+    "-sALLOW_MEMORY_GROWTH=1",
+    "-sINITIAL_MEMORY=268435456",
+    "-sEXPORTED_FUNCTIONS=['_main','_sq1opt_web_set_table_directory','_sq1opt_web_request_stop','_sq1_web_unkarnify_alloc','_sq1_web_karnify_alloc','_sq1_web_rate_algorithm_json_alloc','_sq1_web_two_gen_status_json_alloc','_sq1_web_free_string','_sq1_web_set_rating_weights','_sq1_web_set_move_value','_sq1_web_reset_rating_config','_sq1_web_batch_init','_sq1_web_batch_solve','_sq1_web_batch_solve_multi','_sq1_web_batch_destroy','_malloc','_free']",
+    "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap','UTF8ToString','FS','HEAP32','HEAPU8']",
+    "-o",
+    resolve(wasmOut, "sq1opt.js"),
+  ], { cwd: main });
+} else {
+  console.log("Skipping WASM rebuild (frontend only). Use: node build.mjs --recompile");
+}
 
 run("npx", [
   "vite",

@@ -128,11 +128,12 @@ async function loadModule(): Promise<EmscriptenModule> {
           emit({ id: activeSolveId, type: "line", line });
         }
       },
-      printErr: (line: string) => {
-        if (activeSolveId !== undefined) {
-          emit({ id: activeSolveId, type: "line", line });
-        }
-      },
+      // stderr (printErr) is intentionally NOT forwarded as solution lines:
+      // real solutions are always written to stdout, whereas C++ debug/status
+      // traces go to stderr — forwarding those would corrupt solution parsing
+      // (e.g. a line like "candidate[0] SOLVED at depth 4" contains brackets,
+      // so a consumer looking for "[counts]" would misparse it).
+      printErr: () => undefined,
       locateFile: (file: string) => new URL(`../wasm/${file}`, self.location.href).href,
     });
     try {

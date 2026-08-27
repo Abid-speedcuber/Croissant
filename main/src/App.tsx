@@ -2059,6 +2059,12 @@ export default function App() {
       }
     } finally {
       try { await native.core.invoke("batch_destroy"); } catch { /* ignore */ }
+      // Always clear the running flags, including when the batch bails early
+      // (e.g. a worker terminate on stop) — otherwise the main "running" state
+      // stays true and the whole UI remains disabled with no way out.
+      batchRunningRef.current = false;
+      setBatchRunning(false);
+      setRunningState(false);
     }
     if (runId !== solveRunId.current) return;
     flushSolutionState();
@@ -2068,8 +2074,6 @@ export default function App() {
     const statusMsg = `Done: ${count} solved, ${errorCount} errors, ${lines.length} total (${elapsed}s)`;
     setStatusLines([statusMsg]);
     setBatchResults([...batchResultsRef.current]);
-    batchRunningRef.current = false;
-    setBatchRunning(false);
   };
   const batchCurrentInputRef = useRef<string | null>(null);
   const batchResultsRef = useRef<{ input: string; solution: string; slices: number; moves: number; angle: number }[]>([]);
