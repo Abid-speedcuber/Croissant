@@ -141,3 +141,73 @@ export function generateRemapCandidates(given: string, target: string, debug?: b
 
   return allCandidates;
 }
+
+// ============================================================================
+// Rotation-class grouping (slice metric).
+//
+// Two inputs that differ only by free U/D turns solve in the same number of
+// slices (top and bottom turns cost nothing in slice metric).  So a batch of
+// inputs can be grouped by a canonical "rotation class"; solving one member
+// yields the slice count for the whole group.
+//
+// The canonical form depends on whether we are cube-shape restricted (-c):
+//   - cubeshape: the input is laid out 8-char top layer + 8-char bottom layer,
+//     each layer an exact rotation of the other's.  No extension needed --
+//     rotate the first 8 and last 8 characters independently.
+//   - non-cubeshape (all 7356 shapes): extend each 8-char layer to a 12-char
+//     string (doubling every corner piece) so that a U/D turn becomes a whole
+//     cyclic shift of one half, then rotate each 12-char half independently.
+// In both cases the middle layer is part of the key (grouping is invalid
+// across different middle layers), read from the optional 17th char.
+// ============================================================================
+
+// Letters A-H are corners (an extended corner doubles to two chars); digits
+// 1-8 are edges (one char).  Placeholder letters U-W are corners, X-Z edges.
+function isCornerByIdentity(p: string): boolean {
+  return (p >= "A" && p <= "H") || p === "U" || p === "V" || p === "W";
+}
+
+function extendLayer(layer8: string): string {
+  let out = "";
+  for (const ch of layer8) out += isCornerByIdentity(ch) ? ch + ch : ch;
+  return out;
+}
+
+// Lexicographically smallest cyclic rotation of `s` over all 0..len-1 shifts.
+function minRotation(s: string): string {
+  let best = s;
+  const n = s.length;
+  for (let k = 1; k < n; k++) {
+    const rotated = s.slice(k) + s.slice(0, k);
+    if (rotated < best) best = rotated;
+  }
+  return best;
+}
+
+export function computeRotationClassKey(pos: string, cubeshape: boolean): string {
+  const s = pos.toUpperCase();
+
+  let middle = 0;
+  let body = s;
+  if (s.length === 17) {
+    const last = s[16];
+    if (last === "-") middle = 1;
+    else if (last === "/") middle = -1;
+    body = s.slice(0, 16);
+  }
+
+  const top8 = body.slice(0, 8);
+  const bot8 = body.slice(8, 16);
+
+  let canonicalTop: string;
+  let canonicalBot: string;
+  if (cubeshape) {
+    canonicalTop = minRotation(top8);
+    canonicalBot = minRotation(bot8);
+  } else {
+    canonicalTop = minRotation(extendLayer(top8));
+    canonicalBot = minRotation(extendLayer(bot8));
+  }
+
+  return `${middle}|${canonicalTop}|${canonicalBot}`;
+}

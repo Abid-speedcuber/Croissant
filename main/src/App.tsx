@@ -13,7 +13,7 @@ import {
 } from "./utils";
 import { Modal } from './components/Modal';
 import { Icon } from './components/Icon';
-import { generateRemapCandidates } from './utils/remap';
+import { generateRemapCandidates, computeRotationClassKey } from './utils/remap';
 import { DiskSpaceModal } from './components/DiskSpaceModal';
 import { WeightsModal } from './components/WeightsModal';
 import { t, tList, LangCode, getLang, setLang } from './i18n';
@@ -2006,22 +2006,39 @@ export default function App() {
       captureSolution = null;
       return sol;
     };
-    const storeResult = (input: string, sol: { rawAlg: string; slices: number; moves: number; angle: number }) => {
+    const storeResult = (input: string, sol: { rawAlg: string; slices: number; moves: number; angle: number }, frequency = 1) => {
       const countVal = sol[metricKey] || sol.slices;
-      batchResultsRef.current.push({ input, solution: sol.rawAlg, slices: sol.slices, moves: sol.moves, angle: sol.angle });
+      batchResultsRef.current.push({ input, solution: sol.rawAlg, slices: sol.slices, moves: sol.moves, angle: sol.angle, frequency });
       batchIndex++;
-      const output = `[${batchIndex}] ${input} -> ${sol.rawAlg} [${countVal} ${metricLabel}]`;
+      const output = `[${batchIndex}] ${input} -> ${sol.rawAlg} [${countVal} ${metricLabel}]${frequency > 1 ? ` (x${frequency})` : ""}`;
       outputLinesRef.current = [...outputLinesRef.current, { raw: output, karn: output, isSolution: false }].slice(-10000);
       scheduleSolutionFlush();
     };
     batchCurrentInputRef.current = null;
+    // Rotation-class grouping (slice metric only): inputs that differ only by
+    // free U/D turns solve in the same number of slices, so we can solve one
+    // representative per group and weight the stats by group size.  Only
+    // applies in slice metric where top/bottom turns are free.
+    const enableGrouping = metric === "es";
+    let groups: { reps: string[]; key: string }[] = lines.map((l) => ({ reps: [l], key: "" }));
+    if (enableGrouping) {
+      const byKey = new Map<string, string[]>();
+      for (const l of lines) {
+        const key = computeRotationClassKey(l, cubeShape);
+        if (!byKey.has(key)) byKey.set(key, []);
+        byKey.get(key)!.push(l);
+      }
+      groups = [...byKey.entries()].map(([key, reps]) => ({ reps, key }));
+    }
     try {
       setStatusLines(["Initializing solver..."]);
       await native.core.invoke("batch_init", { flags });
       setStatusLines([]);
-      for (let i = 0; i < lines.length; i++) {
+      for (let gi = 0; gi < groups.length; gi++) {
         if (batchStopRef.current) break;
-        const given = lines[i];
+        const { reps, key } = groups[gi];
+        const frequency = reps.length;
+        const given = reps[0];
         if (targets.length) {
           const candidates: string[] = [];
           const seen = new Set<string>();
@@ -2030,7 +2047,7 @@ export default function App() {
             addOutputLine({ raw: line, karn: line, isSolution: false });
             void native.core.invoke("debug_log", { line }).catch(() => undefined);
           };
-          dbg(`[SI ${i + 1}] Given: "${given}"`);
+          dbg(`[GI ${gi + 1}/${groups.length}] Given: "${given}"${frequency > 1 ? ` (group x${frequency}, key=${key})` : ""}`);
           for (let ti = 0; ti < targets.length; ti++) {
             const t = targets[ti];
             const perTarget = generateRemapCandidates(given, t, false);
@@ -2046,7 +2063,7 @@ export default function App() {
           } catch { /* skip */ }
           const sol = await flushCapture();
           dbg(`  Solved: "${given}"${sol ? " -> " + sol.rawAlg + " (" + (sol[metricKey] || sol.slices) + " " + metricLabel + ")" : " -> (NO solution)"}`);
-          if (sol) storeResult(given, sol);
+          if (sol) storeResult(given, sol, frequency);
         } else {
           captureSolution = null;
           batchCurrentInputRef.current = given;
@@ -2054,7 +2071,7 @@ export default function App() {
             await native.core.invoke("batch_solve_position", { position: given, onLine });
           } catch { /* skip */ }
           const sol = await flushCapture();
-          if (sol) storeResult(given, sol);
+          if (sol) storeResult(given, sol, frequency);
         }
       }
     } finally {
@@ -2068,15 +2085,16 @@ export default function App() {
     }
     if (runId !== solveRunId.current) return;
     flushSolutionState();
-    const count = batchResultsRef.current.length;
-    const errorCount = lines.length - count;
+    const solvedCount = batchResultsRef.current.reduce((sum, r) => sum + r.frequency, 0);
+    const errorCount = lines.length - solvedCount;
+    const groupCount = batchResultsRef.current.length;
     const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
-    const statusMsg = `Done: ${count} solved, ${errorCount} errors, ${lines.length} total (${elapsed}s)`;
+    const statusMsg = `Done: ${solvedCount} solved, ${errorCount} errors, ${lines.length} total (${groupCount} groups, ${elapsed}s)`;
     setStatusLines([statusMsg]);
     setBatchResults([...batchResultsRef.current]);
   };
   const batchCurrentInputRef = useRef<string | null>(null);
-  const batchResultsRef = useRef<{ input: string; solution: string; slices: number; moves: number; angle: number }[]>([]);
+  const batchResultsRef = useRef<{ input: string; solution: string; slices: number; moves: number; angle: number; frequency: number }[]>([]);
   const batchRunningRef = useRef(false);
   const generateBatchStats = () => {
     const results = batchResultsRef.current;
@@ -2086,20 +2104,23 @@ export default function App() {
     const maxVal = Math.max(...results.map((r) => r[metricKey]));
     const counts: number[] = [];
     for (let s = 0; s <= maxVal; s++) counts.push(0);
+    let solvedCount = 0;
     for (const r of results) {
       const s = r[metricKey];
-      if (s >= 0 && s <= maxVal) counts[s]++;
+      if (s >= 0 && s <= maxVal) counts[s] += r.frequency;
+      solvedCount += r.frequency;
     }
     const lines: string[] = [];
     for (let s = 0; s <= maxVal; s++) {
       lines.push(`${s} ${metricLabel} solutions: ${counts[s]}`);
     }
-    const total = results.reduce((sum, r) => sum + r[metricKey], 0);
-    if (results.length) {
-      lines.push(`average ${metricLabel} count: ${(total / results.length).toFixed(2)}`);
+    const total = results.reduce((sum, r) => sum + r[metricKey] * r.frequency, 0);
+    if (solvedCount) {
+      lines.push(`average ${metricLabel} count: ${(total / solvedCount).toFixed(2)}`);
     }
-    const errorCount = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).length - results.length;
+    const errorCount = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).length - solvedCount;
     lines.push(`errors: ${errorCount}`);
+    lines.push(`groups: ${results.length} (${solvedCount} inputs)`);
     const statsText = lines.join("\n");
     setBatchStatsText(statsText);
   };
