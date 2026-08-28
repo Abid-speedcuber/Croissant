@@ -17,6 +17,8 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <unordered_map>
+#include <map>
 
 #define NUMHALVES 13
 #define NUMLAYERS 158
@@ -1780,6 +1782,78 @@ private:
 	}
 };
 
+// LRU cache of built DynCubePrunTable1D tables, shared across every partial-
+// candidate solve in a batch session.  A table depends only on its marked
+// 4-piece set (+ whether it is corners or edges) and the fixed per-session
+// metric/tables, so identical combos across many candidates reuse one build
+// instead of re-running the BFS for every solve.
+class DynTableCache {
+public:
+	// Key uniquely identifies a table: the 4 marked pieces (sorted) + type.
+	// Metric is a session constant (set once by batchParseFlags), so it needn't
+	// be part of the key.
+	struct Key {
+		uint64_t a, b;   // packed piece ids (0..15) into two halves of a bitmask
+		bool isEdge;
+		bool operator==(const Key& o) const { return a==o.a && b==o.b && isEdge==o.isEdge; }
+		Key(const std::array<int,4>& m, bool edge): a(0), b(0), isEdge(edge){
+			for(int v : m){ uint64_t bit = (uint64_t)1 << (uint64_t)(v & 63); if(v<64) a|=bit; else b|=bit; }
+		}
+	};
+	struct KeyHash {
+		size_t operator()(const Key& k) const {
+			size_t h = std::hash<uint64_t>()(k.a);
+			h ^= std::hash<uint64_t>()(k.b) + 0x9e3779b9 + (h<<6) + (h>>2);
+			return h ^ (k.isEdge ? 0xabcd1234 : 0);
+		}
+	};
+
+	explicit DynTableCache(size_t capacity) : _cap(capacity>0?capacity:32) {}
+
+	// Returns a pointer to the built table for `marked`/`isEdge`, building and
+	// caching it on first use.  stt/sc/ct are only needed on a miss.  The
+	// returned pointer stays valid until the next insertion may evict it, so
+	// callers must consume it immediately (see buildDynamicTables).
+	const DynCubePrunTable1D* get(const std::array<int,4>& marked, bool isEdge,
+	                              ShapeTranTable& stt, ShpColTranTable& sc, ChoiceTable& ct){
+		Key key(marked, isEdge);
+		auto it = _map.find(key);
+		if (it != _map.end()){
+			// move to most-recently-used
+			_ring.erase(_ring.find(it->second));
+			int slot = it->second;
+			_ring[slot] = _clock++;
+			return &_vec[slot];
+		}
+		// build
+		int slot;
+		if (_vec.size() < _cap){
+			slot = (int)_vec.size();
+			_vec.emplace_back(marked.data(), isEdge, stt, sc, ct);
+		} else {
+			// evict least-recently-used
+			slot = _ring.begin()->first;
+			// drop the evicted slot's old key mapping
+			for (auto it = _map.begin(); it != _map.end(); ++it)
+				if (it->second == slot){ _map.erase(it); break; }
+			_ring.erase(_ring.begin());
+			_vec[slot] = DynCubePrunTable1D(marked.data(), isEdge, stt, sc, ct);
+		}
+		_map[key] = slot;
+		_ring[slot] = _clock++;
+		return &_vec[slot];
+	}
+
+	void clear(){ _vec.clear(); _map.clear(); _ring.clear(); _clock=0; _cap=_cap; }
+
+private:
+	size_t _cap;
+	uint64_t _clock = 0;
+	std::vector<DynCubePrunTable1D> _vec;
+	std::unordered_map<Key, int, KeyHash> _map;
+	std::map<int,uint64_t> _ring; // slot -> last used clock
+};
+
 // Enumerate every 4-element combination of `items` (capped at MAX_COMBOS
 // to bound build time when a great many pieces of one type are known --
 // C(8,4)=70 is the theoretical ceiling anyway, so this is a generous cap
@@ -2685,6 +2759,10 @@ public:
 	PartialPositionSolver( ShapeTranTable& stt0, ShpColTranTable& scte0, ShpColTranTable& sctc0, PrunTable* pr10, PrunTable* pr20, CubePrunTable* cpr10, CubePrunTable* cpr20 )
 	    : PositionSolver(stt0, scte0, sctc0, pr10, pr20, cpr10, cpr20) {}
 
+	// Optional shared cache for dynamic pruning tables (set by the batch
+	// solver so identical marked-sets across many candidates reuse one build).
+	DynTableCache* dynCache = nullptr;
+
 	// Dynamic per-query pruning tables (see DynCubePrunTable1D). Built once
 	// per solve() call from whichever pieces are concretely known in the
 	// input -- when more than 4 pieces of one type are known, one table per
@@ -2713,18 +2791,22 @@ public:
 			auto combos = chooseFour(knownCorners);
 			if(combos.size()>MAX_DYN_COMBOS) combos.resize(MAX_DYN_COMBOS);
 			for(auto& combo : combos){
-				int m4[4]={combo[0],combo[1],combo[2],combo[3]};
-				dynCornerTables.emplace_back(m4, false, stt, sctc, sctc.ct);
 				dynCornerMarked.push_back(combo);
+				if (dynCache)
+					dynCornerTables.emplace_back(*dynCache->get(combo, false, stt, sctc, sctc.ct));
+				else
+					dynCornerTables.emplace_back(combo.data(), false, stt, sctc, sctc.ct);
 			}
 		}
 		if((int)knownEdges.size()>=4){
 			auto combos = chooseFour(knownEdges);
 			if(combos.size()>MAX_DYN_COMBOS) combos.resize(MAX_DYN_COMBOS);
 			for(auto& combo : combos){
-				int m4[4]={combo[0],combo[1],combo[2],combo[3]};
-				dynEdgeTables.emplace_back(m4, true, stt, scte, scte.ct);
 				dynEdgeMarked.push_back(combo);
+				if (dynCache)
+					dynEdgeTables.emplace_back(*dynCache->get(combo, true, stt, scte, scte.ct));
+				else
+					dynEdgeTables.emplace_back(combo.data(), true, stt, scte, scte.ct);
 			}
 		}
 		dynCornerIdx.assign(dynCornerTables.size(), -1);
@@ -3388,6 +3470,9 @@ struct BatchState {
 	CubePrunTable* cpr2 = nullptr;
 	PositionSolver* ps = nullptr;
 	PartialPositionSolver* pps = nullptr;
+	// Session-wide LRU cache of dynamic partial pruning tables, reused across
+	// every partial-candidate solve and dropped when the batch ends.
+	DynTableCache* dynCache = nullptr;
 	bool keepCubeShape = false;
 	bool ignoreMid = false;
 	bool ignoreTrans = false;
@@ -3406,6 +3491,7 @@ struct BatchState {
 		// so we delete through the exact derived type to avoid UB.
 		delete pps; pps = nullptr;
 		delete ps; ps = nullptr;
+		delete dynCache; dynCache = nullptr;
 		delete pr1; pr1 = nullptr;
 		delete pr2; pr2 = nullptr;
 		delete cpr1; cpr1 = nullptr;
@@ -3520,6 +3606,12 @@ extern "C" int sq1_batch_init(int argc, char* argv[], const char* table_director
 
 	g_batch->ps = new PositionSolver(g_batch->st, g_batch->scte, g_batch->sctc, g_batch->pr1, g_batch->pr2, g_batch->cpr1, g_batch->cpr2);
 	g_batch->pps = new PartialPositionSolver(g_batch->st, g_batch->scte, g_batch->sctc, g_batch->pr1, g_batch->pr2, g_batch->cpr1, g_batch->cpr2);
+	// Cache dynamic pruning tables only in -c mode where they're used.  The
+	// table bodies only depend on the (session-fixed) metric and reference
+	// tables, so entries stay valid for the whole batch.
+	if (g_batch->keepCubeShape)
+		g_batch->dynCache = new DynTableCache(300);
+	g_batch->pps->dynCache = g_batch->dynCache;
 	g_batch->initialized = true;
 
 	if (verbosity >= 3) std::cout << "Batch: Tables ready." << std::endl;
