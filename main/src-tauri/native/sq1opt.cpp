@@ -3647,7 +3647,7 @@ extern "C" int sq1_batch_solve_multi(const char** candidates, int num_candidates
 	std::vector<bool> done(num_candidates, false);
 	bool didDebugHeader = false;
 
-	for (int depth = 1; depth <= maxTotal; depth++) {
+	for (int depth = 0; depth <= maxTotal; depth++) {
 		if (verbosity >= 2 && !didDebugHeader) {
 			std::cerr << "batch_multi: " << num_candidates << " candidate(s):" << std::endl;
 			for (int i = 0; i < num_candidates; i++)
