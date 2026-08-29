@@ -110,11 +110,11 @@ const side = [
 ];
 const colors = ["#333", "#fff", "#f00", "#00f", "#ff8600", "#0f0", "#888"];
 
-function OptionDropdown({ id, label, title, value, options, disabled, open, setOpen, onChange }: DropdownProps) {
+function OptionDropdown({ id, label, title, value, options, disabled, highlight, open, setOpen, onChange }: DropdownProps) {
   const current = options.find((option) => option.value === value)?.label ?? value;
   return (
     <label className="option-dropdown-label" title={title}>
-      {label}
+      {highlight && value !== "none" ? <span style={{ color: "white", fontWeight: "bold", WebkitTextStroke: "0.2px white" }}>{label}</span> : label}
       <div className="option-dropdown">
         <button
           type="button"
@@ -2638,9 +2638,9 @@ export default function App() {
       <h2>{t('options.heading')}</h2>
       <div className="select-grid">
         <OptionDropdown id="metric" label={t('options.metric')} title={tooltips.metric} value={metric} options={[{ value: "es", label: tList('options.metricValues')[0] }, { value: "move", label: tList('options.metricValues')[1] }, { value: "ea", label: tList('options.metricValues')[2] }]} disabled={running} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
-        <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={[{ value: "none", label: tList('options.twoGenValues')[0] }, { value: "p2g", label: tList('options.twoGenValues')[1] }, { value: "2g", label: tList('options.twoGenValues')[2] }]} disabled={running} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
-        <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={[{ value: "none", label: tList('options.lockValues')[0] }, { value: "nb", label: tList('options.lockValues')[1] }, { value: "nu", label: tList('options.lockValues')[2] }, { value: "nd", label: tList('options.lockValues')[3] }]} disabled={running} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
-        <OptionDropdown id="normalize" label={t('options.normalizeABF')} title={tooltips.normalize} value={normalize} options={[{ value: "none", label: tList('options.normalizeValues')[0] }, { value: "both", label: tList('options.normalizeValues')[1] }, { value: "pre", label: tList('options.normalizeValues')[2] }, { value: "post", label: tList('options.normalizeValues')[3] }]} disabled={running} open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
+        <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={[{ value: "none", label: tList('options.twoGenValues')[0] }, { value: "p2g", label: tList('options.twoGenValues')[1] }, { value: "2g", label: tList('options.twoGenValues')[2] }]} disabled={running} highlight open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
+        <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={[{ value: "none", label: tList('options.lockValues')[0] }, { value: "nb", label: tList('options.lockValues')[1] }, { value: "nu", label: tList('options.lockValues')[2] }, { value: "nd", label: tList('options.lockValues')[3] }]} disabled={running} highlight open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+        <OptionDropdown id="normalize" label={t('options.normalizeABF')} title={tooltips.normalize} value={normalize} options={[{ value: "none", label: tList('options.normalizeValues')[0] }, { value: "both", label: tList('options.normalizeValues')[1] }, { value: "pre", label: tList('options.normalizeValues')[2] }, { value: "post", label: tList('options.normalizeValues')[3] }]} disabled={running} highlight open={openDropdown === "normalize"} setOpen={setOpenDropdown} onChange={setNormalize} />
       </div>
       <div className="check-grid">
         <span className="generator-toggle">{t('options.output')} <span className="generator-toggle-value" title={tooltips.generator} onClick={() => !running && setGenerator((g) => !g)}>{generator ? t('options.outputValueScramble') : t('options.outputValueSolution')}</span></span>
@@ -3046,8 +3046,8 @@ export default function App() {
           <h2>Batch Options</h2>
           <div className="select-grid">
             <OptionDropdown id="metric" label={t('options.metric')} title={tooltips.metric} value={metric} options={[{ value: "es", label: tList('options.metricValues')[0] }, { value: "move", label: tList('options.metricValues')[1] }, { value: "ea", label: tList('options.metricValues')[2] }]} disabled={batchRunning} open={openDropdown === "metric"} setOpen={setOpenDropdown} onChange={setMetric} />
-            <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={[{ value: "none", label: tList('options.twoGenValues')[0] }, { value: "p2g", label: tList('options.twoGenValues')[1] }, { value: "2g", label: tList('options.twoGenValues')[2] }]} disabled={batchRunning} open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
-            <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={[{ value: "none", label: tList('options.lockValues')[0] }, { value: "nb", label: tList('options.lockValues')[1] }, { value: "nu", label: tList('options.lockValues')[2] }, { value: "nd", label: tList('options.lockValues')[3] }]} disabled={batchRunning} open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
+            <OptionDropdown id="two" label={t('options.twoGen')} title={tooltips.twoGen} value={two} options={[{ value: "none", label: tList('options.twoGenValues')[0] }, { value: "p2g", label: tList('options.twoGenValues')[1] }, { value: "2g", label: tList('options.twoGenValues')[2] }]} disabled={batchRunning} highlight open={openDropdown === "two"} setOpen={setOpenDropdown} onChange={setTwo} />
+            <OptionDropdown id="angle" label={t('options.lockLayer')} title={tooltips.angle} value={angle} options={[{ value: "none", label: tList('options.lockValues')[0] }, { value: "nb", label: tList('options.lockValues')[1] }, { value: "nu", label: tList('options.lockValues')[2] }, { value: "nd", label: tList('options.lockValues')[3] }]} disabled={batchRunning} highlight open={openDropdown === "angle"} setOpen={setOpenDropdown} onChange={setAngle} />
           </div>
           <div className="check-grid">
             <label title={tooltips.cubeshape}><input type="checkbox" checked={cubeShapeMemory} disabled={batchRunning} onChange={(e) => setCubeShapeMemory(e.target.checked)} /> {t('options.stayInCS')}</label>

@@ -63,6 +63,7 @@ export type DropdownProps = {
   value: string;
   options: DropdownOption[];
   disabled?: boolean;
+  highlight?: boolean;
   open: boolean;
   setOpen: (id: string | null) => void;
   onChange: (value: string) => void;
