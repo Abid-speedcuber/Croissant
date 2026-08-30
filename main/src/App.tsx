@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadSettings, saveSettings, loadFavorites, saveFavorites, writeOffloadedChunk, readOffloadedChunk, removeOffloadedChunk, clearOffloadedSolutions, isNativePlatform } from "./storage";
+import { loadSettings, saveSettings, loadFavorites, saveFavorites, writeOffloadedChunk, readOffloadedChunk, removeOffloadedChunk, clearOffloadedSolutions, isNativePlatform, writeBatchInputChunk, readBatchInputChunk, clearBatchInputChunks } from "./storage";
 import { clearTableBlobs } from "./tableStore";
 import { clearAllTables } from "./diskSpace";
 import {
@@ -28,6 +28,26 @@ function positionTooltip(event: React.MouseEvent<HTMLElement>) {
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000, 2000, 5000, 8000, 10000, 15000, 20000];
 const OFFLOAD_CHUNK = 5000;
+// Batch input stays editable inline (in the textarea) up to this many lines;
+// pasting more migrates it into storage ("Pasted N lines") so a million-row
+// paste never has to live in memory as one giant string.
+const BATCH_INLINE_MAX_LINES = 50000;
+const BATCH_INPUT_CHUNK_SIZE = 50000;
+const BATCH_PROGRESS_EVERY = 10;
+// Global rotation-class grouping partitions classes into hash buckets and
+// groups one bucket in RAM at a time; this caps that bucket's memory use at
+// roughly one input chunk's worth of lines.
+const BATCH_GROUP_BUCKET_LINES = BATCH_INPUT_CHUNK_SIZE;
+// FNV-1a (32-bit) over the rotation-class key string.  Deterministic on every
+// platform so the same key always lands in the same bucket.
+function fnv1a(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
 const LEGACY_METRIC: Record<string, string> = { Slice: "es", Move: "move", Angle: "ea", es: "es", move: "move", ea: "ea" };
 const LEGACY_TWO: Record<string, string> = { None: "none", "Pseudo 2 Gen": "p2g", "2 Gen": "2g", none: "none", p2g: "p2g", "2g": "2g" };
 const LEGACY_ANGLE: Record<string, string> = { None: "none", Both: "nb", Top: "nu", Bottom: "nd", none: "none", nb: "nb", nu: "nu", nd: "nd" };
@@ -645,12 +665,26 @@ export default function App() {
   const [researchMode, setResearchMode] = useState(false);
   const [batchInput, setBatchInput] = useState("");
   const [batchTarget, setBatchTarget] = useState("");
-  const [batchResults, setBatchResults] = useState<{ input: string; solution: string; slices: number }[]>([]);
+  const [batchStored, _setBatchStored] = useState(false);
+  const batchStoredRef = useRef(false);
+  const setBatchStored = (value: boolean) => { batchStoredRef.current = value; _setBatchStored(value); };
+  const [batchStoredLines, setBatchStoredLines] = useState(0);
+  const batchStoredLinesRef = useRef(0);
+  const setBatchStoredLinesState = (value: number) => { batchStoredLinesRef.current = value; setBatchStoredLines(value); };
+  const batchInputChunkCountRef = useRef(0);
+  const batchSolvedRef = useRef(0);
+  const [batchSolved, setBatchSolved] = useState(0);
+  const batchIndexRef = useRef(0);
+  const batchProgressFrameRef = useRef<number | undefined>(undefined);
+  const forceOffloadRef = useRef(false);
+  const [batchOffload, setBatchOffload] = useState(false);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchStatsText, setBatchStatsText] = useState<string | null>(null);
   const [batchDragOver, setBatchDragOver] = useState(false);
   const batchStopRef = useRef(false);
   const batchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const batchMetricKey: "moves" | "angle" | "slices" = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
+  const batchMetricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
   const [favoritesClosing, setFavoritesClosing] = useState(false);
   const [favoritesOpening, setFavoritesOpening] = useState(false);
   const favModalRef = useRef<HTMLDivElement>(null);
@@ -1078,7 +1112,7 @@ export default function App() {
     }, PAGE_SWITCHER_COOLDOWN_MS);
   };
   const goToPage = (next: number, edge: "top" | "bottom") => {
-    if (!filterActive && useLessRamRef.current && !isViewInRam(next, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && offloadActive() && !isViewInRam(next, totalCountRefs())) setIsRestoring(true);
     setPage(next);
     pageScrollEdgeRef.current = edge;
     if (running && next === totalPages - 1) {
@@ -1184,7 +1218,7 @@ export default function App() {
     setFollowTerminal(false);
     isSwitchingViewRef.current = true;
     restoreScrollRef.current = tableScrollPositionRef.current;
-    if (!filterActive && useLessRamRef.current && !isViewInRam(tablePageRef.current, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && offloadActive() && !isViewInRam(tablePageRef.current, totalCountRefs())) setIsRestoring(true);
     setPage(tablePageRef.current);
     setTableView(true);
   };
@@ -1200,7 +1234,7 @@ export default function App() {
     setFollowTerminal(false);
     isSwitchingViewRef.current = true;
     restoreScrollRef.current = terminalScrollPositionRef.current;
-    if (!filterActive && useLessRamRef.current && !isViewInRam(terminalPageRef.current, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && offloadActive() && !isViewInRam(terminalPageRef.current, totalCountRefs())) setIsRestoring(true);
     setPage(terminalPageRef.current);
     setTableView(false);
   };
@@ -1253,10 +1287,10 @@ export default function App() {
   }, [pageSize, showAll]);
   useEffect(() => {
     if (!settingsReady.current) return;
-    if (!filterActive && useLessRam && !isViewInRam(page, totalCountRefs())) setIsRestoring(true);
+    if (!filterActive && (useLessRam || batchOffload) && !isViewInRam(page, totalCountRefs())) setIsRestoring(true);
     void syncOffload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solutions, page, pageSize, useLessRam, showAll, running, filterActive]);
+  }, [solutions, page, pageSize, useLessRam, batchOffload, showAll, running, filterActive]);
   useEffect(() => {
     const onMouseDown = (event: MouseEvent) => {
       const pill = pageSwitcherRef.current;
@@ -1515,7 +1549,7 @@ export default function App() {
     const ramEnd = ramOffsetRef.current + solutionsRef.current.length;
     const pendingLen = pendingTailRef.current?.length ?? 0;
     const total = solutionsRef.current.length + offloadedTotalRef.current + pendingLen;
-    if (useLessRamRef.current && ramEnd < total) {
+    if ((useLessRamRef.current || forceOffloadRef.current) && ramEnd < total) {
       const tailStart = total - pendingLen;
       if (pendingLen && ramEnd === tailStart) {
         solutionsRef.current = [...solutionsRef.current, ...pendingTailRef.current!];
@@ -1538,6 +1572,10 @@ export default function App() {
     scheduleSolutionFlush();
   };
   const totalCountRefs = () => offloadedTotalRef.current + solutionsRef.current.length + (pendingTailRef.current?.length ?? 0);
+  // Disk offloading of solution pages kicks in when the user enables
+  // "useLessRam", or is forced on automatically while batch results exist so a
+  // million-row batch never has to keep every solution in memory.
+  const offloadActive = () => useLessRamRef.current || forceOffloadRef.current;
   const offloadRange = async (start: number, rows: Solution[]) => {
     if (!rows.length) return;
     for (let i = 0; i < rows.length; i += OFFLOAD_CHUNK) {
@@ -1637,10 +1675,15 @@ export default function App() {
     ramOffsetRef.current = 0;
     setOffloadedTotal(0);
     setSolutions([]);
+    forceOffloadRef.current = false;
+    setBatchOffload(false);
+    batchSolvedRef.current = 0;
+    setBatchSolved(0);
+    setBatchStatsText(null);
     void clearOffloadedSolutions();
   };
   const syncOffload = async () => {
-    if (!useLessRamRef.current) {
+    if (!offloadActive()) {
       if (offloadedTotalRef.current || (pendingTailRef.current?.length ?? 0)) {
         if (offloadBusyRef.current) { offloadPendingRef.current = true; return; }
         offloadBusyRef.current = true;
@@ -1863,6 +1906,11 @@ export default function App() {
     setFilterAppliedQuery("");
     setFilterSearching(false);
     setFilterInvalid(false);
+    forceOffloadRef.current = false;
+    setBatchOffload(false);
+    batchSolvedRef.current = 0;
+    setBatchSolved(0);
+    setBatchStatsText(null);
     if (useLessRamRef.current) void clearOffloadedSolutions();
     seenRaw.current.clear();
     seenDisplay.current.clear();
@@ -1953,20 +2001,97 @@ export default function App() {
       if (runId === solveRunId.current) { solveStopTimeRef.current = performance.now(); setRunningState(false); }
     }
   };
+  const batchLineCount = (text: string) => {
+    let count = 0;
+    let start = 0;
+    while (start <= text.length) {
+      const end = text.indexOf("\n", start);
+      const rawLine = end === -1 ? text.slice(start) : text.slice(start, end);
+      if (rawLine.trim().length > 0) count++;
+      if (end === -1) break;
+      start = end + 1;
+    }
+    return count;
+  };
+  const batchNonEmptyLines = (text: string) => text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  // Stores the given (trimmed, non-empty) lines as BATCH_INPUT_CHUNK_SIZE-line
+  // chunks in storage.  The whole batch input never lives in memory as a
+  // single string once it is big enough to be spooled.
+  const storeBatchLines = async (lines: string[]) => {
+    if (!lines.length) return;
+    for (let i = 0; i < lines.length; i += BATCH_INPUT_CHUNK_SIZE) {
+      await writeBatchInputChunk(batchInputChunkCountRef.current++, lines.slice(i, i + BATCH_INPUT_CHUNK_SIZE));
+    }
+  };
+  const appendBatchLines = async (text: string) => {
+    const newLines = batchNonEmptyLines(text);
+    if (!newLines.length) return;
+    if (batchStoredRef.current) {
+      await storeBatchLines(newLines);
+      setBatchStoredLinesState(batchStoredLinesRef.current + newLines.length);
+      return;
+    }
+    const existing = batchLineCount(batchInput);
+    if (existing + newLines.length <= BATCH_INLINE_MAX_LINES) {
+      setBatchInput((prev) => (prev ? prev + "\n" : "") + text);
+    } else {
+      // Too big for the editable textarea: spool everything to storage and
+      // show a "Pasted N lines" summary instead of rendering the text.
+      const all = [...batchNonEmptyLines(batchInput), ...newLines];
+      setBatchInput("");
+      setBatchStored(true);
+      await storeBatchLines(all);
+      setBatchStoredLinesState(all.length);
+    }
+  };
+  const clearBatchInput = async () => {
+    setBatchInput("");
+    setBatchStored(false);
+    setBatchStoredLinesState(0);
+    batchInputChunkCountRef.current = 0;
+    await clearBatchInputChunks();
+  };
+  // Async iteration over every solution row that exists right now (offloaded
+  // chunks from disk, the in-RAM page window and the pending tail).  Used to
+  // rebuild batch CSV/stats without ever holding all results in memory.
+  const forEachSolution = async (visit: (row: Solution) => void) => {
+    const chunks = [...offloadedChunksRef.current.entries()].sort((a, b) => a[0] - b[0]);
+    for (const [start] of chunks) {
+      const raw = await readOffloadedChunk(start);
+      if (raw) for (const row of raw) visit(row);
+    }
+    for (const row of solutionsRef.current) visit(row);
+    const pending = pendingTailRef.current ?? [];
+    for (const row of pending) visit(row);
+  };
   const batchSolve = async () => {
     const native = tauri();
     if (!native?.core?.invoke) return;
-    const lines = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-    if (!lines.length) return;
-    const targets = batchTarget.trim() ? batchTarget.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0) : [];
+    const invoke = native.core.invoke;
+    const Channel = native.Channel;
+    const stored = batchStoredRef.current;
+    const totalLines = stored ? batchStoredLinesRef.current : batchLineCount(batchInput);
+    if (!totalLines) return;
+    const targets = batchTarget.trim() ? batchNonEmptyLines(batchTarget) : [];
     batchStopRef.current = false;
-    batchResultsRef.current = [];
-    setBatchResults([]);
+    forceOffloadRef.current = true;
+    setBatchOffload(true);
+    batchSolvedRef.current = 0;
+    setBatchSolved(0);
+    batchIndexRef.current = 0;
     setBatchStatsText(null);
     batchRunningRef.current = true;
     setBatchRunning(true);
     solutionsRef.current = [];
     outputLinesRef.current = [];
+    ramOffsetRef.current = 0;
+    offloadedTotalRef.current = 0;
+    offloadedChunksRef.current.clear();
+    pendingTailRef.current = null;
+    setOffloadedTotal(0);
+    setPendingTailCount(0);
+    setIsRestoring(false);
+    void clearOffloadedSolutions();
     seenRaw.current.clear();
     seenDisplay.current.clear();
     lineQueue.current = Promise.resolve();
@@ -1974,7 +2099,7 @@ export default function App() {
     setFollowTerminal(true);
     setTableView(false);
     setPage(0);
-    const headerMsg = targets.length ? `Batch: ${lines.length} positions -> ${targets.length} target${targets.length !== 1 ? "s" : ""}` : `Batch: ${lines.length} positions`;
+    const headerMsg = targets.length ? `Batch: ${totalLines} positions -> ${targets.length} target${targets.length !== 1 ? "s" : ""}` : `Batch: ${totalLines} positions`;
     setOutputLines([{ raw: headerMsg, karn: headerMsg, isSolution: false }]);
     outputLinesRef.current = [{ raw: headerMsg, karn: headerMsg, isSolution: false }];
     setStatusLines([]);
@@ -1985,12 +2110,9 @@ export default function App() {
     const flags = solverFlags({ metric, all: false, suboptimal: 0, depths: "", generator: false, two, cubeshape: cubeShape, ignoreEquator: ignoreMiddle, angle, maxX, maxXValue, maxY, maxYValue, maxTotal, maxTotalValue });
     if (ignoreTransforms) flags.push("-x");
     if (debugOutput) flags.push("-v2");
-    if (!native.Channel) return;
-    const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
-    const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
-    let batchIndex = 0;
+    if (!Channel) return;
     let captureSolution: { rawAlg: string; slices: number; moves: number; angle: number } | null = null;
-    const onLine = new native.Channel<string>();
+    const onLine = new Channel<string>();
     onLine.onmessage = (line: string) => {
       if (runId !== solveRunId.current) return;
       const lb = line.lastIndexOf("["), rb = line.lastIndexOf("]");
@@ -2006,36 +2128,39 @@ export default function App() {
       captureSolution = null;
       return sol;
     };
-    const storeResult = (input: string, sol: { rawAlg: string; slices: number; moves: number; angle: number }, frequency = 1) => {
-      const countVal = sol[metricKey] || sol.slices;
-      batchResultsRef.current.push({ input, solution: sol.rawAlg, slices: sol.slices, moves: sol.moves, angle: sol.angle, frequency });
-      batchIndex++;
-      const output = `[${batchIndex}] ${input} -> ${sol.rawAlg} [${countVal} ${metricLabel}]${frequency > 1 ? ` (x${frequency})` : ""}`;
-      outputLinesRef.current = [...outputLinesRef.current, { raw: output, karn: output, isSolution: false }].slice(-10000);
-      scheduleSolutionFlush();
+    const flushBatchSolved = () => {
+      if (batchProgressFrameRef.current !== undefined) return;
+      batchProgressFrameRef.current = requestAnimationFrame(() => {
+        batchProgressFrameRef.current = undefined;
+        setBatchSolved(batchSolvedRef.current);
+      });
     };
-    batchCurrentInputRef.current = null;
+    // Batch results stream straight into the normal solutions pipeline so they
+    // are paginated and page-offloaded to disk exactly like single-solve output.
+    const storeBatchResult = (input: string, sol: { rawAlg: string; slices: number; moves: number; angle: number }, frequency = 1) => {
+      const countVal = sol[batchMetricKey] || sol.slices;
+      const idx = batchIndexRef.current++;
+      const output = `[${idx}] ${input} -> ${sol.rawAlg} [${countVal} ${batchMetricLabel}]${frequency > 1 ? ` (x${frequency})` : ""}`;
+      const row: Solution = {
+        raw: output, rawDisplay: output, karnDisplay: output, algRaw: output,
+        slices: sol.slices, moves: sol.moves, angle: sol.angle,
+        input, solution: sol.rawAlg, frequency, rawPassThrough: true,
+      };
+      addSolution(row);
+      batchSolvedRef.current += frequency;
+      flushBatchSolved();
+    };
     // Rotation-class grouping (slice metric only): inputs that differ only by
     // free U/D turns solve in the same number of slices, so we can solve one
     // representative per group and weight the stats by group size.  Only
     // applies in slice metric where top/bottom turns are free.
     const enableGrouping = metric === "es";
-    let groups: { reps: string[]; key: string }[] = lines.map((l) => ({ reps: [l], key: "" }));
-    if (enableGrouping) {
-      const byKey = new Map<string, string[]>();
-      for (const l of lines) {
-        const key = computeRotationClassKey(l, cubeShape);
-        if (!byKey.has(key)) byKey.set(key, []);
-        byKey.get(key)!.push(l);
-      }
-      groups = [...byKey.entries()].map(([key, reps]) => ({ reps, key }));
-    }
-    try {
-      setStatusLines(["Initializing solver..."]);
-      await native.core.invoke("batch_init", { flags });
-      setStatusLines([]);
+    // Solves a list of rotation-class groups (each group = one representative to
+    // solve + the list of inputs it represents).  Shared by per-chunk grouping
+    // and the global bucket-grouping used for huge stored inputs.
+    const solveGroupList = async (groups: { reps: string[]; key: string }[]) => {
       for (let gi = 0; gi < groups.length; gi++) {
-        if (batchStopRef.current) break;
+        if (batchStopRef.current) return;
         const { reps, key } = groups[gi];
         const frequency = reps.length;
         const given = reps[0];
@@ -2045,7 +2170,7 @@ export default function App() {
           const dbg = (line: string) => {
             if (!debugOutput) return;
             addOutputLine({ raw: line, karn: line, isSolution: false });
-            void native.core.invoke("debug_log", { line }).catch(() => undefined);
+            void invoke("debug_log", { line }).catch(() => undefined);
           };
           dbg(`[GI ${gi + 1}/${groups.length}] Given: "${given}"${frequency > 1 ? ` (group x${frequency}, key=${key})` : ""}`);
           for (let ti = 0; ti < targets.length; ti++) {
@@ -2059,20 +2184,95 @@ export default function App() {
           dbg(`  All candidates (${candidates.length}): ${candidates.join(" | ")}`);
           captureSolution = null;
           try {
-            await native.core.invoke("batch_solve_multi", { candidates, onLine });
+            await invoke("batch_solve_multi", { candidates, onLine });
           } catch { /* skip */ }
           const sol = await flushCapture();
-          dbg(`  Solved: "${given}"${sol ? " -> " + sol.rawAlg + " (" + (sol[metricKey] || sol.slices) + " " + metricLabel + ")" : " -> (NO solution)"}`);
-          if (sol) storeResult(given, sol, frequency);
+          dbg(`  Solved: "${given}"${sol ? " -> " + sol.rawAlg + " (" + (sol[batchMetricKey] || sol.slices) + " " + batchMetricLabel + ")" : " -> (NO solution)"}`);
+          if (sol) storeBatchResult(given, sol, frequency);
         } else {
           captureSolution = null;
-          batchCurrentInputRef.current = given;
           try {
-            await native.core.invoke("batch_solve_position", { position: given, onLine });
+            await invoke("batch_solve_position", { position: given, onLine });
           } catch { /* skip */ }
           const sol = await flushCapture();
-          if (sol) storeResult(given, sol, frequency);
+          if (sol) storeBatchResult(given, sol, frequency);
         }
+      }
+    };
+    // Groups a single batch of lines into rotation classes (per-chunk grouping;
+    // for a whole stored input the bucket path below is preferred so classes
+    // are merged across chunk boundaries).
+    const processChunk = async (chunkLines: string[]) => {
+      let groups: { reps: string[]; key: string }[] = chunkLines.map((l) => ({ reps: [l], key: "" }));
+      if (enableGrouping) {
+        const byKey = new Map<string, string[]>();
+        for (const l of chunkLines) {
+          const key = computeRotationClassKey(l, cubeShape);
+          const arr = byKey.get(key);
+          if (arr) arr.push(l); else byKey.set(key, [l]);
+        }
+        groups = [...byKey.entries()].map(([key, reps]) => ({ reps, key }));
+      }
+      await solveGroupList(groups);
+    };
+    // Global rotation-class grouping for huge stored inputs: partition classes
+    // into hash buckets on disk, then load/group one bucket (~chunk sized) into
+    // memory at a time, so grouping a million inputs never needs the whole set
+    // in RAM and classes are still merged across chunk boundaries.
+    const groupedBucketSolve = async (chunkCount: number) => {
+      const n = Math.max(1, Math.ceil(totalLines / BATCH_GROUP_BUCKET_LINES));
+      addOutputLine({ raw: `Grouping ${totalLines} positions into rotation classes`, karn: `Grouping ${totalLines} positions into rotation classes`, isSolution: false });
+      for (let b = 0; b < n; b++) {
+        if (batchStopRef.current) return;
+        const byKey = new Map<string, string[]>();
+        let bucketLines = 0;
+        for (let ci = 0; ci < chunkCount; ci++) {
+          if (batchStopRef.current) return;
+          const chunk = (await readBatchInputChunk(ci)) ?? [];
+          for (const l of chunk) {
+            const key = computeRotationClassKey(l, cubeShape);
+            if (fnv1a(key) % n !== b) continue;
+            bucketLines++;
+            const arr = byKey.get(key);
+            if (arr) arr.push(l); else byKey.set(key, [l]);
+          }
+        }
+        if (batchStopRef.current) return;
+        const groups = [...byKey.entries()].map(([key, reps]) => ({ reps, key }));
+        if (groups.length) {
+          addOutputLine({ raw: `Grouping bucket ${b + 1}/${n}: ${bucketLines} positions -> ${groups.length} rotation classes`, karn: `Grouping bucket ${b + 1}/${n}: ${bucketLines} positions -> ${groups.length} rotation classes`, isSolution: false });
+          await solveGroupList(groups);
+        }
+        if (!batchStopRef.current && b < n - 1) {
+          const progress = `Progress: ${batchSolvedRef.current}/${totalLines} solved (bucket ${b + 1}/${n})`;
+          addOutputLine({ raw: progress, karn: progress, isSolution: false });
+        }
+      }
+    };
+    try {
+      setStatusLines(["Initializing solver..."]);
+      await native.core.invoke("batch_init", { flags });
+      setStatusLines([]);
+      if (stored) {
+        // Stream the input out of storage in reasonably big chunks: read a
+        // chunk into memory, solve it, discard, then pull the next chunk.
+        const chunkCount = batchInputChunkCountRef.current;
+        if (enableGrouping) {
+          await groupedBucketSolve(chunkCount);
+        } else {
+          for (let ci = 0; ci < chunkCount; ci++) {
+            if (batchStopRef.current) break;
+            const chunk = (await readBatchInputChunk(ci)) ?? [];
+            if (!chunk.length) continue;
+            await processChunk(chunk);
+            if (ci % BATCH_PROGRESS_EVERY === BATCH_PROGRESS_EVERY - 1 || ci === chunkCount - 1) {
+              const progress = `Progress: ${batchSolvedRef.current}/${totalLines} solved (chunk ${ci + 1}/${chunkCount})`;
+              addOutputLine({ raw: progress, karn: progress, isSolution: false });
+            }
+          }
+        }
+      } else {
+        await processChunk(batchNonEmptyLines(batchInput));
       }
     } finally {
       try { await native.core.invoke("batch_destroy"); } catch { /* ignore */ }
@@ -2084,55 +2284,57 @@ export default function App() {
       setRunningState(false);
     }
     if (runId !== solveRunId.current) return;
-    flushSolutionState();
-    const solvedCount = batchResultsRef.current.reduce((sum, r) => sum + r.frequency, 0);
-    const errorCount = lines.length - solvedCount;
-    const groupCount = batchResultsRef.current.length;
-    const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
-    const statusMsg = `Done: ${solvedCount} solved, ${errorCount} errors, ${lines.length} total (${groupCount} groups, ${elapsed}s)`;
-    setStatusLines([statusMsg]);
-    setBatchResults([...batchResultsRef.current]);
-  };
-  const batchCurrentInputRef = useRef<string | null>(null);
-  const batchResultsRef = useRef<{ input: string; solution: string; slices: number; moves: number; angle: number; frequency: number }[]>([]);
-  const batchRunningRef = useRef(false);
-  const generateBatchStats = () => {
-    const results = batchResultsRef.current;
-    if (!results.length) return;
-    const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
-    const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
-    const maxVal = Math.max(...results.map((r) => r[metricKey]));
-    const counts: number[] = [];
-    for (let s = 0; s <= maxVal; s++) counts.push(0);
-    let solvedCount = 0;
-    for (const r of results) {
-      const s = r[metricKey];
-      if (s >= 0 && s <= maxVal) counts[s] += r.frequency;
-      solvedCount += r.frequency;
+    if (batchProgressFrameRef.current !== undefined) {
+      cancelAnimationFrame(batchProgressFrameRef.current);
+      batchProgressFrameRef.current = undefined;
     }
+    setBatchSolved(batchSolvedRef.current);
+    // Fold any pending tail into disk so RAM only keeps the current page.
+    await syncOffload();
+    flushSolutionState();
+    const solvedCount = batchSolvedRef.current;
+    const errorCount = totalLines - solvedCount;
+    const groupCount = totalCountRefs();
+    const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
+    const statusMsg = `Done: ${solvedCount} solved, ${errorCount} errors, ${totalLines} total (${groupCount} groups, ${elapsed}s)`;
+    setStatusLines([statusMsg]);
+  };
+  const batchRunningRef = useRef(false);
+  const generateBatchStats = async () => {
+    if (!totalCount) return;
+    const counts = new Map<number, number>();
+    let solvedCount = 0, groups = 0, totalMetric = 0;
+    await forEachSolution((row) => {
+      const freq = row.frequency ?? 1;
+      const s = batchMetricKey === "moves" ? (row.moves || 0) : batchMetricKey === "angle" ? (row.angle || 0) : (row.slices || 0);
+      counts.set(s, (counts.get(s) ?? 0) + freq);
+      solvedCount += freq;
+      groups++;
+      totalMetric += s * freq;
+    });
+    if (!groups) return;
+    const maxVal = Math.max(0, ...counts.keys());
     const lines: string[] = [];
     for (let s = 0; s <= maxVal; s++) {
-      lines.push(`${s} ${metricLabel} solutions: ${counts[s]}`);
+      lines.push(`${s} ${batchMetricLabel} solutions: ${counts.get(s) ?? 0}`);
     }
-    const total = results.reduce((sum, r) => sum + r[metricKey] * r.frequency, 0);
     if (solvedCount) {
-      lines.push(`average ${metricLabel} count: ${(total / solvedCount).toFixed(2)}`);
+      lines.push(`average ${batchMetricLabel} count: ${(totalMetric / solvedCount).toFixed(2)}`);
     }
-    const errorCount = batchInput.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).length - solvedCount;
+    const batchTotalLines = batchStoredRef.current ? batchStoredLinesRef.current : batchLineCount(batchInput);
+    const errorCount = batchTotalLines - solvedCount;
     lines.push(`errors: ${errorCount}`);
-    lines.push(`groups: ${results.length} (${solvedCount} inputs)`);
-    const statsText = lines.join("\n");
-    setBatchStatsText(statsText);
+    lines.push(`groups: ${groups} (${solvedCount} inputs)`);
+    setBatchStatsText(lines.join("\n"));
   };
-  const downloadBatchCSV = () => {
-    const results = batchResultsRef.current;
-    if (!results.length) return;
-    const metricKey = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
-    const metricLabel = metric === "move" ? "moves" : metric === "ea" ? "angle" : "slices";
-    const csvRows = [`input,solution,${metricLabel}`];
-    for (const r of results) {
-      csvRows.push(`${r.input},${r.solution.replace(/,/g, " ")},${r[metricKey]}`);
-    }
+  const downloadBatchCSV = async () => {
+    if (!totalCount) return;
+    const csvRows: string[] = [`input,solution,${batchMetricLabel}`];
+    await forEachSolution((row) => {
+      if (row.input === undefined || row.solution === undefined) return;
+      const metricVal = batchMetricKey === "moves" ? (row.moves || 0) : batchMetricKey === "angle" ? (row.angle || 0) : (row.slices || 0);
+      csvRows.push(`${row.input},${row.solution.replace(/,/g, " ")},${metricVal}`);
+    });
     const csv = csvRows.join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -2333,7 +2535,7 @@ export default function App() {
   const commandPreview = `croissant ${commandFlags.join(" ")} ${positionString(cubeState)}`;
   const showErgo = runCubeShape;
   const solutionDisplayText = (solution: Solution) =>
-    buildDisplayText(solution.rawDisplay, solution.karnDisplay, solution.abidDisplay, solution.sliceStart);
+    solution.rawPassThrough ? solution.rawDisplay : buildDisplayText(solution.rawDisplay, solution.karnDisplay, solution.abidDisplay, solution.sliceStart);
   const displaySolution = (solution: Solution): DisplaySolution => {
     const display = solutionDisplayText(solution);
     return { ...solution, display, alg: lineAlg(display) };
@@ -2395,7 +2597,7 @@ export default function App() {
       seen.add(alg);
       if (matcher(alg)) matches.push(solution);
     };
-    if (useLessRamRef.current) {
+    if (offloadActive()) {
       const chunks = [...offloadedChunksRef.current.entries()].sort((a, b) => a[0] - b[0]);
       for (const [start] of chunks) {
         if (id !== filterSearchIdRef.current) return;
@@ -2460,7 +2662,7 @@ export default function App() {
     }
     const seen = new Set<string>();
     const rows: DisplaySolution[] = [];
-    const ramOffset = useLessRam ? ramOffsetRef.current : 0;
+    const ramOffset = offloadActive() ? ramOffsetRef.current : 0;
     for (let i = pageStart; i < pageEnd; i++) {
       const index = i - ramOffset;
       if (index < 0 || index >= solutions.length) continue;
@@ -2481,7 +2683,7 @@ export default function App() {
       seen.add(alg);
       out.push(display);
     };
-    if (useLessRamRef.current) {
+    if (offloadActive()) {
       const chunks = [...offloadedChunksRef.current.entries()].sort((a, b) => a[0] - b[0]);
       for (const [start] of chunks) {
         const raw = await readOffloadedChunk(start);
@@ -2703,12 +2905,12 @@ export default function App() {
     <div className="terminal-shell">
       <div className="output-tools">
         <div className="output-tools-left">
-          {researchMode ? <span className="generator-toggle">Batch: {batchResults.length} solved</span> : <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setModal("notation")}>{t('karnSelect.' + outputMode)}</span></span>}
+          {researchMode ? <span className="generator-toggle">Batch: {formatCount(batchSolved)} solved</span> : <span className="generator-toggle">{t('outputNotation')} <span className="generator-toggle-value" title={tooltips.karn} onClick={() => !running && setModal("notation")}>{t('karnSelect.' + outputMode)}</span></span>}
         </div>
         <div className="output-tools-right">
           {researchMode && <>
-            <button title="Download CSV" disabled={!batchResults.length} onClick={downloadBatchCSV}><Icon name="copy" /></button>
-            <button title="Show Stats" disabled={!batchResults.length} onClick={generateBatchStats}>S</button>
+            <button title="Download CSV" disabled={!batchSolved} onClick={() => void downloadBatchCSV()}><Icon name="copy" /></button>
+            <button title="Show Stats" disabled={!batchSolved} onClick={() => void generateBatchStats()}>S</button>
           </>}
           {!researchMode && debugOutput && <button title={t('btn.debugStats')} onClick={() => setModal("debug")}><Icon name="timer" /></button>}
           {!researchMode && <button
@@ -2771,7 +2973,7 @@ export default function App() {
       {!followTerminal && !tableView && running && <button className="terminal-follow-button" title={t('btn.scrollBottom')} onClick={scrollTerminalToBottom}><Icon name="chevronDown" /></button>}
       {running && <button className="mobile-floating-stop" onClick={() => void solve()}>{t('btn.stopSolver')}</button>}
       {!showAll && totalPages > 1 && <div className={`page-switcher${pageSwitcherOpaque ? " page-switcher-opaque" : ""}`} ref={pageSwitcherRef}>
-        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0 || (useLessRam && isRestoring)} title={t('btn.prevPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}><Icon name="chevronLeft" /></button>
+        <button className="page-switcher-btn page-switcher-prev" disabled={clampedPage === 0 || ((useLessRam || batchOffload) && isRestoring)} title={t('btn.prevPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage - 1, "bottom"); }}><Icon name="chevronLeft" /></button>
         <div className="page-switcher-center">
           <span className="page-switcher-inputwrap">
             <input
@@ -2796,19 +2998,21 @@ export default function App() {
           </span>
           <span className="page-switcher-total">/ {totalPages}</span>
         </div>
-        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || (useLessRam && isRestoring)} title={t('btn.nextPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}><Icon name="chevronRight" /></button>
+        <button className="page-switcher-btn page-switcher-next" disabled={clampedPage >= totalPages - 1 || ((useLessRam || batchOffload) && isRestoring)} title={t('btn.nextPage')} onClick={(event) => { event.currentTarget.blur(); pageInputRef.current?.blur(); goToPage(clampedPage + 1, "top"); }}><Icon name="chevronRight" /></button>
       </div>}
       {/* Intentional feature by Abid: table columns reflect the metric at solve time, not the live metric dropdown. */}
       {tableView && tableCols ? <div ref={tableContainerRef} className={`terminal metric-${tableMetricRef.current.toLowerCase()} ${showErgo ? "with-ergo" : ""}`} onScroll={handleTableScroll} onWheel={handleTableWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; }}>
         <div className="terminal-head" style={{ gridTemplateColumns: tableCols.template }}>{tableCols.hash && <span>{t('table.hash')}</span>}<b>{t('table.solution')}</b>{tableCols.angle && tableMetricRef.current === "ea" && <span>{t('table.angle')}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{t('table.moves')}</span>}{tableCols.slices && <span>{t('table.slices')}</span>}{tableCols.ergo && showErgo && <span>{t('table.ergo')}</span>}</div>
         {tableSolutions.map((x, i) => {
           const ergo = displayErgo(x);
+          const batchRow = !!x.rawPassThrough;
+          const codeContent = batchRow ? x.alg : (outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : (highlightActive ? highlightQuery(x.alg, filterAppliedQuery, filterMatchCase) : x.alg));
           return <div className="solution" style={{ gridTemplateColumns: tableCols.template }} key={x.raw} onMouseDown={(event) => {
             if (event.button !== 0 && event.button !== 2) return;
             event.preventDefault();
             if (event.button === 0) { if (contextMenu) setContextMenu(null); return; }
             setContextMenu({ x: event.clientX, y: event.clientY, alg: x.display });
-          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`} data-tooltip={x.debugAnn} onMouseEnter={positionTooltip}>{outputMode === "abid" || (karn && abidNotation) ? abidify(x.alg) : (highlightActive ? highlightQuery(x.alg, filterAppliedQuery, filterMatchCase) : x.alg)}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span className={debugOutput && x.debugAnn ? "ergo-value clickable" : "ergo-value"} onClick={(event) => {
+          }} onContextMenu={(event) => event.preventDefault()}>{tableCols.hash && <span>{pageStart + i + 1}</span>}<code className={`${outputMode === "abid" || (karn && abidNotation) ? "abid" : ""} ${notationCleanClass}`} data-tooltip={x.debugAnn} onMouseEnter={positionTooltip}>{codeContent}</code>{tableCols.angle && tableMetricRef.current === "ea" && <span>{x.angle}</span>}{tableCols.move && tableMetricRef.current !== "es" && <span>{x.moves}</span>}{tableCols.slices && <span>{x.slices}</span>}{tableCols.ergo && showErgo && <span className={debugOutput && x.debugAnn ? "ergo-value clickable" : "ergo-value"} onClick={(event) => {
           if (!debugOutput || !x.debugAnn) return;
           event.stopPropagation();
           if (stickyTooltip?.key === x.raw) { setStickyTooltip(null); return; }
@@ -2818,9 +3022,9 @@ export default function App() {
         })}
         {filterActive && !filterResults!.length && <div className="empty">{t('filter.noMatches')}</div>}
         {tableBusyMessage && <div className="table-busy"><span className="table-busy-spinner" /><span>{tableBusyText}</span></div>}
-        {useLessRam && isRestoring && <div className="table-busy"><span className="table-busy-spinner" /><span>{t('terminal.loadingPage')}</span></div>}
+        {(useLessRam || batchOffload) && isRestoring && <div className="table-busy"><span className="table-busy-spinner" /><span>{t('terminal.loadingPage')}</span></div>}
       </div> : <div ref={terminalTextRef} className="terminal terminal-text" onWheel={handleTerminalWheel} onScroll={handleTerminalScroll} onMouseDown={markTerminalUserActive} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchNavRef.current = null; scheduleTerminalUserInactive(); }}>
-        {useLessRam && isRestoring && <span className="terminal-line terminal-line-status">{t('terminal.loadingPage')}</span>}
+        {(useLessRam || batchOffload) && isRestoring && <span className="terminal-line terminal-line-status">{t('terminal.loadingPage')}</span>}
         {!outputLines.length && !totalCount && <span className="terminal-line terminal-line-empty">{generator ? t('terminal.emptyScramble') : t('terminal.emptySolution')}</span>}
         {filterActive && !filterResults!.length && <span className="terminal-line terminal-line-empty">{t('filter.noMatches')}</span>}
         {terminalNonSolutions.map((line) => <span key={line.key} className={`terminal-line terminal-line-status ${notationCleanClass}`}>{line.text || " "}</span>)}
@@ -2982,35 +3186,53 @@ export default function App() {
                 const reader = new FileReader();
                 reader.onload = () => {
                   const text = typeof reader.result === "string" ? reader.result : "";
-                  setBatchInput((prev) => prev ? prev + "\n" + text : text);
+                  void appendBatchLines(text);
                 };
                 reader.readAsText(file);
               }
             }}
           >
-            <textarea
-              className="batch-textarea"
-              value={batchInput}
-              onChange={(e) => setBatchInput(e.target.value)}
-              placeholder={"Paste positions, one per line\nOr drag-drop a .txt file here"}
-              spellCheck={false}
-              disabled={batchRunning}
-            />
+            {batchStored ? (
+              <div className="batch-stored-summary">
+                <span className="batch-stored-text">Pasted {batchStoredLines} lines</span>
+                <button
+                  type="button"
+                  className="batch-stored-clear"
+                  title="Clear batch input"
+                  disabled={batchRunning}
+                  onClick={() => void clearBatchInput()}
+                >Clear</button>
+              </div>
+            ) : (
+              <textarea
+                className="batch-textarea"
+                value={batchInput}
+                onChange={(e) => setBatchInput(e.target.value)}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  void appendBatchLines(e.clipboardData.getData("text"));
+                }}
+                placeholder={"Paste positions, one per line\nOr drag-drop a .txt file here"}
+                spellCheck={false}
+                disabled={batchRunning}
+              />
+            )}
           </div>
           <div className="batch-info">
-            {batchInput.split(/\r?\n/).filter((l) => l.trim()).length} position{batchInput.split(/\r?\n/).filter((l) => l.trim()).length !== 1 ? "s" : ""}
+            {batchStored ? `${batchStoredLines} position${batchStoredLines !== 1 ? "s" : ""}` : `${batchLineCount(batchInput)} position${batchLineCount(batchInput) !== 1 ? "s" : ""}`}
+            {batchStored && <span className="batch-stored-badge">stored to disk</span>}
             {batchRunning && <span className="batch-running-badge">Running...</span>}
           </div>
           <div className="batch-actions">
             <button
               className={`solve ${batchRunning ? "is-running" : ""}`}
-              disabled={!batchInput.trim()}
+              disabled={batchStored ? !batchStoredLines : !batchInput.trim()}
               onClick={() => { if (batchRunning) { batchStopRef.current = true; const native = tauri(); native?.core?.invoke("stop_solver").catch(() => undefined); } else { void batchSolve(); } }}
             >{batchRunning ? "Stop" : "Batch Solve"}</button>
           </div>
           <div className="batch-export">
-            <button disabled={!batchResults.length} onClick={downloadBatchCSV}>Download CSV</button>
-            <button disabled={!batchResults.length} onClick={generateBatchStats}>Show Stats</button>
+            <button disabled={!batchSolved} onClick={() => void downloadBatchCSV()}>Download CSV</button>
+            <button disabled={!batchSolved} onClick={() => void generateBatchStats()}>Show Stats</button>
           </div>
         </aside> : <aside className="cube-column" ref={cubeColumnRef}>
           <Cube

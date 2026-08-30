@@ -22,6 +22,12 @@ export type Solution = {
   ergo?: number;
   sliceStart?: string;
   debugAnn?: string;
+  // Batch-solve rows carry these extra fields so stats/CSV can be rebuilt from
+  // the paginated/offloaded solution list without keeping results in memory.
+  input?: string;
+  solution?: string;
+  frequency?: number;
+  rawPassThrough?: boolean;
 };
 
 export type OutputLine = { raw: string; karn: string; isSolution: boolean; algRaw?: string; sliceStart?: string };

@@ -172,3 +172,43 @@ export async function solutionBytes(): Promise<number> {
     return 0;
   }
 }
+
+// Batch input is spooled to storage in chunks so that pasting a huge list of
+// positions (e.g. a million lines) never has to live in memory as one string.
+// Each chunk holds an array of trimmed, non-empty position lines.
+const BATCH_INPUT_PREFIX = "croissant-batch-input-";
+
+export async function writeBatchInputChunk(index: number, lines: string[]): Promise<void> {
+  try {
+    const store = await getBackend();
+    await store.setItem(`${BATCH_INPUT_PREFIX}${index}`, JSON.stringify(lines));
+  } catch { /* best effort */ }
+}
+
+export async function readBatchInputChunk(index: number): Promise<string[] | null> {
+  try {
+    const store = await getBackend();
+    const raw = await store.getItem(`${BATCH_INPUT_PREFIX}${index}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as string[];
+  } catch {
+    return null;
+  }
+}
+
+export async function removeBatchInputChunk(index: number): Promise<void> {
+  try {
+    const store = await getBackend();
+    await store.removeItem(`${BATCH_INPUT_PREFIX}${index}`);
+  } catch { /* best effort */ }
+}
+
+export async function clearBatchInputChunks(): Promise<void> {
+  try {
+    const store = await getBackend();
+    const keys = await store.keys();
+    for (const key of keys) {
+      if (key.startsWith(BATCH_INPUT_PREFIX)) await store.removeItem(key);
+    }
+  } catch { /* best effort */ }
+}
