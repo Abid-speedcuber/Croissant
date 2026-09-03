@@ -2158,44 +2158,87 @@ export default function App() {
     // Solves a list of rotation-class groups (each group = one representative to
     // solve + the list of inputs it represents).  Shared by per-chunk grouping
     // and the global bucket-grouping used for huge stored inputs.
-    const solveGroupList = async (groups: { reps: string[]; key: string }[]) => {
-      for (let gi = 0; gi < groups.length; gi++) {
-        if (batchStopRef.current) return;
-        const { reps, key } = groups[gi];
-        const frequency = reps.length;
-        const given = reps[0];
-        if (targets.length) {
-          const candidates: string[] = [];
-          const seen = new Set<string>();
-          const dbg = (line: string) => {
-            if (!debugOutput) return;
-            addOutputLine({ raw: line, karn: line, isSolution: false });
-            void invoke("debug_log", { line }).catch(() => undefined);
-          };
-          dbg(`[GI ${gi + 1}/${groups.length}] Given: "${given}"${frequency > 1 ? ` (group x${frequency}, key=${key})` : ""}`);
-          for (let ti = 0; ti < targets.length; ti++) {
-            const t = targets[ti];
-            const perTarget = generateRemapCandidates(given, t, false);
-            dbg(`  Target ${ti + 1}: "${t}" -> ${perTarget.length ? perTarget.join(" | ") : "(none)"}`);
-            for (const c of perTarget) {
-              if (!seen.has(c)) { seen.add(c); candidates.push(c); }
-            }
+    const dbg = (line: string) => {
+      if (!debugOutput) return;
+      addOutputLine({ raw: line, karn: line, isSolution: false });
+      void invoke("debug_log", { line }).catch(() => undefined);
+    };
+    // Runs one IDA* search for a single input against its targets (or the solved
+    // state) on this run's channel and captures the first solution found.
+    const solveToSolution = async (given: string): Promise<{ rawAlg: string; slices: number; moves: number; angle: number } | null> => {
+      if (targets.length) {
+        const candidates: string[] = [];
+        const seen = new Set<string>();
+        for (let ti = 0; ti < targets.length; ti++) {
+          const t = targets[ti];
+          const perTarget = generateRemapCandidates(given, t, false);
+          dbg(`  Target ${ti + 1}: "${t}" -> ${perTarget.length ? perTarget.join(" | ") : "(none)"}`);
+          for (const c of perTarget) {
+            if (!seen.has(c)) { seen.add(c); candidates.push(c); }
           }
-          dbg(`  All candidates (${candidates.length}): ${candidates.join(" | ")}`);
-          captureSolution = null;
-          try {
-            await invoke("batch_solve_multi", { candidates, onLine });
-          } catch { /* skip */ }
-          const sol = await flushCapture();
-          dbg(`  Solved: "${given}"${sol ? " -> " + sol.rawAlg + " (" + (sol[batchMetricKey] || sol.slices) + " " + batchMetricLabel + ")" : " -> (NO solution)"}`);
-          if (sol) storeBatchResult(given, sol, frequency);
-        } else {
-          captureSolution = null;
-          try {
-            await invoke("batch_solve_position", { position: given, onLine });
-          } catch { /* skip */ }
-          const sol = await flushCapture();
-          if (sol) storeBatchResult(given, sol, frequency);
+        }
+        dbg(`  All candidates (${candidates.length}): ${candidates.join(" | ")}`);
+        captureSolution = null;
+        try {
+          await invoke("batch_solve_multi", { candidates, onLine });
+        } catch { /* skip */ }
+        return flushCapture();
+      }
+      captureSolution = null;
+      try {
+        await invoke("batch_solve_position", { position: given, onLine });
+      } catch { /* skip */ }
+      return flushCapture();
+    };
+    // Secondary, target-frame grouping: distinct rotation classes of the INPUT
+    // can translate onto rotation-equivalent positions inside a target's frame
+    // (a free U/D turn in slice metric just re-rotates the translated state).
+    // Sorted per-target rotation-class keys fully describe the candidate set, so
+    // classes sharing a key solve identically and one IDA* search answers them
+    // all.  Only meaningful when solving toward explicit targets.
+    const targetFrameKey = (given: string): string =>
+      targets.map((t) =>
+        generateRemapCandidates(given, t, false)
+          .map((c) => computeRotationClassKey(c, cubeShape))
+          .sort()
+          .join(",")
+      ).join("|");
+    const bucketKeyOf = (l: string): string =>
+      (enableGrouping && targets.length) ? targetFrameKey(l) : computeRotationClassKey(l, cubeShape);
+    const solveGroupList = async (groups: { reps: string[]; key: string }[]) => {
+      if (enableGrouping && targets.length && groups.length > 1) {
+        let mergedGroups = 0;
+        const byFrame = new Map<string, { reps: string[]; key: string }[]>();
+        for (const g of groups) {
+          const k = targetFrameKey(g.reps[0]);
+          const arr = byFrame.get(k);
+          if (arr) arr.push(g); else byFrame.set(k, [g]);
+        }
+        for (const merged of byFrame.values()) {
+          if (batchStopRef.current) return;
+          if (merged.length > 1) mergedGroups++;
+          const given = merged[0].reps[0];
+          dbg(`Given: "${given}" (${merged.length} class${merged.length !== 1 ? "es" : ""} merged, x${merged.reduce((sum, g) => sum + g.reps.length, 0)})`);
+          const sol = await solveToSolution(given);
+          if (sol) {
+            dbg(`  Solved: "${given}" -> ${sol.rawAlg} (${sol[batchMetricKey] || sol.slices} ${batchMetricLabel})`);
+            for (const g of merged) storeBatchResult(g.reps[0], sol, g.reps.length);
+          }
+        }
+        if (mergedGroups) {
+          const progress = `Secondary grouping: ${groups.length} rotation classes -> ${byFrame.size} unique target-frame classes (reused for ${mergedGroups})`;
+          addOutputLine({ raw: progress, karn: progress, isSolution: false });
+        }
+        return;
+      }
+      for (const g of groups) {
+        if (batchStopRef.current) return;
+        const given = g.reps[0];
+        dbg(`Given: "${given}"${g.reps.length > 1 ? ` (group x${g.reps.length})` : ""}`);
+        const sol = await solveToSolution(given);
+        if (sol) {
+          dbg(`  Solved: "${given}" -> ${sol.rawAlg} (${sol[batchMetricKey] || sol.slices} ${batchMetricLabel})`);
+          storeBatchResult(given, sol, g.reps.length);
         }
       }
     };
@@ -2230,9 +2273,12 @@ export default function App() {
           if (batchStopRef.current) return;
           const chunk = (await readBatchInputChunk(ci)) ?? [];
           for (const l of chunk) {
-            const key = computeRotationClassKey(l, cubeShape);
-            if (fnv1a(key) % n !== b) continue;
+            // Bucket by the class that fully determines the candidate set, so
+            // the whole mergeable group lands in one bucket.  Primary grouping
+            // inside the bucket still happens on the plain rotation class.
+            if (fnv1a(bucketKeyOf(l)) % n !== b) continue;
             bucketLines++;
+            const key = computeRotationClassKey(l, cubeShape);
             const arr = byKey.get(key);
             if (arr) arr.push(l); else byKey.set(key, [l]);
           }
