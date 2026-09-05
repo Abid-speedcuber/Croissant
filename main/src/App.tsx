@@ -132,34 +132,80 @@ const colors = ["#333", "#fff", "#f00", "#00f", "#ff8600", "#0f0", "#888"];
 
 function OptionDropdown({ id, label, title, value, options, disabled, highlight, open, setOpen, onChange }: DropdownProps) {
   const current = options.find((option) => option.value === value)?.label ?? value;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [activeIndex, setActiveIndex] = useState(() => Math.max(0, options.findIndex((option) => option.value === value)));
+  useEffect(() => {
+    if (!open) return;
+    setActiveIndex(Math.max(0, options.findIndex((option) => option.value === value)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const commit = (index: number) => {
+    const option = options[index];
+    if (option) onChange(option.value);
+    setOpen(null);
+  };
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) { setOpen(id); return; }
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      setActiveIndex((index) => (index + delta + options.length) % options.length);
+    } else if (event.key === "Home" && open) {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === "End" && open) {
+      event.preventDefault();
+      setActiveIndex(options.length - 1);
+    } else if ((event.key === "Enter" || event.key === " ") && open) {
+      event.preventDefault();
+      commit(activeIndex);
+    } else if (event.key === "Escape" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(null);
+      event.currentTarget.blur();
+    }
+  };
   return (
     <label className="option-dropdown-label" title={title}>
       {highlight && value !== "none" ? <span style={{ color: "white", fontWeight: "bold", WebkitTextStroke: "0.2px white" }}>{label}</span> : label}
       <div className="option-dropdown">
         <button
+          ref={buttonRef}
           type="button"
           disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={open}
+          aria-activedescendant={open ? `${id}-option-${activeIndex}` : undefined}
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => !disabled && setOpen(open ? null : id)}
+          onClick={(event) => {
+            if (disabled) return;
+            const next = open ? null : id;
+            setOpen(next);
+            if (next) event.currentTarget.focus();
+          }}
+          onKeyDown={handleKeyDown}
         >
           <span>{current}</span>
           <span className="option-dropdown-arrow"><Icon name="chevronDown" size={10} /></span>
         </button>
         {open && !disabled && (
           <div className="option-dropdown-menu" role="listbox">
-            {options.map((option) => (
+            {options.map((option, index) => (
               <button
                 key={option.value}
+                id={`${id}-option-${index}`}
                 type="button"
                 role="option"
                 aria-selected={option.value === value}
-                className={option.value === value ? "selected" : ""}
+                className={(option.value === value ? "selected" : "") + (index === activeIndex ? " active" : "")}
+                onMouseEnter={() => setActiveIndex(index)}
                 onMouseDown={(event) => {
                   event.preventDefault();
                   onChange(option.value);
                   setOpen(null);
+                  buttonRef.current?.blur();
                 }}
               >
                 {option.label}
@@ -177,10 +223,12 @@ function Cube({
   onChange,
   actionsRef,
   onOptions,
+  shortcutsBlocked,
 }: {
   onChange: (s: CubeState, action?: string) => void;
   actionsRef: React.MutableRefObject<CubeActions | undefined>;
   onOptions: () => void;
+  shortcutsBlocked?: boolean;
 }) {
   const [s, setS] = useState<CubeState>({
     position: [...solved],
@@ -410,6 +458,7 @@ function Cube({
   };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (shortcutsBlocked) return;
       const target = e.target as HTMLElement | null;
       if (target?.matches("input, textarea, select, [contenteditable=true]")) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -447,7 +496,7 @@ function Cube({
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [s]);
+  }, [s, shortcutsBlocked]);
   const pointer = (e: React.MouseEvent) => {
     const r = canvas.current!.getBoundingClientRect();
     return [
@@ -895,6 +944,7 @@ export default function App() {
   const isSwitchingViewRef = useRef(false);
   const zoomRef = useRef(1);
   const cubeColumnRef = useRef<HTMLDivElement>(null);
+  const appRef = useRef<HTMLDivElement>(null);
   const tableMetricRef = useRef("Slice");
   const mainGridRef = useRef<HTMLDivElement>(null);
   const optionsPanelRef = useRef<HTMLDivElement>(null);
@@ -1019,11 +1069,24 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
+    if (appRef.current) appRef.current.inert = Boolean(modal || diskOpen || weightsOpen || showAllConfirm || favoritesOpen || favoritesClosing);
+  }, [modal, diskOpen, weightsOpen, showAllConfirm, favoritesOpen, favoritesClosing]);
+  useEffect(() => {
+    const suppressButtonFocus = (event: MouseEvent) => {
+      if (event.button === 0 && (event.target as Element | null)?.closest("button")) event.preventDefault();
+    };
+    window.addEventListener("mousedown", suppressButtonFocus);
+    return () => window.removeEventListener("mousedown", suppressButtonFocus);
+  }, []);
+  useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (!modeControlRef.current?.contains(event.target as Node)) {
         setModeMenu(false);
       }
       if (!(event.target as Element | null)?.closest(".option-dropdown")) {
+        if (document.activeElement instanceof HTMLElement && document.activeElement.closest(".option-dropdown")) {
+          document.activeElement.blur();
+        }
         setOpenDropdown(null);
       }
       if (!(event.target as Element | null)?.closest(".top-menu-wrap")) {
@@ -2427,6 +2490,26 @@ export default function App() {
       }
       if (event.ctrlKey && event.key.toLowerCase() === "z") { event.preventDefault(); doUndo(); }
       if (event.ctrlKey && event.key.toLowerCase() === "y") { event.preventDefault(); doRedo(); }
+      if (event.key === "Escape") {
+        // Closes only the topmost thing open, in nested order.
+        if (stickyTooltip) { event.preventDefault(); setStickyTooltip(null); return; }
+        if (contextMenu) { event.preventDefault(); setContextMenu(null); return; }
+        if (openDropdown) {
+          event.preventDefault();
+          if (document.activeElement instanceof HTMLElement && document.activeElement.closest(".option-dropdown")) {
+            document.activeElement.blur();
+          }
+          setOpenDropdown(null);
+          return;
+        }
+        if (modeMenu) { event.preventDefault(); setModeMenu(false); return; }
+        if (menu) { event.preventDefault(); setMenu(false); return; }
+        if (showAllConfirm) { event.preventDefault(); setShowAllConfirm(false); return; }
+        if (diskOpen) { event.preventDefault(); setDiskOpen(false); return; }
+        if (weightsOpen) { event.preventDefault(); setWeightsOpen(false); return; }
+        if (favoritesOpen) { event.preventDefault(); beginCloseFavorites(); return; }
+        if (modal) { event.preventDefault(); history.back(); return; }
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -3096,7 +3179,7 @@ export default function App() {
     );
   };
   return (
-    <div className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""} ${stickyTooltip ? "sticky-tooltip-active" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
+    <div ref={appRef} className={`app ${expanded ? "output-expanded" : ""} ${mobileOptionsOpen ? "mobile-options-open" : ""} ${mobileOutputOpen ? "mobile-output-open" : ""} ${stickyTooltip ? "sticky-tooltip-active" : ""}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: "top left", width: `${100 / zoom}%`, height: `${100 / zoom}dvh` }}>
       <header>
         <img className="app-icon" src={`${import.meta.env.BASE_URL}icon-web.png`} alt="" />
         <div className="brand">
@@ -3285,6 +3368,7 @@ export default function App() {
             actionsRef={cubeActions}
             onChange={onCubeChange}
             onOptions={() => setMobileOptionsOpen(true)}
+            shortcutsBlocked={Boolean(modal || favoritesOpen || openDropdown || modeMenu || menu || showAllConfirm || diskOpen || weightsOpen || contextMenu || stickyTooltip)}
           />
           <div className="moves">
             <button title={t('cube.titleUp')} onClick={() => cubeActions.current?.up()}>{t('btn.up')}</button>

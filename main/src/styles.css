@@ -19,6 +19,10 @@
 * {
   box-sizing: border-box;
 }
+:focus-visible {
+  outline: 2px solid #4a90d9;
+  outline-offset: 2px;
+}
 html,
 body,
 #root {
@@ -176,6 +180,9 @@ textarea {
   font-weight: 700;
   letter-spacing: 0.15px;
 }
+.mode-control .mode:focus-visible {
+  z-index: 1;
+}
 .mode-control .arrow {
   display: flex;
   align-items: center;
@@ -255,7 +262,7 @@ textarea {
   display: flex;
   flex-direction: column;
   border-right: 1px solid #2a3445;
-  padding-right: 4px;
+  padding: 6px 4px 0 6px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -488,11 +495,15 @@ textarea {
   opacity: 0.55;
   cursor: not-allowed;
 }
-.option-dropdown > button:focus-visible,
 .limit-grid input:focus,
 .input-control input:focus {
   outline: 2px solid #4a90d9;
   outline-offset: 1px;
+}
+.option-dropdown > button:focus-visible {
+  outline: none;
+  border-width: 2px;
+  border-color: #4a90d9;
 }
 .option-dropdown-arrow {
   color: #94b8e8;
@@ -533,6 +544,9 @@ textarea {
 .option-dropdown-menu button.selected {
   color: #9ac7f2;
   font-weight: 700;
+}
+.option-dropdown-menu button.active {
+  box-shadow: inset 0 0 0 1px #4a90d9;
 }
 .limit-grid input[type="number"],
 .limit-grid input[type="text"] {
@@ -593,6 +607,11 @@ textarea {
 .number-stepper button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.number-stepper button:focus-visible {
+  outline: none;
+  border-width: 2px;
+  border-color: #4a90d9;
 }
 .number-stepper .top-stepper {
   margin-bottom: 0px;
@@ -657,6 +676,11 @@ textarea {
 .stepper-group button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.stepper-group button:focus-visible {
+  outline: none;
+  border-width: 2px;
+  border-color: #4a90d9;
 }
 .check-grid input[type="checkbox"],
 .modal-check input[type="checkbox"] {
