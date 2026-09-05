@@ -2491,8 +2491,12 @@ class PositionSolver {
 				int absBottomMove = i>6 ? 12-i : i;
 				// use the following to respect generator's solution inversion
 				bool nearExemptBoundary = generator ? (m_slicesDone < 2) : (l < 2) || (m_slicesDone == 0);
-				// explicitly keep the branches for T and T'
-				bool isTMove = (topMove==2 && i==8) || (topMove==10 && i==4);
+				// explicitly keep both branches for T° and E*.
+				// topMove maps directly to its printed value, but i (bottom) needs
+				// the asymmetric bottom conversion:
+				// raw = (12 - praw(printed)) % 12, praw(v) = v<0 ? v+12 : v.
+				bool isTMove = (topMove==2 && i==4) || (topMove==10 && i==8)
+					|| (topMove==3 && i==3) || (topMove==9 && i==9);
 				if ((absBottomMove <= maxY) && (absBottomMove + absTopMove <= maxTotal) && (metric==TURN_METRIC || ignoreTrans || twoGen!=0 || nearExemptBoundary || isTMove || (absTopMove + absBottomMove < 6) || (absTopMove + absBottomMove == 6 && absTopMove >= absBottomMove))  && (!keepAngleBot || absBottomMove < 2)) {
 					moveList[moveLen++]=i+12;
 					lastTurns[5]=i;
