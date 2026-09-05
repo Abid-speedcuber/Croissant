@@ -2156,28 +2156,20 @@ class PositionSolver {
 	// whole solution including pre/post-abf comes from the search.
 	int m_preadfBot{0};
 
-	// U2/D2 ((6,0)/(0,6)) handling for the slice metric.  A U2/D2 is allowed freely
-	// before the first slice (preabf) and after the last slice (postabf).  A U2/D2
-	// strictly between the first and last slice ("internal") is allowed only when
-	// necessary, decided per depth:
-	//   * A "clean" solution (no internal U2/D2) is emitted immediately.  The first
-	//     clean solution found at a depth proves internal U2/D2 is unnecessary, so
-	//     m_banInternal is turned on (killing all remaining internal-U2/D2 branches)
-	//     and any dirty solutions buffered so far are discarded.
-	//   * A "dirty" solution (has internal U2/D2) is buffered, not emitted.  If the
-	//     depth finishes with no clean solution, the buffer is emitted (U2/D2 was
-	//     necessary).
-	//   * At depth >= 6 slices a clean solution is always known to exist, so
-	//     m_banInternal starts on and dirty branches are pruned from the outset.
-	//   m_slicesDone   – slices performed so far on the current search path
-	//   m_internalBad  – (6,0)/(0,6) segments strictly between first & last slice on
-	//                    the current path (>0 => the current solution is "dirty")
-	//   m_banInternal  – kill internal-U2/D2 branches at slice points
-	//   m_cleanFound   – a clean solution was emitted at the current depth
-	//   m_dirtyBuf     – dirty solutions held back at the current depth
+	/*
+	* U2/D2 handling:
+	* - allowed in preabf and postabf
+	* - only allowed for a depth if no solutions without U2/D2 can be found (a "clean" solution)
+	* - before a clean solution, all dirty solutions are stored, and the buffer is cleared
+	*   upon the first clean
+
+	* m_slicesDone   – slices performed so far on the current search path
+	* m_internalBad  – how many U2/D2 internal moves exist in this path?
+	* m_cleanFound   – a clean solution exists at the current depth.
+	* m_dirtyBuf     – dirty solutions held back at the current depth
+	*/
 	int m_slicesDone{0};
 	int m_internalBad{0};
-	bool m_banInternal{false};
 	bool m_cleanFound{false};
 	bool m_solutionFound{false};
 	std::vector<std::string> m_dirtyBuf;
@@ -2328,9 +2320,7 @@ class PositionSolver {
 					continue;
 				}
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
-				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
 				m_cleanFound = false; m_dirtyBuf.clear();
-				m_banInternal = (metric == SLICE_METRIC) && (depth >= 6);
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
 					restore(st);
@@ -2350,9 +2340,7 @@ class PositionSolver {
 				l++;
 				if (metric == SLICE_METRIC && sharedMiddle!=0) l++;
 				if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
-				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
 				m_cleanFound = false; m_dirtyBuf.clear();
-				m_banInternal = (metric == SLICE_METRIC) && (l >= 6);
 				bool anySol = false;
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
@@ -2511,15 +2499,13 @@ class PositionSolver {
 		}
 		// try slice move
 		if( lm!=2 && l>0){
-			// The segment this slice closes is (lastTurns[4],lastTurns[5]).  A (6,0)/
-			// (0,6) segment is "internal" only if a slice already preceded it
-			// (m_slicesDone>=1) — the slice we're about to do supplies the following
-			// slice.  Internal U2/D2 is tagged (m_internalBad) so a finished solution
-			// can be classified dirty/clean; it is pruned here only once m_banInternal
-			// is on (a clean solution already exists, or depth >= 6 slices).
+			// The segment this slice closes is (lastTurns[4],lastTurns[5]).
+			// A U2/D2 segment is "internal" only if m_slicesDone>=1.
+			// Internal U2/D2 is tagged (m_internalBad) so a finished solution can be
+			// classified dirty/clean; it is pruned here only once m_cleanFound is on.
 			bool badSeg = (lastTurns[4]==6 && lastTurns[5]==0) || (lastTurns[4]==0 && lastTurns[5]==6);
 			bool internalBadSeg = (metric == SLICE_METRIC) && badSeg && (m_slicesDone >= 1);
-			bool block60 = internalBadSeg && m_banInternal;
+			bool block60 = internalBadSeg && m_cleanFound;
 			// 2-gen / pseudo-2-gen D-layer restriction.  A slice marks the end of a
 			// between-slice region: the D move just performed (lastTurns[5]) must obey
 			// the mode's rule (2-gen: no D; pseudo-2-gen: only D±1).  A disallowed D is
@@ -2741,15 +2727,10 @@ class PositionSolver {
 		line += " \n";
 		if (metric != SLICE_METRIC) { std::cout << line << std::flush; return; }
 		if (m_internalBad > 0) {
-			// Dirty: hold it back. In single-solution mode one buffered dirty is
-			// enough (we only need a fallback if no clean solution turns up).
 			if (findAll || m_dirtyBuf.empty()) m_dirtyBuf.push_back(line);
 		} else {
-			// Clean: emit now. The first clean of this depth makes internal U2/D2
-			// provably unnecessary, so ban it from here on and drop the dirty buffer.
 			if (!m_cleanFound) {
 				m_cleanFound = true;
-				m_banInternal = true;
 				m_dirtyBuf.clear();
 			}
 			std::cout << line << std::flush;
@@ -2944,9 +2925,7 @@ public:
 					continue;
 				}
 				if(verbosity>=5) std::cout<<"searching depth "<<depth<<std::endl<<std::flush;
-				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
 				m_cleanFound = false; m_dirtyBuf.clear();
-				m_banInternal = (metric == SLICE_METRIC) && (depth >= 6);
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
 					restore(st);
@@ -2965,9 +2944,7 @@ public:
 				l++;
 				if( metric==SLICE_METRIC && sharedMiddle!=0 ) l++;
 				if(verbosity>=5) std::cout<<"searching depth "<<l<<std::endl<<std::flush;
-				// Per-depth U2/D2 state: ban internal U2/D2 outright at >= 6 slices.
 				m_cleanFound = false; m_dirtyBuf.clear();
-				m_banInternal = (metric == SLICE_METRIC) && (l >= 6);
 				bool anySol = false;
 				for (const auto& st : states) {
 					if (stopRequested.load()) return -1;
